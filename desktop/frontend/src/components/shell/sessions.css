@@ -3,7 +3,7 @@
  * and blocked runs above a "Settled" divider that folds the rest away, a
  * Pinned group above them and Snoozed and Archived folded below when there
  * are any. A row is a 16px source tile, the ticket number (or the local
- * name) in the ledger face and the age at the end, at 36 tall, with the dots
+ * name) in the ledger face and the age at the end, at 30 tall, with the dots
  * that open its menu shown on hover. Everything a row does not say is on the
  * card it opens beside the sidebar after a moment's hover.
  *
@@ -23,7 +23,7 @@
   flex: 0 0 auto;
   align-items: stretch;
   inline-size: 100%;
-  min-block-size: 36px;
+  min-block-size: 30px;
   border-radius: 10px;
   color: var(--sd-ink-2);
   transition: background-color var(--sd-dur-1) ease;
@@ -45,11 +45,11 @@
   display: flex;
   flex: 1 1 auto;
   align-items: center;
-  gap: 10px;
+  gap: var(--sd-space-2);
   min-inline-size: 0;
-  min-block-size: 36px;
+  min-block-size: 30px;
   padding-block: 0;
-  padding-inline: 12px 14px;
+  padding-inline: 10px 12px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -92,10 +92,11 @@
   flex-direction: column;
   gap: 1px;
   min-inline-size: 0;
-  padding-block: 4px;
+  padding-block: 2px;
 }
 
-/* OMNI-2815 or #25312: the ledger face at 14px, one line, ellipsised. A
+/* OMNI-2815 or #25312: the ledger face at the meta size, one line,
+   ellipsised. A
    local name is drawn in the UI face instead, since it is words. */
 .sd-session-row__number {
   min-inline-size: 0;
@@ -166,9 +167,9 @@
   align-items: center;
   justify-content: center;
   align-self: center;
-  inline-size: 24px;
-  block-size: 24px;
-  margin-inline-end: 6px;
+  inline-size: 22px;
+  block-size: 22px;
+  margin-inline-end: 4px;
   padding: 0;
   border: 0;
   border-radius: var(--sd-radius-xs);
@@ -192,15 +193,15 @@
 }
 
 .sd-session-row__more > svg {
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: 14px;
+  block-size: 14px;
 }
 
 /* Renaming: the field sits where the number was, in the same face. */
 .sd-session-row[data-editing='true'] {
   align-items: center;
-  gap: 10px;
-  padding-inline: 12px 14px;
+  gap: var(--sd-space-2);
+  padding-inline: 10px 12px;
   background: var(--sd-nav-hover);
 }
 
@@ -235,10 +236,10 @@
   align-items: center;
   gap: var(--sd-space-2);
   inline-size: 100%;
-  min-block-size: 28px;
+  min-block-size: 24px;
   margin-block-start: var(--sd-space-2);
   padding-block: 0;
-  padding-inline: 12px 14px;
+  padding-inline: 10px 12px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -298,9 +299,9 @@
 .sd-sessions__more {
   flex: 0 0 auto;
   inline-size: 100%;
-  min-block-size: 32px;
+  min-block-size: 28px;
   padding-block: 0;
-  padding-inline: 14px;
+  padding-inline: 12px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -320,7 +321,7 @@
 .sd-sessions__empty {
   margin: 0;
   padding-block: var(--sd-space-2);
-  padding-inline: 12px 14px;
+  padding-inline: 10px 12px;
   color: var(--sd-ink-3);
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-micro);
@@ -360,18 +361,18 @@
 /* ---------- in the rail ---------- */
 
 /* The sidebar at 56px (sidebar.css `data-collapsed`): a row is its 16px
-   tile in a 36px square, the number, the age, the dots and the match gone
+   tile in a 32px square, the number, the age, the dots and the match gone
    to the hover card; the group heads are their chevrons; Show N more is
    "+N". */
 .sd-sidebar[data-collapsed='true'] .sd-session-row {
-  inline-size: 36px;
+  inline-size: 32px;
 }
 
 .sd-sidebar[data-collapsed='true'] .sd-session-row__open,
 .sd-sidebar[data-collapsed='true'] .sd-sessions__settled,
 .sd-sidebar[data-collapsed='true'] .sd-sessions__more {
   justify-content: center;
-  inline-size: 36px;
+  inline-size: 32px;
   padding-inline: 0;
 }
 
@@ -397,9 +398,9 @@
 .sd-session-card {
   position: fixed;
   z-index: 25;
-  inline-size: 280px;
-  padding-block: 12px;
-  padding-inline: 14px;
+  inline-size: 272px;
+  padding-block: 10px;
+  padding-inline: 12px;
   border: 1px solid var(--sd-rule-strong);
   border-radius: var(--sd-radius-md);
   background: var(--sd-surface);
@@ -421,7 +422,7 @@
   margin: 0;
   margin-block-end: var(--sd-space-2);
   color: var(--sd-ink);
-  font-size: 15px;
+  font-size: var(--sd-text-body-l);
   font-weight: 500;
   line-height: 1.35;
   overflow-wrap: anywhere;
@@ -432,7 +433,7 @@
   margin: 0;
   margin-block: calc(-1 * var(--sd-space-1)) var(--sd-space-2);
   color: var(--sd-ink-2);
-  font-size: 13px;
+  font-size: var(--sd-text-meta);
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -451,7 +452,7 @@
   gap: var(--sd-space-2);
   min-inline-size: 0;
   color: var(--sd-ink-2);
-  font-size: 13px;
+  font-size: var(--sd-text-meta);
   line-height: 1.3;
 }
 

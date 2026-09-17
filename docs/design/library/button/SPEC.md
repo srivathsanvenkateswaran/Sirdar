@@ -20,11 +20,13 @@ points the screens at this component.
 ## Anatomy
 
 - `button.sd-button[data-variant][data-size][data-icon-only]` — the whole
-  control. `min-height: var(--sd-control-h)` (40px), `padding-inline: 18px`
-  (20 on the primary), `border-radius: 8px`, `gap: 8px`, `--sd-text-body`.
-  `sm` is 32 tall at `--sd-text-ledger`; `lg` is 48 tall and at least 160
-  wide, for the wide pale button on a setting row. `icon-only` is a 40px
-  square carrying one icon and an accessible name.
+  control. `min-height: var(--sd-control-h)` (32px), `padding-inline: 12px`
+  (16 on the primary), `border-radius: 8px`, `gap: 8px`, `--sd-text-body`.
+  The primary stands at `--sd-control-h-lg` (36), which is the one control on
+  a screen the hand goes to. `sm` is 28 tall at `--sd-text-ledger`; `lg` is
+  36 tall and at least 140 wide, for the wide pale button on a setting row.
+  `icon-only` is a `--sd-control-h` square carrying one icon and an
+  accessible name.
 - `span.sd-button__label` — the label. One line in Latin, two in Arabic
   without the box changing shape, because the height is a minimum and not a
   fixed value.
@@ -88,6 +90,12 @@ hover label is **8.36:1** on paper. Reduced motion: every transition falls to
 1ms; nothing waits for it.
 
 ## Changelog
+
+### 2026-09-17 (density)
+The app moved one size class down. A button is 32 tall
+(`--sd-control-h`) on 12px of inline padding; the primary keeps 36
+(`--sd-control-h-lg`) and 16. `sm` goes 32 → 28, `lg` 48 → 36 and 160 → 140
+wide. Nothing about colour, radius or the hard-shadow primary changes.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: 40 tall (`--sd-control-h`) at

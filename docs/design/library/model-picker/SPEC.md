@@ -45,7 +45,7 @@ hint saying where an id would come from.
   `top`, `left`, `max-height` and `data-side`). 480 wide or the window less
   16, about 420 tall: the dialog's surface (`--sd-surface`,
   `--sd-rule-strong`, `--sd-radius-md`, `--sd-shadow-soft`).
-- `.sd-model-picker__search` — the 44-tall row across the top, on `--sd-sheet`
+- `.sd-model-picker__search` — the 36-tall row across the top, on `--sd-sheet`
   with a `--sd-rule` hairline under it: a magnifier and
   `input.sd-model-picker__search-input[type=search]` labelled "Search
   models" (visually hidden). Focused on open. Filters by model label, model
@@ -62,9 +62,9 @@ hint saying where an id would come from.
   `role="group"`s: "Favourites" (only when there are any) and "Models"
   ("Matches" while a search is typed), each under a
   `.sd-model-picker__heading`. Rows are `div.sd-model-picker__row[role="option"]`,
-  44 tall: `.sd-model-picker__star` (a button, "Favourite <label>" /
+  36 tall: `.sd-model-picker__star` (a button, "Favourite <label>" /
   "Unfavourite <label>", `aria-pressed`), `.sd-model-picker__text` holding
-  `.sd-model-picker__label` (16px, weight 500) over `.sd-model-picker__meta`
+  `.sd-model-picker__label` (14px, weight 500) over `.sd-model-picker__meta`
   (a 14px mark, the provider's config name, 13px, third ink; the CLI default
   row adds `· last used <id>` when a run has said), `.sd-model-picker__check`
   on the selected row, and `kbd.sd-model-picker__kbd` reading ⌘1 … ⌘9 on the
@@ -160,6 +160,10 @@ selected row is `--sd-ink` on `--sd-card-row`, **15.70:1** light and
 `--sd-dur-1`, 1ms under reduced motion.
 
 ## Changelog
+
+### 2026-09-17 (density)
+The search row and each option go 44 → 36 tall, and the
+list's own controls to `--sd-control-h` (32).
 
 ### 2026-09-16 (picker tidy)
 The "Other…" row and its box are gone: the search field is the free-text

@@ -49,7 +49,7 @@
   align-items: center;
   gap: var(--sd-space-3);
   inline-size: 100%;
-  min-block-size: 32px;
+  min-block-size: 30px;
   margin: 0;
   padding-block: 0;
   padding-inline: var(--sd-space-3) var(--sd-space-2);

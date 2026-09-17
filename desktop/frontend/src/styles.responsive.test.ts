@@ -78,15 +78,15 @@ describe('the breakpoints', () => {
     expect(tokens).toMatch(/narrow\s+< 1024/)
   })
 
-  it('step the sidebar 248 → 220 and the page inset 40/48 → 32/32 → 24/24', () => {
-    expect(rule(tokens, ':root')).toContain('--sd-sidebar-w: 248px')
+  it('step the sidebar 240 → 208 and the page inset 40/48 → 32/32 → 24/24', () => {
+    expect(rule(tokens, ':root')).toContain('--sd-sidebar-w: 240px')
     expect(rule(tokens, ':root')).toContain('--sd-page-pad-block: 40px')
     expect(rule(tokens, ':root')).toContain('--sd-page-pad-inline: 48px')
     const standard = atMost(tokens, BANDS.standard)
     expect(standard).toContain('--sd-page-pad-block: 32px')
     expect(standard).toContain('--sd-page-pad-inline: 32px')
     const compact = atMost(tokens, BANDS.compact)
-    expect(compact).toContain('--sd-sidebar-w: 220px')
+    expect(compact).toContain('--sd-sidebar-w: 208px')
     expect(compact).toContain('--sd-page-pad-block: 24px')
     expect(compact).toContain('--sd-page-pad-inline: 24px')
   })
@@ -343,17 +343,18 @@ describe('the register', () => {
    * The band's height, added up from the boxes the sheets declare.
    *
    * jsdom lays nothing out, so the sum is done here — the arithmetic a
-   * browser does, over the numbers the stylesheets carry. Brave at 1440x900
-   * measures the strip at 72.9px and the grid card at 144px against the 72.8
-   * and 144 below, and leaves the table 498px: its caption, its header and
-   * eight whole rows with a ninth part way up.
+   * browser does, over the numbers the stylesheets carry. At the 2026-09-17
+   * density Brave at 1440x900 measures the strip at 65px and the grid card at
+   * 142px against the 63.6 and 142 below, and leaves the table 524px: its
+   * 36px caption, its 41px header and twelve whole 36px rows with a
+   * thirteenth part way up.
    */
-  it('adds up to a strip of about 72px and a grid card of about 144px', () => {
+  it('adds up to a strip of about 64px and a grid card of about 142px', () => {
     const stat = sheet('ui/stat-card/StatCard.css')
     const heat = sheet('ui/heatmap/Heatmap.css')
     const compactStat = rule(stat, ".sd-stat[data-size='compact']")
 
-    // Figure and label on one baseline (the 28px figure is the taller box,
+    // Figure and label on one baseline (the 20px figure is the taller box,
     // at line-height 1), the detail line under them, 12px padding each side.
     const strip =
       2 * len(decl(compactStat, 'padding-block')) +
@@ -361,9 +362,9 @@ describe('the register', () => {
       len(decl(compactStat, 'row-gap')) +
       len(decl(rule(stat, '.sd-stat__detail'), 'font-size')) *
         Number(decl(rule(stat, '.sd-stat__detail'), 'line-height'))
-    expect(strip).toBeCloseTo(72.8, 1)
-    expect(strip).toBeGreaterThanOrEqual(72)
-    expect(strip).toBeLessThanOrEqual(88)
+    expect(strip).toBeCloseTo(63.6, 1)
+    expect(strip).toBeGreaterThanOrEqual(56)
+    expect(strip).toBeLessThanOrEqual(80)
 
     // The month row, the grid's seven 10px rows and their 2px gaps.
     const grid =
@@ -386,7 +387,7 @@ describe('the register', () => {
       Math.max(title, legend) +
       len(decl(rule(css, '.register-heatcard__head'), 'margin-block-end')) +
       grid
-    expect(card).toBe(144)
+    expect(card).toBe(142.5)
   })
 
   it('scrolls the heatmap inside its card', () => {

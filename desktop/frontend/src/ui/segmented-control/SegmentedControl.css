@@ -39,9 +39,9 @@
 .sd-segmented__option {
   position: relative;
   z-index: 1;
-  min-height: 32px;
+  min-height: var(--sd-control-h);
   padding-block: 5px;
-  padding-inline: var(--sd-space-4);
+  padding-inline: var(--sd-space-3);
   border: 0;
   border-radius: var(--sd-radius-pill);
   background: transparent;

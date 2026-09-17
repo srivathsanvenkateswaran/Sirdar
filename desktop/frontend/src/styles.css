@@ -94,7 +94,7 @@ body {
   margin: 0;
   background: var(--sd-shell);
   color: var(--sd-ink);
-  font: var(--sd-text-body) / 1.5 var(--sd-font-ui);
+  font: var(--sd-text-body) / 1.45 var(--sd-font-ui);
   -webkit-font-smoothing: antialiased;
 }
 

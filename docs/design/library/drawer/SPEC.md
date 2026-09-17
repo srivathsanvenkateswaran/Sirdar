@@ -76,5 +76,9 @@ place.
 
 ## Changelog
 
+### 2026-09-17 (density)
+The head goes 52 → 44 tall, the insets to 16, and the two
+12.5px labels read `--sd-text-ledger` rather than spelling the size out.
+
 ### 2026-09-16
 Added, from `.drawer` and `.dh` in `docs/design/2026-09-16-session/B/`.

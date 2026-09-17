@@ -1,17 +1,16 @@
 /*
- * Sidebar nav item. A 44-tall pill on the shell, with no fill of its own at
- * rest: the 2026-09-15 mocks' register, up from the 28-tall pill the app-shell
- * language first drew.
+ * Sidebar nav item. A --sd-nav-row-h pill on the shell (30 at the 2026-09-17
+ * density), with no fill of its own at rest, an 18px icon and a 14px label.
  */
 
 .sd-nav-row {
   display: flex;
   align-items: center;
-  gap: var(--sd-space-3);
+  gap: var(--sd-space-2);
   inline-size: 100%;
   min-block-size: var(--sd-nav-row-h);
   padding-block: 0;
-  padding-inline: 14px;
+  padding-inline: 10px;
   border: 0;
   /* Between --sd-radius-sm and --sd-radius-md: the mocks draw every nav pill
      at 10, and a token for one shape that two rows share is this file's. */
@@ -40,8 +39,8 @@
 .sd-nav-row__icon {
   display: inline-flex;
   flex: 0 0 auto;
-  inline-size: 20px;
-  block-size: 20px;
+  inline-size: 18px;
+  block-size: 18px;
 }
 
 .sd-nav-row__icon > svg {
@@ -66,7 +65,7 @@
   flex: 0 0 auto;
   margin-inline-start: auto;
   padding-block: 0;
-  padding-inline: 9px;
+  padding-inline: var(--sd-space-2);
   border-radius: var(--sd-radius-pill);
   background: var(--sd-badge-bg);
   color: var(--sd-badge-ink);
@@ -74,7 +73,7 @@
   font-size: var(--sd-text-micro);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
-  line-height: 20px;
+  line-height: 18px;
 }
 
 /* Read out, never drawn: "3 waiting on Board" rather than a bare "3". */

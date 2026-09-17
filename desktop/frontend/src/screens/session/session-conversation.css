@@ -959,7 +959,7 @@ code.sc-ref {
 }
 
 .sc-composer .composer-text {
-  font-size: 16px;
+  font-size: var(--sd-text-body);
 }
 
 /* --------------------------------------------------------------- inspector */
@@ -969,7 +969,7 @@ code.sc-ref {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--sd-space-3);
-  padding-inline: var(--sd-space-5) var(--sd-space-3);
+  padding-inline: var(--sd-space-4) var(--sd-space-2);
   border-block-end: 1px solid var(--sd-rule);
 }
 
@@ -980,12 +980,14 @@ code.sc-ref {
 .sc-tabs {
   display: flex;
   flex: 1 1 auto;
-  gap: 28px;
+  gap: var(--sd-space-5);
   min-inline-size: 0;
 }
 
+/* 36 tall, which is the tab row: a 13px label on the body's leading between
+   8 above and 7 below, and the 2px selected rule under it. */
 .sc-tab {
-  padding-block: 14px 12px;
+  padding-block: var(--sd-space-2) 7px;
   padding-inline: 0;
   margin-block-end: -1px;
   border: 0;
@@ -993,7 +995,7 @@ code.sc-ref {
   background: transparent;
   color: var(--sd-ink-2);
   font: inherit;
-  font-size: var(--sd-text-body);
+  font-size: var(--sd-text-meta);
   cursor: pointer;
 }
 
@@ -1010,7 +1012,7 @@ code.sc-ref {
 .sc-tab__n {
   margin-inline-start: 6px;
   font-family: var(--sd-font-mono);
-  font-size: 12.5px;
+  font-size: var(--sd-text-ledger);
   font-weight: 400;
   color: var(--sd-ink-3);
   font-variant-numeric: tabular-nums;

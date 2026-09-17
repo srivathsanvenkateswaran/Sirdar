@@ -30,7 +30,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 20px;
+  gap: var(--sd-space-4);
   margin-block-start: var(--sd-space-5);
 }
 
@@ -91,8 +91,8 @@
 /* ---------- the assignee menu ---------- */
 
 /*
- * The trigger is the mock's `.sel`: a bordered field on the sheet, 40 tall,
- * with the chevron in the quiet ink. The popover it opens is pinned to the
+ * The trigger is the mock's `.sel`: a bordered field on the sheet,
+ * --sd-control-h tall, with the chevron in the quiet ink. The popover it opens is pinned to the
  * viewport by lib/anchor and borrows the dialog's surface — strong rule,
  * medium radius, the one soft shadow — as the model picker's does.
  */
@@ -112,12 +112,12 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sd-space-2);
-  min-block-size: 40px;
-  min-inline-size: 160px;
+  min-block-size: var(--sd-control-h);
+  min-inline-size: 140px;
   max-inline-size: 260px;
   margin: 0;
   padding-block: 0;
-  padding-inline: 14px;
+  padding-inline: var(--sd-space-3);
   border: 1px solid var(--sd-rule-strong);
   border-radius: var(--sd-radius-sm);
   background: var(--sd-sheet);
@@ -164,7 +164,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: var(--sd-space-2);
-  min-block-size: 44px;
+  min-block-size: 36px;
   padding-inline: var(--sd-space-3);
   border-block-end: 1px solid var(--sd-rule);
   background: var(--sd-sheet);
@@ -213,9 +213,9 @@
   align-items: center;
   gap: var(--sd-space-2);
   inline-size: 100%;
-  min-block-size: 40px;
+  min-block-size: var(--sd-nav-row-h);
   margin: 0;
-  padding-block: 4px;
+  padding-block: var(--sd-space-1);
   padding-inline: var(--sd-space-2);
   border: 0;
   border-radius: var(--sd-radius-sm);
@@ -335,7 +335,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: var(--sd-space-1);
 }
 
 .board-ticket > .sd-run-card {
@@ -371,7 +371,7 @@
 .board-landed {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sd-space-3);
   margin-block-start: var(--sd-space-5);
 }
 

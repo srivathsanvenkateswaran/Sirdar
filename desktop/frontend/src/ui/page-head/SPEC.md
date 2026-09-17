@@ -2,7 +2,7 @@
 
 ## What it is
 
-The top of a screen: its name at `--sd-text-display-m` (32px), an optional
+The top of a screen: its name at `--sd-text-head` (22px), an optional
 line under it, and its actions at the inline end. The sans on every screen;
 the serif on the settings heading only, which is where the reference app
 keeps its serif too.
@@ -15,10 +15,10 @@ round.
 
 - `div.sd-page-head` — flex, space-between, `gap: 16px`, wrapping.
 - `div.sd-page-head__text` — the title and lede.
-- `h1.sd-page-head__title` (or `h2` via `level`) — `--sd-text-display-m`
+- `h1.sd-page-head__title` (or `h2` via `level`) — `--sd-text-head`
   weight 500, `line-height: 1.2`, `letter-spacing: -.01em`, `--sd-ink`. With
-  `serif`: `--sd-font-display` at 34px weight 400.
-- `p.sd-page-head__lede` — `--sd-text-body` in `--sd-ink-3`, 6px under.
+  `serif`: `--sd-font-display` at `--sd-text-head` weight 400.
+- `p.sd-page-head__lede` — `--sd-text-body` in `--sd-ink-3`, 4px under.
 - `div.sd-page-head__actions` — flex, `gap: 12px`, at the inline end.
 
 ## States
@@ -43,8 +43,9 @@ round.
 - `--sd-font-ui` / `--sd-font-display` — the sans, and the serif for Settings
 - `--sd-space-3` / `--sd-space-4`
 
-The serif's 34px is not on the ladder: it is the reference app's settings
-heading, measured off the Settings mock, and one component uses it.
+Both variants read `--sd-text-head`, which is on the ladder. The serif's
+34px, which was the reference app's settings heading measured off the
+Settings mock, is gone: at this density one heading size serves both.
 
 ## Do / Don't
 
@@ -65,6 +66,11 @@ Contrast: `--sd-ink` on the sheet **17.44:1**, the lede `--sd-ink-3` on the
 sheet **5.25:1** light. No motion.
 
 ## Changelog
+
+### 2026-09-17 (density)
+Both headings drop to `--sd-text-head` (22): the sans from
+32 and the serif from 34. A page heading was the single loudest thing in the
+window, and at this density the screen's own content leads instead.
 
 ### 2026-09-15
 Added, from `.page-head`, `.h-page`, `.lede` and `.h-serif` in

@@ -104,6 +104,10 @@ the answer `03-desktop-app.md` section 11 states.
 
 ## Changelog
 
+### 2026-09-17 (density)
+The serif heading drops to `--sd-text-head` (22) from 34,
+and its inset and the body's to 32 from 40.
+
 ### 2026-09-16 (responsive)
 The sheet is `min(1160px, calc(100vw - 48px))` by `min(820px, calc(100vh -
 48px))` — a 24px margin on every side, in place of the 92vw/88vh it had,

@@ -100,7 +100,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: var(--sd-space-2);
-  min-block-size: 44px;
+  min-block-size: 36px;
   padding-inline: var(--sd-space-3);
   border-block-end: 1px solid var(--sd-rule);
   background: var(--sd-sheet);
@@ -170,7 +170,7 @@
   align-items: center;
   justify-content: center;
   inline-size: 40px;
-  block-size: 36px;
+  block-size: var(--sd-control-h);
   padding: 0;
   border: 0;
   border-radius: var(--sd-radius-sm);
@@ -221,8 +221,8 @@
   display: flex;
   align-items: center;
   gap: var(--sd-space-2);
-  min-block-size: 44px;
-  padding-block: 6px;
+  min-block-size: 36px;
+  padding-block: var(--sd-space-1);
   padding-inline: var(--sd-space-1) var(--sd-space-2);
   border-radius: var(--sd-radius-sm);
   color: var(--sd-ink-2);
@@ -264,7 +264,7 @@
   gap: 6px;
   min-inline-size: 0;
   color: var(--sd-ink-3);
-  font-size: 13px;
+  font-size: var(--sd-text-meta);
   line-height: 1.3;
   unicode-bidi: isolate;
 }

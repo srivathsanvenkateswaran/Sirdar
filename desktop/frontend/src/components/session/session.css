@@ -80,16 +80,16 @@
 /*
  * One row, the same in all three layouts: which ticket, what kind of run,
  * what state it is in, the ticket's number in the other system — and
- * nothing else. 56px, never wrapped. What a run is about, who has it, what
+ * nothing else. 44px, never wrapped. What a run is about, who has it, what
  * it ran on and what it has spent are behind the `i` button (`.sn-about`).
  */
 .sn-head {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--sd-space-3);
-  block-size: 56px;
-  padding-inline: var(--sd-space-6);
+  gap: var(--sd-space-2);
+  block-size: 44px;
+  padding-inline: var(--sd-space-5);
   border-block-end: 1px solid var(--sd-rule);
   white-space: nowrap;
 }
@@ -101,7 +101,7 @@
 .sn-head__key {
   margin: 0;
   font-family: var(--sd-font-mono);
-  font-size: 20px;
+  font-size: var(--sd-text-body-l);
   font-weight: 600;
   letter-spacing: 0.01em;
   unicode-bidi: isolate;
@@ -119,7 +119,7 @@
   align-items: center;
   gap: 4px;
   font-family: var(--sd-font-mono);
-  font-size: 13px;
+  font-size: var(--sd-text-meta);
   color: var(--sd-ink-3);
   text-decoration: none;
   unicode-bidi: isolate;
@@ -131,8 +131,8 @@ a.sn-head__other:hover {
 }
 
 .sn-head__other > svg {
-  inline-size: 13px;
-  block-size: 13px;
+  inline-size: 12px;
+  block-size: 12px;
 }
 
 /* The gap that pushes the switcher and the `i` to the far end. */
@@ -177,7 +177,7 @@ a.sn-head__other:hover {
 }
 
 .sn-head[data-variant='workbench'] .sn-head__key {
-  font-size: 18px;
+  font-size: var(--sd-text-title);
 }
 
 /* ------------------------------------------------------- about this run */

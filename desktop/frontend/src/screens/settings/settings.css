@@ -74,7 +74,7 @@
   display: inline-flex;
   align-items: center;
   min-block-size: 28px;
-  padding-inline: 10px;
+  padding-inline: var(--sd-space-2);
   border: 1px solid var(--sd-rule-strong);
   border-radius: 6px;
   background: var(--sd-surface);
@@ -90,8 +90,8 @@
  */
 .settings-verdict {
   display: inline-block;
-  padding-block: 3px;
-  padding-inline: 10px;
+  padding-block: 2px;
+  padding-inline: var(--sd-space-2);
   border: 1px solid var(--sd-rule-strong);
   border-radius: 6px;
   color: var(--sd-ink-3);
@@ -135,7 +135,7 @@
 .settings-provider {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sd-space-2);
 }
 
 .settings-provider__name {
@@ -206,7 +206,7 @@
 
 /* ---------- MCP servers ---------- */
 
-/* 56-tall list rows, one control each, hairlines between. */
+/* 44-tall list rows, one control each, hairlines between. */
 .settings-servers {
   display: flex;
   flex-direction: column;
@@ -217,7 +217,7 @@
   grid-template-columns: 220px minmax(0, 1fr) auto;
   column-gap: var(--sd-space-4);
   align-items: center;
-  min-block-size: 56px;
+  min-block-size: 44px;
   padding-block: var(--sd-space-1);
   border-block-start: 1px solid var(--sd-rule-faint);
 }
@@ -229,7 +229,7 @@
 .settings-server__name {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sd-space-2);
   min-inline-size: 0;
   font-family: var(--sd-font-mono);
   font-size: var(--sd-text-ledger);
@@ -274,7 +274,8 @@
   gap: var(--sd-space-3);
 }
 
-/* A select drawn as the mock's picker: 40 tall, strong rule, chevron trailing. */
+/* A select drawn as the mock's picker: --sd-control-h tall, strong rule,
+   chevron trailing. */
 .settings-select {
   position: relative;
   display: inline-flex;
@@ -296,7 +297,7 @@
   inline-size: 100%;
   min-block-size: calc(var(--sd-control-h) - 2px);
   padding-block: 0;
-  padding-inline: 14px 36px;
+  padding-inline: var(--sd-space-3) var(--sd-space-6);
   border: 0;
   border-radius: var(--sd-radius-sm);
   background: transparent;
@@ -308,7 +309,7 @@
 
 .settings-select > svg {
   position: absolute;
-  inset-inline-end: 14px;
+  inset-inline-end: var(--sd-space-3);
   inline-size: 16px;
   block-size: 16px;
   color: var(--sd-ink-3);
@@ -317,8 +318,8 @@
 
 .settings-textarea {
   inline-size: 100%;
-  padding-block: 10px;
-  padding-inline: 14px;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
   border: 1px solid var(--sd-rule);
   border-radius: var(--sd-radius-sm);
   background: var(--sd-sunk);
@@ -348,7 +349,7 @@
   flex-direction: column;
   gap: var(--sd-space-2);
   padding-block: var(--sd-space-3);
-  padding-inline: 14px;
+  padding-inline: var(--sd-space-3);
   border-radius: var(--sd-radius-sm);
   background: var(--sd-sunk);
   color: var(--sd-ink-2);
@@ -381,7 +382,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Recent calls: 48-tall rows, the time trailing. */
+/* Recent calls: 36-tall rows, the time trailing. */
 .settings-calls {
   display: flex;
   flex-direction: column;
@@ -393,7 +394,7 @@
   grid-template-columns: minmax(0, 1fr) 120px 88px 64px;
   column-gap: var(--sd-space-4);
   align-items: center;
-  min-block-size: 48px;
+  min-block-size: 36px;
   border-block-start: 1px solid var(--sd-rule-faint);
   color: var(--sd-ink-2);
   font-size: var(--sd-text-meta);
@@ -410,7 +411,7 @@
 
 /* ---------- Providers ---------- */
 
-/* 44-tall rows, the mark before the name; the head row 28 in the third ink. */
+/* 36-tall rows, the mark before the name; the head row 24 in the third ink. */
 .settings-table {
   display: flex;
   flex-direction: column;
@@ -420,24 +421,24 @@
 .settings-table__row {
   display: grid;
   grid-template-columns: 118px 168px 150px 82px minmax(0, 1fr) auto;
-  column-gap: 10px;
+  column-gap: var(--sd-space-2);
   align-items: center;
   min-inline-size: 720px;
-  min-block-size: 44px;
+  min-block-size: 36px;
   border-block-start: 1px solid var(--sd-rule-faint);
   font-size: var(--sd-text-meta);
   line-height: 1.25;
 }
 
 .settings-table__head {
-  min-block-size: 28px;
+  min-block-size: 24px;
   border-block-start: 0;
   color: var(--sd-ink-3);
-  font-size: var(--sd-text-ledger);
+  font-size: var(--sd-text-micro);
 }
 
 .settings-table__button {
-  min-block-size: 32px;
+  min-block-size: var(--sd-control-h);
   padding-inline: var(--sd-space-3);
   font-size: var(--sd-text-ledger);
 }
@@ -493,7 +494,7 @@
 /* ---------- Playbooks ---------- */
 
 /*
- * One row per playbook, on the mock's 56-tall server-list register: the
+ * One row per playbook, on the server list's own 44-tall register: the
  * order prefix in the mono face, the title, and the sentence the file opens
  * with. The file's path, its size and when it changed are deliberately not
  * here — an engineer picking a playbook to edit needs the order, the name
@@ -509,7 +510,7 @@
   grid-template-columns: 2.5rem minmax(0, 1fr) auto;
   column-gap: var(--sd-space-4);
   align-items: center;
-  min-block-size: 56px;
+  min-block-size: 44px;
   padding-block: var(--sd-space-2);
   border-block-start: 1px solid var(--sd-rule-faint);
 }
@@ -564,8 +565,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  inline-size: 32px;
-  block-size: 32px;
+  inline-size: var(--sd-control-h);
+  block-size: var(--sd-control-h);
   padding: 0;
   border: 0;
   border-radius: var(--sd-radius-sm);
@@ -616,7 +617,7 @@
   inline-size: 100%;
   min-block-size: 360px;
   padding-block: var(--sd-space-3);
-  padding-inline: 14px;
+  padding-inline: var(--sd-space-3);
   border: 1px solid var(--sd-rule);
   border-radius: var(--sd-radius-sm);
   background: var(--sd-sunk);
@@ -647,7 +648,7 @@
 .playbook-name {
   inline-size: 100%;
   min-block-size: var(--sd-control-h);
-  padding-inline: 14px;
+  padding-inline: var(--sd-space-3);
   border: 1px solid var(--sd-rule-strong);
   border-radius: var(--sd-radius-sm);
   background: var(--sd-sheet);

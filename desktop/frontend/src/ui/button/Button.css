@@ -1,7 +1,8 @@
 /*
  * Button. The primary variant is the one filled control on a screen and the
- * only one permitted to mutate anything. At the 2026-09-15 register every
- * button is --sd-control-h (40) tall and nothing casts a shadow.
+ * only one permitted to mutate anything. At the 2026-09-17 density a button
+ * is --sd-control-h (32) tall and nothing casts a shadow; the primary, which
+ * is what the hand goes to, stands at --sd-control-h-lg (36).
  */
 
 .sd-button {
@@ -9,11 +10,11 @@
   align-items: center;
   justify-content: center;
   gap: var(--sd-space-2);
-  /* 40px is the control height; the padding gets there without a fixed
-     height, so a two-line label in Arabic still fits. */
+  /* --sd-control-h is the control height; the padding gets there without a
+     fixed height, so a two-line label in Arabic still fits. */
   min-height: var(--sd-control-h);
   padding-block: var(--sd-space-1);
-  padding-inline: 18px;
+  padding-inline: var(--sd-space-3);
   border: 1px solid var(--sd-rule-strong);
   border-radius: var(--sd-radius-sm);
   background: var(--sd-surface);
@@ -40,16 +41,16 @@
 /* ---------- sizes ---------- */
 
 .sd-button[data-size='sm'] {
-  min-height: 32px;
-  padding-inline: var(--sd-space-3);
+  min-height: 28px;
+  padding-inline: var(--sd-space-2);
   font-size: var(--sd-text-ledger);
 }
 
 /* The wide pale button on a setting row, and Start on the New session screen. */
 .sd-button[data-size='lg'] {
-  min-inline-size: 160px;
-  min-height: 48px;
-  padding-inline: var(--sd-space-5);
+  min-inline-size: 140px;
+  min-height: var(--sd-control-h-lg);
+  padding-inline: var(--sd-space-4);
 }
 
 /* A square button holding one icon and an accessible name. */
@@ -74,7 +75,8 @@
 /* The ink, inverted per theme, and its own label. No border, no shadow: the
    fill is what says this is the one control that acts. */
 .sd-button[data-variant='primary'] {
-  padding-inline: 20px;
+  min-height: var(--sd-control-h-lg);
+  padding-inline: var(--sd-space-4);
   border-color: transparent;
   background: var(--sd-primary);
   color: var(--sd-primary-ink);

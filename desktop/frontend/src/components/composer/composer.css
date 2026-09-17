@@ -4,8 +4,8 @@
  * One card — 16px corner, a hairline, the sheet's fill — holding a textarea
  * and a bottom bar. The bar is T3 Code's shape drawn on Sirdar's tokens: the
  * chips at the inline start with a hairline between each, and one round
- * 36px send button at the inline end. The textarea is one line high at rest
- * (the mock's 52px text block, A-session.css) and follows the text a row at
+ * --sd-control-h-lg send button at the inline end. The textarea is one line
+ * high at rest (44px at the 2026-09-17 density) and follows the text a row at
  * a time: `ComposerCard` sets `rows` from the content, so nothing here
  * declares a height for it, and the ring sits on the box's outline so the
  * card never moves when focus arrives. Every value here is a token; nothing
@@ -39,9 +39,9 @@
 .composer-text {
   display: block;
   inline-size: 100%;
-  min-block-size: 52px;
-  padding-block: 16px 6px;
-  padding-inline: 20px;
+  min-block-size: 44px;
+  padding-block: var(--sd-space-3) var(--sd-space-1);
+  padding-inline: var(--sd-space-4);
   border: 0;
   border-radius: var(--sd-radius-sheet) var(--sd-radius-sheet) 0 0;
   background: transparent;
@@ -69,7 +69,7 @@
 .composer-error {
   margin: 0;
   padding-block: 0 var(--sd-space-2);
-  padding-inline: 20px;
+  padding-inline: var(--sd-space-4);
   font-size: var(--sd-text-meta);
   color: var(--sd-st-failed);
 }
@@ -114,7 +114,7 @@
   text-align: end;
 }
 
-/* The one filled control: round, 36px, an arrow. */
+/* The one filled control: round, --sd-control-h-lg, an arrow. */
 .composer-send {
   display: inline-flex;
   flex: 0 0 auto;
@@ -122,8 +122,8 @@
 }
 
 .composer-send > .sd-button[data-icon-only='true'] {
-  inline-size: 36px;
-  min-height: 36px;
+  inline-size: var(--sd-control-h-lg);
+  min-height: var(--sd-control-h-lg);
   padding: 0;
   border-radius: var(--sd-radius-pill);
 }
@@ -137,7 +137,7 @@
 
 /*
  * Under a document (the session's Document layout): a 14px corner on the
- * strong rule, one line of 16px text until typed into, and the bar at
+ * strong rule, one line of body text until typed into, and the bar at
  * 6/12/12/14 with a labelled primary at its end rather than the arrow.
  */
 .composer[data-variant='strip'] {
@@ -148,8 +148,8 @@
 
 .composer[data-variant='strip'] .composer-text {
   min-block-size: 0;
-  padding-block: 12px 6px;
-  padding-inline: 18px;
+  padding-block: var(--sd-space-2) var(--sd-space-1);
+  padding-inline: var(--sd-space-4);
   border-radius: 14px 14px 0 0;
 }
 
@@ -175,15 +175,15 @@
 }
 
 /*
- * Stop: the same 36px circle the send wears, in the failed hue at a muted
+ * Stop: the same circle the send wears, in the failed hue at a muted
  * strength rather than the ink fill — it takes something away rather than
  * committing something, and the reader should be able to tell the two apart
  * without reading the title. The glyph is the square, so the meaning does
  * not rest on the colour; the accessible name says "Stop the run".
  */
 .composer-send[data-stop='true'] > .sd-button {
-  inline-size: 36px;
-  min-height: 36px;
+  inline-size: var(--sd-control-h-lg);
+  min-height: var(--sd-control-h-lg);
   padding: 0;
   border-radius: var(--sd-radius-pill);
   background: color-mix(in srgb, var(--sd-st-failed) 16%, transparent);
@@ -200,10 +200,10 @@
   block-size: 20px;
 }
 
-/* Wide: the word beside the arrow, still round-ended, still 36 tall. */
+/* Wide: the word beside the arrow, still round-ended, still --sd-control-h-lg. */
 .composer-send[data-wide='true'] > .sd-button {
-  min-height: 36px;
-  padding-inline: 18px 16px;
+  min-height: var(--sd-control-h-lg);
+  padding-inline: var(--sd-space-4);
   border-radius: var(--sd-radius-pill);
   gap: var(--sd-space-2);
 }
@@ -219,8 +219,8 @@
 .composer-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-block-size: 32px;
+  gap: var(--sd-space-1);
+  min-block-size: var(--sd-control-h);
   min-inline-size: 0;
   max-inline-size: 100%;
   overflow: hidden;
@@ -303,8 +303,8 @@
   display: flex;
   align-items: center;
   gap: var(--sd-space-2);
-  min-block-size: 40px;
-  padding-block: 6px;
+  min-block-size: var(--sd-nav-row-h);
+  padding-block: var(--sd-space-1);
   padding-inline: var(--sd-space-3) var(--sd-space-2);
   border-radius: var(--sd-radius-sm);
   color: var(--sd-ink-2);

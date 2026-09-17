@@ -87,7 +87,7 @@
 /* Compact (under 1200): the head steps down one notch. */
 @media (max-width: 1199px) {
   .sd-lane__head {
-    font-size: calc(var(--sd-text-micro) - 1px);
+    font-size: var(--sd-text-micro);
     letter-spacing: 0.06em;
   }
 }

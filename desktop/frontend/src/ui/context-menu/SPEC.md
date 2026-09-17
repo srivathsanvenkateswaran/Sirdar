@@ -96,6 +96,10 @@ Contrast: `--sd-ink` on `--sd-surface` **17.44:1** light, **13.44:1** dark;
 
 ## Changelog
 
+### 2026-09-17 (density)
+A menu row goes 32 → 30 tall, which is the popover row
+height the density round sets.
+
 ### 2026-09-16
 Added, for the sidebar's session menu. `lib/anchor` gained `pointAnchor` and
 accepts any anchorable, so the menu can open under the pointer as well as

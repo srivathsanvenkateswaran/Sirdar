@@ -158,14 +158,14 @@
   background: var(--sd-sheet);
 }
 
-/* The app's one serif heading: 34px at the regular weight, 40px in from
-   the edge, as the settings mock has it. */
+/* The app's one serif heading: --sd-text-head at the regular weight, 32px in
+   from the edge. */
 .sd-modal__title {
   margin: 0;
-  padding-block: var(--sd-space-6) var(--sd-space-4);
-  padding-inline: 40px;
+  padding-block: var(--sd-space-5) var(--sd-space-3);
+  padding-inline: var(--sd-space-6);
   font-family: var(--sd-font-display);
-  font-size: 34px;
+  font-size: var(--sd-text-head);
   font-weight: 400;
   line-height: 1.15;
 }
@@ -177,7 +177,7 @@
   gap: var(--sd-space-5);
   min-block-size: 0;
   padding-block: 0 var(--sd-space-5);
-  padding-inline: 40px;
+  padding-inline: var(--sd-space-6);
   overflow-y: auto;
 }
 

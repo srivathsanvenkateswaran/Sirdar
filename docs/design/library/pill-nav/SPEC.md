@@ -75,6 +75,10 @@ falls to 1ms; nothing else moves.
 
 ## Changelog
 
+### 2026-09-17 (density)
+A pill reads `--sd-control-h` (32) rather than spelling 32
+out.
+
 ### 2026-09-15
 Added. Initial spec from `styles.css` `.nav` / `.nav-item`. Radius moves 3px to
 `--sd-radius-pill`; the current item keeps `--sd-accent-soft` from today's rule;

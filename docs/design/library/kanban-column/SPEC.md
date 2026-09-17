@@ -83,6 +83,10 @@ motion: nothing moves.
 
 ## Changelog
 
+### 2026-09-17 (density)
+The compact lane head reads `--sd-text-micro` rather than a
+pixel under it: 11 is the floor, and the calc took it to 10.
+
 ### 2026-09-15 (responsive)
 The column shares its row: `flex: 1 1 0` with `min-inline-size: 160px`
 replaces `flex: 0 0 248px`, so six lanes fit the sheet from 1440 up (167

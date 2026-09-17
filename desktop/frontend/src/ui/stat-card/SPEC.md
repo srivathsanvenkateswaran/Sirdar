@@ -16,15 +16,16 @@ Register. New in the 2026-09-15 screens round.
   `padding-inline: 24px`, `--sd-radius-md`, `--sd-card-row` fill. `default`
   or `compact`.
 - `span.sd-stat__label` — `--sd-text-body` weight 500 in `--sd-ink-3`.
-- `span.sd-stat__value` — 36px weight 500, tabular, `line-height: 1`,
+- `span.sd-stat__value` — `--sd-text-display-m` weight 500, tabular,
+  `line-height: 1`,
   `dir="ltr"`, with the exact number as its `title` when the shown one is
   rounded.
 - `span.sd-stat__detail` — `--sd-text-meta` in `--sd-ink-2`, one line, no
   wrapping.
 
-Compact (`size="compact"`): a two-column grid, the 28px figure and the
+Compact (`size="compact"`): a two-column grid, the 20px figure and the
 `--sd-text-meta` label on one baseline, the detail under both, at 12px block
-and 16px inline padding — about 72px tall. The DOM order is unchanged, so a
+and 16px inline padding — about 64px tall. The DOM order is unchanged, so a
 screen reader still hears the label first; the grid areas put the figure
 first for the eye. The label and detail ellipsise rather than wrap.
 
@@ -50,7 +51,8 @@ first for the eye. The label and detail ellipsise rather than wrap.
 - `--sd-radius-md`, `--sd-space-1` / `--sd-space-4` / `--sd-space-5`
 - `--sd-text-body`, `--sd-text-meta`, `--sd-font-ui`
 
-The 36px figure is not on the type ladder. It is the reference app's own
+The figure reads `--sd-text-display-m`, so nothing on a screen out-shouts
+its page heading. It used to be the reference app's own
 size for a headline number, measured off the Register mock, and it is used by
 one component, which by `01-tokens.md` section 4 keeps it here.
 
@@ -73,6 +75,10 @@ reads "Runs this week, 38". Contrast: `--sd-ink` on a card row **15.70:1**,
 `--sd-ink-2` **7.37:1**, `--sd-ink-3` **4.73:1** light. No motion.
 
 ## Changelog
+
+### 2026-09-17 (density)
+The figure goes 36 → `--sd-text-display-m` (26) and the
+compact one 28 → 20, which takes the Register's stat strip to about 64 tall.
 
 ### 2026-09-17 (register compact)
 Gained `size="compact"`: the figure at 28px beside its label, the detail

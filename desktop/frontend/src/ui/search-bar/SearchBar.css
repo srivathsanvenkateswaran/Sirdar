@@ -1,15 +1,15 @@
 /*
  * Search bar. One input with a magnifier before it and a hint after it, in
- * two sizes: the 64-tall bar a session starts from, and the 40-tall sunk well
- * the board filters with.
+ * two sizes: the 48-tall bar a session starts from, and the --sd-control-h
+ * sunk well the board filters with.
  */
 
 .sd-search {
   display: flex;
   align-items: center;
-  gap: var(--sd-space-4);
-  min-block-size: 64px;
-  padding-inline: var(--sd-space-5);
+  gap: var(--sd-space-3);
+  min-block-size: 48px;
+  padding-inline: var(--sd-space-4);
   border: 1px solid var(--sd-rule);
   border-radius: var(--sd-radius-sheet);
   background: var(--sd-sheet);
@@ -41,8 +41,8 @@
 }
 
 .sd-search__icon > svg {
-  inline-size: 20px;
-  block-size: 20px;
+  inline-size: 16px;
+  block-size: 16px;
 }
 
 .sd-search__input {
@@ -79,7 +79,7 @@
 
 .sd-search[data-variant='well'] {
   gap: var(--sd-space-2);
-  inline-size: 240px;
+  inline-size: 220px;
   max-inline-size: 100%;
   min-block-size: var(--sd-control-h);
   padding-inline: var(--sd-space-3);
@@ -90,6 +90,6 @@
 }
 
 .sd-search[data-variant='well'] .sd-search__icon > svg {
-  inline-size: 18px;
-  block-size: 18px;
+  inline-size: 16px;
+  block-size: 16px;
 }
