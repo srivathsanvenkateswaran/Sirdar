@@ -83,6 +83,11 @@ nothing moves.
 
 ## Changelog
 
+### 2026-09-17 (density)
+Rows go 48 → 36 tall on 12px of cell padding, body cells to
+`--sd-text-meta` (13) and the sticky header to `--sd-text-micro`. Nine rows
+of the Register now stand where six did.
+
 ### 2026-09-16 (assignee round, responsive)
 Every header and body cell now carries `data-col` with its column's id. It is
 the hook a screen needs to drop a column at a narrow width — the register's

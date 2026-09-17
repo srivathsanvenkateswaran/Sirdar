@@ -72,5 +72,9 @@ alone.
 
 ## Changelog
 
+### 2026-09-17 (density)
+Both sizes read `--sd-text-micro` (11) instead of 11.5 and
+10.5, so the marker is on the ladder and no text in the app is under 11.
+
 ### 2026-09-16
 Added, from `.mk` in `docs/design/2026-09-16-session/B/`.

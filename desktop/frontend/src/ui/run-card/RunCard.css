@@ -9,8 +9,8 @@
   align-items: flex-start;
   width: 100%;
   margin: 0;
-  padding-block: 14px;
-  padding-inline: var(--sd-space-4);
+  padding-block: 10px;
+  padding-inline: var(--sd-space-3);
   border: 1px solid var(--sd-rule);
   border-radius: 6px;
   background: var(--sd-sheet);
@@ -48,14 +48,14 @@ a.sd-run-card:hover {
   /* A title that is one long token — an attachment's file name — breaks
      inside the card rather than running out of it. */
   overflow-wrap: anywhere;
-  font-size: var(--sd-text-body);
+  font-size: var(--sd-text-meta);
   font-weight: 400;
   line-height: 1.35;
   color: var(--sd-ink);
 }
 
 .sd-run-card__kind {
-  margin-block-start: 10px;
+  margin-block-start: var(--sd-space-2);
 }
 
 .sd-run-card__foot {
@@ -65,7 +65,7 @@ a.sd-run-card:hover {
   justify-content: space-between;
   gap: var(--sd-space-2);
   inline-size: 100%;
-  margin-block-start: var(--sd-space-3);
+  margin-block-start: var(--sd-space-2);
 }
 
 /*
@@ -103,7 +103,7 @@ a.sd-run-card:hover {
 
 .sd-run-card__key {
   font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-ledger);
+  font-size: var(--sd-text-micro);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--sd-ink-3);

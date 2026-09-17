@@ -348,12 +348,12 @@ describe('the register', () => {
    * and 144 below, and leaves the table 498px: its caption, its header and
    * eight whole rows with a ninth part way up.
    */
-  it('adds up to a strip of about 72px and a grid card of about 142px', () => {
+  it('adds up to a strip of about 64px and a grid card of about 142px', () => {
     const stat = sheet('ui/stat-card/StatCard.css')
     const heat = sheet('ui/heatmap/Heatmap.css')
     const compactStat = rule(stat, ".sd-stat[data-size='compact']")
 
-    // Figure and label on one baseline (the 28px figure is the taller box,
+    // Figure and label on one baseline (the 20px figure is the taller box,
     // at line-height 1), the detail line under them, 12px padding each side.
     const strip =
       2 * len(decl(compactStat, 'padding-block')) +
@@ -361,9 +361,9 @@ describe('the register', () => {
       len(decl(compactStat, 'row-gap')) +
       len(decl(rule(stat, '.sd-stat__detail'), 'font-size')) *
         Number(decl(rule(stat, '.sd-stat__detail'), 'line-height'))
-    expect(strip).toBeCloseTo(71.6, 1)
-    expect(strip).toBeGreaterThanOrEqual(64)
-    expect(strip).toBeLessThanOrEqual(88)
+    expect(strip).toBeCloseTo(63.6, 1)
+    expect(strip).toBeGreaterThanOrEqual(56)
+    expect(strip).toBeLessThanOrEqual(80)
 
     // The month row, the grid's seven 10px rows and their 2px gaps.
     const grid =

@@ -7,8 +7,8 @@
 
 ## What it is
 
-One row of the desktop app's left sidebar: a 20px icon, a 16px label, and an
-optional count at the inline end, inside a 44-tall pill.
+One row of the desktop app's left sidebar: an 18px icon, a 14px label, and
+an optional count at the inline end, inside a `--sd-nav-row-h` (30) pill.
 
 Built. `desktop/frontend/src/ui/sidebar-nav-item/`. It replaces `.nav-item` in
 `styles.css`, which was a pill in a horizontal header bar; the header is gone
@@ -17,15 +17,15 @@ and `docs/design/03-desktop-app.md` section 5 is where the sidebar comes from.
 ## Anatomy
 
 - `button.sd-nav-row` — the whole row is the control. `min-block-size:
-  var(--sd-nav-row-h)` (44px), `padding-inline: 14px`, `gap: 12px`, radius
+  var(--sd-nav-row-h)` (30px), `padding-inline: 10px`, `gap: 8px`, radius
   10px, no border. The shell stacks rows at a 2px gap.
-- `span.sd-nav-row__icon` — 20 by 20, `currentColor`, `aria-hidden`. Lucide
+- `span.sd-nav-row__icon` — 18 by 18, `currentColor`, `aria-hidden`. Lucide
   outlines at stroke 1.6 in the app; the component takes whatever node it is
   given.
-- `span.sd-nav-row__label` — `--sd-text-body` (16px) weight 500, ellipsised
+- `span.sd-nav-row__label` — `--sd-text-body` (14px) weight 500, ellipsised
   rather than wrapped.
 - `span.sd-nav-row__count` — the pill count at the inline end, `--sd-badge-bg`
-  with `--sd-badge-ink`, `--sd-text-micro` mono tabular on a 20px line. Hidden
+  with `--sd-badge-ink`, `--sd-text-micro` mono tabular on an 18px line. Hidden
   when the count is zero.
 - `span.sd-nav-row__count-name` — the count's name, read out and never drawn.
 
@@ -126,7 +126,7 @@ which the user showed as the reference.
   a ref keyed by run id, so the store's re-renders never reset one.
 - In the 56px rail (`.sd-sidebar[data-collapsed='true']`, automatic under
   1024 or the reader's own fold on the head's Panel toggle / ⌘B, remembered
-  as `sirdar.sidebarCollapsed`) a row is its tile alone in a 36px square,
+  as `sirdar.sidebarCollapsed`) a row is its tile alone in a 32px square,
   the Settled divider is its chevron, "Show N more" reads `+N` (still named
   "Show N more"), and the card carries the row's own number as a first row
   — "Jira OMNI-2815" — before the other one.
@@ -146,6 +146,12 @@ pitch, with the sidebar's own inline padding taking the clickable box past the
 moves.
 
 ## Changelog
+
+### 2026-09-17 (density)
+The pill goes 44 → `--sd-nav-row-h` (30) on 10px of inline
+padding with an 18px icon, and the session rows under it 36 → 30. The
+sidebar itself is 240 wide (208 compact), the brand and workspace rows 32,
+the search well 30.
 
 ### 2026-09-16 (hover and panes)
 The hover card is rebuilt on `useHoverCard`: 120ms of intent instead of

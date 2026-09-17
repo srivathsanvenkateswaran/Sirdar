@@ -76,6 +76,10 @@ light. No motion.
 
 ## Changelog
 
+### 2026-09-17 (density)
+The row's padding goes to 12/16, its icon tile 44 → 36 and
+the glyph inside it 20 → 16.
+
 ### 2026-09-15
 Added, from `.item` in `docs/design/2026-09-15-screens/SessionEmpty.html` and
 `Board.html`.

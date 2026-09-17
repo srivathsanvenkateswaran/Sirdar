@@ -1,6 +1,8 @@
 /*
- * Stat card. A big tabular figure between a grey label and one line of
- * context, on the card-row fill with 16px block and 24px inline padding.
+ * Stat card. A tabular figure between a grey label and one line of context,
+ * on the card-row fill with 16px block and 24px inline padding. The figure is
+ * the display-m size since the 2026-09-17 density round, so that nothing on a
+ * screen out-shouts its page heading.
  */
 
 .sd-stat {
@@ -23,7 +25,7 @@
 }
 
 .sd-stat__value {
-  font-size: 36px;
+  font-size: var(--sd-text-display-m);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -39,7 +41,7 @@
 }
 
 /*
- * Compact: the figure at 28px with its label beside it on the baseline, and
+ * Compact: the figure at 20px with its label beside it on the baseline, and
  * the detail under the pair, at 12px block and 16px inline padding. The DOM
  * order stays label, figure, detail, so a screen reader still hears "Runs
  * this week, 38"; the grid puts the figure first for the eye.
@@ -68,7 +70,7 @@
 
 .sd-stat[data-size='compact'] .sd-stat__value {
   grid-area: value;
-  font-size: 28px;
+  font-size: 20px;
 }
 
 .sd-stat[data-size='compact'] .sd-stat__detail {

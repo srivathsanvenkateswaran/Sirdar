@@ -125,6 +125,11 @@ hover border transitions.
 
 ## Changelog
 
+### 2026-09-17 (density)
+The card's padding goes to 10/12, the title to
+`--sd-text-meta` (13) and the key to `--sd-text-micro` (11), which is the
+board's register at this density.
+
 ### 2026-09-16 (picker-sources)
 `keyTitle`: the foot's number carries the ticket's other number, with its
 product's name, as a tooltip. The board hands the card whichever number the

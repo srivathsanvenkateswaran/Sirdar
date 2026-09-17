@@ -1,6 +1,7 @@
 /*
- * Page head. The screen's name at the display-m size, a lede under it, and
- * the actions at the inline end. No rule beneath.
+ * Page head. The screen's name at --sd-text-head (22 since the 2026-09-17
+ * density round, down from 32 and from the serif variant's 34), a lede under
+ * it, and the actions at the inline end. No rule beneath.
  */
 
 .sd-page-head {
@@ -19,23 +20,24 @@
   margin: 0;
   color: var(--sd-ink);
   font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-display-m);
+  font-size: var(--sd-text-head);
   font-weight: 500;
   line-height: 1.2;
   letter-spacing: -0.01em;
 }
 
-/* The settings heading: the app's serif, one size up, at the regular weight. */
+/* The settings heading: the app's serif, on the same size, at the regular
+   weight. */
 .sd-page-head__title[data-serif='true'] {
   font-family: var(--sd-font-display);
-  font-size: 34px;
+  font-size: var(--sd-text-head);
   font-weight: 400;
   line-height: 1.15;
   letter-spacing: 0;
 }
 
 .sd-page-head__lede {
-  margin-block: 6px 0;
+  margin-block: var(--sd-space-1) 0;
   color: var(--sd-ink-3);
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-body);

@@ -85,6 +85,11 @@ Reduced motion: nothing moves.
 
 ## Changelog
 
+### 2026-09-17 (density)
+The badge reads `--sd-text-micro` on 2px of block padding,
+which is 20 tall — the chip height the density round sets. The word and its
+hue are unchanged.
+
 ### 2026-09-15 (fix round)
 Owns the vocabulary. `STATE_WORDS` replaces the capitalised `STATUS_WORDS`;
 the words are the mocks' lowercase
