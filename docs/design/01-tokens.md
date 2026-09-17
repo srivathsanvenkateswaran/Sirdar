@@ -139,13 +139,14 @@ in the inbound strip, where 4.5:1 is the applicable threshold, not 3:1.
 | `--sd-font-display` | `Newsreader, Georgia, 'Noto Naskh Arabic', serif` | Variable weight with a true italic, drawn for screens. Arabic sits behind it as a fallback and carries no Latin glyphs, so Latin still renders in Newsreader. That fallback trick is already how `--sans` works today. |
 | `--sd-font-ui` | `Figtree, Inter, -apple-system, 'IBM Plex Sans Arabic', system-ui, sans-serif` | Figtree leads since the 2026-09-15 screens round, which re-based the app on the reference's 16px register; Inter stays as the fallback with the tabular figures and the Arabic companions behind it. |
 | `--sd-font-mono` | `'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace` | Unambiguous `0/O`, tabular by default. |
-| `--sd-text-display-m` | `2rem` | The screen title (Board, Register, Eval, Library) and the settings heading. Was 1.5rem before the 2026-09-15 re-base. |
-| `--sd-text-title` | `1.375rem` | Card titles. Was 1.125rem. |
-| `--sd-text-body-l` | `1.0625rem` | Item-row titles, the search bar. Was 0.9375rem. |
-| `--sd-text-body` | `1rem` | The UI face: nav rows, buttons, table cells, setting labels. Was 0.8125rem (13px); the reviewed mocks re-based the app to the reference app's 16px register. |
-| `--sd-text-meta` | `0.875rem` | Secondary lines, table headers, help text. Was 0.71875rem. |
-| `--sd-text-micro` | `0.75rem` | Kind chips, group labels, kbd hints. Was 0.65625rem. |
-| `--sd-text-ledger` | `0.84375rem` | The mono ledger: keys, clocks, costs, event rows, at 13.5px. New in the re-base; the mono face at the body size out-weighs the title beside it. |
+| `--sd-text-display-m` | `1.625rem` | The one figure or headline a screen leads with: the New session question, a stat card's number. Was 2rem before the 2026-09-17 density round. |
+| `--sd-text-head` | `1.375rem` | The page heading on Board, Register, Eval and Settings, sans and serif alike. Added 2026-09-17, replacing the 32px sans and the 34px serif that were the loudest thing in the window. |
+| `--sd-text-title` | `1.125rem` | Card titles, section names. Was 1.375rem. |
+| `--sd-text-body-l` | `0.9375rem` | Item-row titles, the session start bar, the run header's key. Was 1.0625rem. |
+| `--sd-text-body` | `0.875rem` | The UI face: nav rows, buttons, setting labels. Was 1rem; the 2026-09-17 round moved the whole app one size class down, to the register the owner's reference screenshot reads at. |
+| `--sd-text-meta` | `0.8125rem` | Secondary lines, table cells, board card titles, inspector tabs, help text. Was 0.875rem. |
+| `--sd-text-micro` | `0.6875rem` | Status chips, kind chips, group labels, sticky table headers, kbd hints. Was 0.75rem. It is the floor: no text in the app is smaller. |
+| `--sd-text-ledger` | `0.78125rem` | The mono ledger: keys, clocks, costs, event rows, at 12.5px. Was 0.84375rem; it still sits a half-step under the body so a run id does not out-weigh the title beside it. |
 | `--sd-space-1` .. `--sd-space-10` | 4, 8, 12, 16, 24, 32, 48, 64, 96, 128px | 4px base. |
 | `--sd-radius-xs` | `4px` | badges, kbd, chips |
 | `--sd-radius-sm` | `8px` | inputs, buttons, board cards |
@@ -161,9 +162,10 @@ in the inbound strip, where 4.5:1 is the applicable threshold, not 3:1.
 | `--sd-measure-wide` | `1200px` | landing section content |
 | `--sd-measure-prose` | `68ch` | docs body, note pane |
 | `--sd-gutter` | `12px` app, `24px` landing | today's app gutter is 12px and stays |
-| `--sd-control-h` | `40px` | every control's height: button, select, search well, segmented track. Added 2026-09-15 from the mocks; two components share it, which is what makes it a token |
-| `--sd-sidebar-w` | `248px` | the sidebar's width; the shell and the gallery's sidebar specimens both read it |
-| `--sd-nav-row-h` | `44px` | a sidebar row and a modal nav row, with 20px icons |
+| `--sd-control-h` | `32px` | every control's height: chip, select, search well, segmented track, secondary button. Was 40px before the 2026-09-17 density round |
+| `--sd-control-h-lg` | `36px` | the two controls the hand goes to and nothing else: the composer's send and a screen's one primary button. Added 2026-09-17 |
+| `--sd-sidebar-w` | `240px` (208px under 1200) | the sidebar's width; the shell and the gallery's sidebar specimens both read it. Was 248 / 220 |
+| `--sd-nav-row-h` | `30px` | a sidebar row, a session row, a modal nav row and a popover menu row, with 18px icons. Was 44px with 20px icons |
 
 ## 4. What a token is not
 

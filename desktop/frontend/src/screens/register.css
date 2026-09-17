@@ -4,7 +4,7 @@
  *
  * Sizes are lifted from docs/design/2026-09-15-screens/Register.html for the
  * page inset (40/48/32) and the table's cells. The band over the table is
- * the 2026-09-17 compaction: two compact stat cards in one row (64px) and a
+ * the 2026-09-17 compaction: two compact stat cards in one row (65px) and a
  * compact 26-week grid beside them (142px: 12px padding, the 16px title and
  * legend row, 4px, and the grid's 98px), so the table under them takes the
  * rest of the sheet — twelve rows of it at 1440x900. Every colour is a token; nothing here

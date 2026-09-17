@@ -343,10 +343,11 @@ describe('the register', () => {
    * The band's height, added up from the boxes the sheets declare.
    *
    * jsdom lays nothing out, so the sum is done here — the arithmetic a
-   * browser does, over the numbers the stylesheets carry. Brave at 1440x900
-   * measures the strip at 72.9px and the grid card at 144px against the 72.8
-   * and 144 below, and leaves the table 498px: its caption, its header and
-   * eight whole rows with a ninth part way up.
+   * browser does, over the numbers the stylesheets carry. At the 2026-09-17
+   * density Brave at 1440x900 measures the strip at 65px and the grid card at
+   * 142px against the 63.6 and 142 below, and leaves the table 524px: its
+   * 36px caption, its 41px header and twelve whole 36px rows with a
+   * thirteenth part way up.
    */
   it('adds up to a strip of about 64px and a grid card of about 142px', () => {
     const stat = sheet('ui/stat-card/StatCard.css')

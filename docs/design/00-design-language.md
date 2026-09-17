@@ -144,18 +144,27 @@ Scale (rem, off a 16px root):
 |---|---|---|
 | display-xl | 4.5 | not used |
 | display-l | 3.5 | not used |
-| display-m | 2.5 | 2 (screen title) |
-| title | 2 | 1.375 |
-| body-l | 1.25 | 1.0625 |
-| body | 1 | 1 (16px) |
-| meta | 0.875 | 0.875 (14px) |
-| micro | 0.75 | 0.75 (12px) |
-| ledger | not used | 0.84375 (13.5px mono) |
+| display-m | 2.5 | 1.625 (26px — the one figure or headline a screen leads with) |
+| head | not used | 1.375 (22px — the page heading, sans and serif alike) |
+| title | 2 | 1.125 (18px) |
+| body-l | 1.25 | 0.9375 (15px) |
+| body | 1 | 0.875 (14px) |
+| meta | 0.875 | 0.8125 (13px) |
+| micro | 0.75 | 0.6875 (11px) |
+| ledger | not used | 0.78125 (12.5px mono) |
 
-The app column was the small end of the same ladder (13px base) until the 2026-09-15 screens
-round, whose review found the UI too dense; it is now re-based on the reference app's 16px
-register, and only the display sizes still separate the two columns. The exact values are in
-`01-tokens.md` section 3.
+The app column has moved twice. It was the small end of the same ladder (13px base) until
+the 2026-09-15 screens round re-based it on a 16px register; on 2026-09-17 the owner, with a
+screenshot of the reference app beside ours, said the header, the side pane and the type were
+all a size too big, and the whole column came down one class to the 14px register above. A
+support engineer wants four facts and the room around them, not a 16px body pushing the fifth
+off the screen. The landing and docs Newsreader display sizes did not move. The exact values
+are in `01-tokens.md` section 3.
+
+The shell's measures came down with the type: a control is 32 tall (36 for the composer's
+send and a screen's one primary button), the sidebar 240 wide with 30-tall nav and session
+rows, the run header 44, the inspector's tab row 36, a register row 36, a board card 10/12.
+Every text stays at or above 11px and every hit target at or above 28.
 
 ## 5. Spacing and radius
 
@@ -259,7 +268,7 @@ components.
   alone. The accent clears 4.5:1 against paper, surface, and sunk in both themes.
 - **Status is never colour alone.** Every status hue is paired with its word in the badge.
   The lane rail is redundant with the lane heading.
-- **Hit targets 32px minimum in the app, 44px on the landing page.**
+- **Hit targets 28px minimum in the app (32 for a control that is not a row), 44px on the landing page.**
 - **Motion.** See section 7. No parallax, no scroll-jacking, no autoplaying video with
   sound.
 - **Text over a band.** Only paper-coloured ink on `band-deep` and `band-ink`. No accent
