@@ -5,7 +5,6 @@ import { costOrUnknown } from '../../lib/format'
 import { sessionsShow, shownNumber, subscribeSessionsShow, type SessionsShow } from '../../lib/sessionsShow'
 import { BELOW_STANDARD, useMediaQuery } from '../../lib/useMediaQuery'
 import Age from '../../components/Age'
-import Button from '../../ui/button'
 import KindChip from '../../ui/kind-chip'
 import ProviderMark from '../../ui/provider-mark'
 import { AssignedTo } from '../../ui/run-card/Avatar'
@@ -16,7 +15,9 @@ import { SessionLayoutSwitcher } from '../../components/session/RunHeader'
 /**
  * The compact run header: key under its source's mark, kind, state, the
  * ticket's title, who it is assigned to, then the run's figures — provider
- * and model, the clock, turns, cost — and Cancel while the run is live.
+ * and model, the clock, turns, cost. Stopping a live run is the composer's
+ * Stop button, beside the box the reader is already looking at, not a text
+ * button at the far corner of the window.
  *
  * Under 1200 the provider, the model and the turns fold into the figures'
  * title and the clock and the cost stay drawn.
@@ -31,17 +32,12 @@ export interface RunHeaderProps {
   title?: string
   sources?: SourcesSummary
   live: boolean
-  terminal: boolean
   /**
    * The model the provider's init line named, for a run whose record has
    * not reported one: the workspace configured no model, so state.json
    * says '' while the log says which one answered.
    */
   fallbackModel?: string
-  /** Cancel is offered while the run is live; absent when this window cannot stop it. */
-  onCancel?: () => void
-  cancelDisabled?: boolean
-  cancelTitle?: string
 }
 
 export default function RunHeader({
@@ -49,11 +45,7 @@ export default function RunHeader({
   title,
   sources,
   live,
-  terminal,
   fallbackModel = '',
-  onCancel,
-  cancelDisabled = false,
-  cancelTitle,
 }: RunHeaderProps): JSX.Element {
   const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const compact = useMediaQuery(BELOW_STANDARD)
@@ -101,11 +93,6 @@ export default function RunHeader({
         </span>
       </div>
       <SessionLayoutSwitcher />
-      {terminal || !onCancel ? null : (
-        <Button variant="ghost" onClick={onCancel} disabled={cancelDisabled} title={cancelTitle}>
-          Cancel
-        </Button>
-      )}
     </header>
   )
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { RunKind } from '../../api/types'
 import ChipMenu from '../composer/ChipMenu'
 import ComposerCard from '../composer/ComposerCard'
-import { ACCESS, MODES, accessOf } from '../composer/modes'
+import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder } from '../composer/modes'
 import ModelPicker from '../../ui/model-picker'
 
 /** What the composer's one button does right now. */
@@ -11,6 +11,12 @@ export type ComposerMode =
   | { kind: 'answer'; question: string }
   /** The run has finished; the text is an instruction and the button steers it. */
   | { kind: 'steer' }
+  /**
+   * The run is working. The button is a Stop, not a send that is off, and
+   * the box says what typing here does — once, in the placeholder, with
+   * nothing repeating it beside the button.
+   */
+  | { kind: 'running' }
   /** Nothing can be sent, and `reason` says why. */
   | { kind: 'disabled'; reason: string }
 
@@ -33,6 +39,12 @@ export interface ComposerProps {
   placeholder?: string
   /** Draw the send's word beside its arrow while the run is blocked. */
   wideWhenAnswering?: boolean
+  /** Stops the run. Drawn as the round button while the run works. */
+  onCancel?: () => void
+  /** Only a run this window started can be stopped; the button says so when it cannot. */
+  canCancel?: boolean
+  /** The cancel is in flight. */
+  cancelBusy?: boolean
 }
 
 /**
@@ -40,12 +52,13 @@ export interface ComposerProps {
  *
  * The same card New session draws, with the bar's chips turned into facts:
  * Model is the run's provider and model and cannot change, since a steer
- * resumes the session it has; Mode is the run's kind; Access is the posture
- * that kind ran with. The round send button's word is the run's state —
- * Answer while the agent is waiting on a question, Steer once the run has
- * finished, and off with the reason while it is working or when the
- * provider refuses to be steered. The button is this screen's one filled
- * control; the sidebar's New session steps down while it is on screen.
+ * resumes the session it has; Mode is the run's kind, carrying the posture
+ * that kind runs with as its secondary text. Two chips, one row, never
+ * wrapping. The round button's word is the run's state — Answer while the
+ * agent is waiting on a question, Steer once the run has finished, Stop
+ * while it is working, and off with the reason when the provider refuses to
+ * be steered. The button is this screen's one filled control; the sidebar's
+ * New session steps down while it is on screen.
  *
  * Cmd or Ctrl with Enter sends, so a person typing does not have to reach
  * for the mouse; Enter alone is a new line, because an answer to an agent's
@@ -63,6 +76,9 @@ export default function Composer({
   autoFocus = false,
   placeholder: ownPlaceholder,
   wideWhenAnswering = false,
+  onCancel,
+  canCancel = false,
+  cancelBusy = false,
 }: ComposerProps) {
   const [text, setText] = useState('')
 
@@ -72,10 +88,11 @@ export default function Composer({
     setText('')
   }, [sentCount])
 
+  const running = mode.kind === 'running'
   const trimmed = text.trim()
   const label = mode.kind === 'answer' ? 'Answer' : 'Steer'
   const needsText = mode.kind === 'steer' || (mode.kind === 'answer' && mode.question !== '')
-  const disabled = mode.kind === 'disabled' || (needsText && trimmed === '')
+  const disabled = mode.kind === 'disabled' || running || (needsText && trimmed === '')
   const title =
     mode.kind === 'disabled'
       ? mode.reason
@@ -84,8 +101,11 @@ export default function Composer({
           ? 'Type the answer first'
           : 'Type the instruction first'
         : `${label} (↵)`
-  const placeholder =
-    mode.kind === 'disabled'
+  // Said once: while the run works the box carries the whole of it, and the
+  // button beside it is the Stop.
+  const placeholder = running
+    ? runningPlaceholder(provider)
+    : mode.kind === 'disabled'
       ? mode.reason
       : ownPlaceholder ??
         (mode.kind === 'answer'
@@ -102,8 +122,8 @@ export default function Composer({
         value={text}
         onChange={setText}
         placeholder={placeholder}
-        disabled={mode.kind === 'disabled'}
-        autoFocus={autoFocus && mode.kind !== 'disabled'}
+        disabled={mode.kind === 'disabled' || running}
+        autoFocus={autoFocus && mode.kind !== 'disabled' && !running}
         error={error}
         chips={
           <>
@@ -115,26 +135,9 @@ export default function Composer({
               unknownAs="model unknown"
               readOnly="A steer resumes the same session, so the provider and model cannot change here"
             />
-            {kind ? (
-              <>
-                <ChipMenu
-                  label="Mode"
-                  value={kind}
-                  items={MODES}
-                  readOnly="The run's kind does not change; start another session for a different one"
-                />
-                <ChipMenu
-                  label="Access"
-                  value={accessOf(kind)}
-                  items={ACCESS}
-                  readOnly={
-                    kind === 'fix'
-                      ? 'This run writes in its linked worktree'
-                      : 'This run reads the workspace and writes nothing'
-                  }
-                />
-              </>
-            ) : null}
+            {/* Access is what the mode does to the tree, so it is the mode
+                chip's second word rather than a chip of its own. */}
+            {kind ? <ChipMenu label="Mode" value={kind} items={MODES_WITH_ACCESS} readOnly={modeChipTitle(kind)} /> : null}
           </>
         }
         aside={mode.kind === 'disabled' ? mode.reason : undefined}
@@ -147,6 +150,16 @@ export default function Composer({
           onClick: () => onSend(trimmed),
           wide: wideWhenAnswering && mode.kind === 'answer',
         }}
+        stop={
+          running && onCancel
+            ? {
+                onStop: onCancel,
+                disabled: !canCancel,
+                busy: cancelBusy,
+                title: canCancel ? 'Stop the run' : 'Only a run started from this window can be stopped',
+              }
+            : undefined
+        }
       />
     </div>
   )

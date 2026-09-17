@@ -355,21 +355,23 @@ export default function SessionConversation(props: SessionConversationProps): JS
       case 'over_budget':
         return { kind: 'disabled', reason: 'Over budget: a run at its cap cannot be steered.' }
       default:
-        return { kind: 'disabled', reason: 'The run is still working. Wait for it, or cancel it.' }
+        return { kind: 'running' }
     }
   }, [detail, question, steerRefusal])
 
   const send = mode.kind === 'answer' ? answer : steer
   const sendBusy = pending === 'answer' || pending === 'steer'
 
+  // The screen's one filled control, whichever it is: the send, or the Stop
+  // that stands in its place while the run works.
   useProvidePrimaryAction(
     detail
       ? {
-          label: mode.kind === 'answer' ? 'Answer' : 'Steer',
+          label: mode.kind === 'answer' ? 'Answer' : mode.kind === 'running' ? 'Stop' : 'Steer',
           onRun: () => {},
-          disabled: mode.kind === 'disabled',
-          busy: sendBusy,
-          shortcut: '↵',
+          disabled: mode.kind === 'disabled' || (mode.kind === 'running' && !jobId),
+          busy: mode.kind === 'running' ? pending === 'cancel' : sendBusy,
+          shortcut: mode.kind === 'running' ? undefined : '↵',
           title: mode.kind === 'disabled' ? mode.reason : undefined,
           placement: 'screen',
         }
@@ -594,18 +596,16 @@ export default function SessionConversation(props: SessionConversationProps): JS
         title={title}
         sources={sources}
         live={live}
-        terminal={terminal}
         fallbackModel={model.start?.model}
-        onCancel={() => void cancel()}
-        cancelDisabled={!jobId || pending !== ''}
-        cancelTitle={jobId ? 'Stop the run this window started' : 'Only a run started from this window can be cancelled'}
       />
 
       <span className="visually-hidden" aria-live="polite">
         {`Run ${stateWord(detail.status)}`}
       </span>
 
-      {actionError && pending !== 'accept' && mode.kind !== 'answer' && mode.kind !== 'steer' ? (
+      {/* The composer carries what a send or a stop came back with; the
+          line above it is for the errors no composer is up to hold. */}
+      {actionError && pending !== 'accept' && mode.kind === 'disabled' ? (
         <p className="sc-failed-line" role="alert">
           {actionError}
         </p>
@@ -660,6 +660,9 @@ export default function SessionConversation(props: SessionConversationProps): JS
               autoFocus={mode.kind === 'answer'}
               placeholder={placeholder}
               wideWhenAnswering
+              onCancel={() => void cancel()}
+              canCancel={Boolean(jobId) && pending === ''}
+              cancelBusy={pending === 'cancel'}
             />
           </div>
         </div>
