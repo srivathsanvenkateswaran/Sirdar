@@ -130,3 +130,72 @@ Wails app rather than a bare `WKWebView`.
 Headless Brave itself ran fine under the harness sandbox — no CVDisplayLink
 trouble. Only the Swift `WKWebView` harness needed the sandbox lifted, because
 it opens a real window.
+
+## What the fix round changed (2026-09-17, branch `ui-perf-fix`)
+
+Findings #1, #2, #9, #5 and the feedback half of #4 were implemented on
+`ui-perf-fix` and measured against the tree this report was written on
+(`7a4a024`), back to back on one machine, one afternoon, in headless Brave
+against `sirdar serve` on the sandbox workspace at port 47392. #3, the code
+splitting, is untouched and is still a round of its own.
+
+Both builds served the same board, the same 2270-event run
+(`20260915T121105Z-076d`) and the same replayed run — a copy of that log cut
+to 2100 lines, marked running, appended to by `session-trace.mjs` and deleted
+afterwards. The absolute numbers still carry the wide error bar the method
+section describes; what is worth reading is the ratios and the shapes.
+
+| Finding | Scenario | Before | After |
+|---|---|---|---|
+| #1 | 120 lines written 50 ms apart, from the process hosting the run, timed at the service boundary (`SIRDAR_PERF=1 go test ./internal/app -run TestEventLatency`) | watcher poll: **median 224 ms** per line, p95 471 ms; the transcript would move **13 times**, gap median **499 ms** | in-process sink: **median 0 ms** per line, p95 0 ms, max 1 ms; the transcript moves **120 times**, gap median **50 ms**, p95 51 ms |
+| #1 | the same 120 lines written by another process (the CLI) | 36 commits over 6.1 s | unchanged by design — the watcher still polls at 500 ms, and it is the only thing that can see a run this process did not start |
+| #2 | ten consecutive loads of the board, each a full navigation | loads 1–4 at 334/546/321/355 ms, **load 5 never painted** inside the probe's 15 s, and every scenario after it failed too | ten loads, **281–353 ms**, none over 400 ms, the whole script through to the end |
+| #5 | 120 lines the transcript draws nothing for, one every 50 ms, through the watcher | 0 characters changed, **36 React commits** | 0 characters changed, **22 commits** |
+| #5 | the same 120 lines delivered one at a time, which is what the in-process sink now does (vitest, `screens/session/streamCost.test.tsx`) | 120 renders of the screen, one a line | **1 render**, and no card below it drawn at all |
+| #5 | 12 bursts of 12 mixed lines (10 quiet, a call and its result) into the 2100-line run | 103 commits, **2047 component renders**, 14.2 a line; main-thread 2263 ms, longest task 122 ms | 91 commits, **423 component renders**, 2.9 a line; main-thread 1984 ms, longest task 112 ms |
+| #5 | a line that does draw (vitest) | — | **2 renders**: the screen, and the card that arrived. The fifteen cards above it and the answer below are the elements of the render before |
+| #4 | layout switch, the 2100-line run | → Workbench 150 ms, → Document 149 ms, → Conversation 144 ms, with the window empty between the two | → Workbench 129 ms, → Document 114 ms, → Conversation 128 ms, the previous layout painted throughout |
+| #4 | opening that run | 138–366 ms across passes | 128 ms |
+| — | warm board paint, 3 rounds | cold 349 ms, warm median 350 ms | cold 277 ms, warm median 299 ms |
+| — | sidebar navigation | → Register 43 ms, → Eval 49 ms, → Board 49 ms | → Register 48 ms, → Eval 49 ms, → Board 49 ms |
+| — | keystroke in the board filter | median 32.4 ms | median 32.5 ms |
+| — | board at rest, 10 s | 12 commits, 65 component renders | 12 commits, 65 component renders |
+
+Read with the findings they answer:
+
+**#1 is two numbers because it is two paths.** A run the desktop shell or
+`sirdar serve` is hosting now hands every line it writes to the service as it
+writes it, so the reader sees it in under a millisecond and the transcript
+advances every 50 ms instead of roughly once a second. A run the CLI started
+is still found by the watcher's 500 ms poll, which is all a separate process
+leaves to find, and its numbers are the before column on purpose. The two
+share a per-run cursor, so the poll never re-delivers what the sink already
+sent.
+
+**#2 reproduced harder than the report described.** The report saw the sixth
+consecutive load stall for twelve seconds; on this build the fifth never
+painted at all inside a fifteen-second probe, and the browser stayed out of
+sockets for the rest of the run. One shared stream per page, a 5 s keepalive,
+a server that drops a stream whose write fails, and closing the stream on
+`pagehide` so a bfcached page holds nothing: ten loads, none over 353 ms.
+
+**#5 splits the same way #1 does.** Through the watcher the poll had already
+batched the quiet lines, so holding them saves 36 commits down to 22. Through
+the new per-line path there is no batching to inherit, and without the hold
+each of the 120 lines would have rendered the screen on its own — the fix is
+what keeps the faster delivery from costing more than it gains. The burst
+figure is the render cost of a line that does draw: 14.2 components a line
+down to 2.9, because the rows the model kept are now the elements React kept.
+
+**#8 still holds and #6 still needs nothing.** The transcript is 16 rows and
+333 nodes whatever the log length, no frame in any scroll went past two
+vsyncs on either build, and the keystroke is unchanged at the measurement
+floor. Nothing here made the board slower: it is the same 12 commits and 65
+renders at rest, and the same navigation.
+
+`perf-trace.mjs` grew three repairs in the course of this: it prints every
+load in order rather than only the median, a load that never paints is
+reported as the finding it is instead of ending the run, and a scenario whose
+probe no longer matches the markup is skipped the way `session-trace.mjs`
+already skipped its layout scenario. The hover probe is one of those — it
+looks for `.sd-session-card`, and on a long enough run it stops matching.
