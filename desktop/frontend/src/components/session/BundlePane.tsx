@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { Attachment, Transport } from '../../api/types'
 import { reasonOf } from '../../lib/format'
+import { usePathAction } from '../../lib/pathAction'
 import ContextMenu from '../../ui/context-menu'
 import AttachmentPreview from './AttachmentPreview'
 import {
@@ -46,6 +47,11 @@ export interface BundlePaneProps {
   helpdeskKey?: string
   /** Reveals the run's bundle directory; absent in a browser, which cannot. */
   onOpenFolder?: () => void
+  /**
+   * Where the bundle is on disk. The desktop opens it; a browser copies the
+   * path, so the menu is there either way rather than only on the desktop.
+   */
+  folderPath?: string
   /** Told what the prompt carried once it is read, for a tab's count or an outline. */
   onLoaded?: (bundle: Bundle | null) => void
 }
@@ -298,6 +304,7 @@ export default function BundlePane({
   assignee,
   helpdeskKey,
   onOpenFolder,
+  folderPath = '',
   onLoaded,
 }: BundlePaneProps): JSX.Element {
   const [prompt, setPrompt] = useState<string | null>(null)
@@ -305,6 +312,12 @@ export default function BundlePane({
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [preview, setPreview] = useState<Attachment | null>(null)
   const [menu, setMenu] = useState(false)
+  const folder = usePathAction({
+    path: folderPath,
+    open: onOpenFolder,
+    openLabel: 'Open bundle folder',
+    copyLabel: 'Copy bundle path',
+  })
   const menuButton = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
@@ -353,7 +366,7 @@ export default function BundlePane({
 
   return (
     <div className="si-bundle" data-testid="bundle-view">
-      {onOpenFolder ? (
+      {folder.disabled ? null : (
         <div className="si-bundle__menu">
           <button
             ref={menuButton}
@@ -370,10 +383,15 @@ export default function BundlePane({
             open={menu}
             anchor={menuButton}
             label="Bundle options"
-            items={[{ id: 'folder', label: 'Open bundle folder', onSelect: onOpenFolder }]}
+            items={[{ id: 'folder', label: folder.label, onSelect: folder.run }]}
             onClose={() => setMenu(false)}
           />
         </div>
+      )}
+      {folder.failure ? (
+        <p className="si-empty si-empty--error" role="alert">
+          {folder.failure}
+        </p>
       ) : null}
       <TicketBlock bundle={bundle} assignee={assignee} helpdeskKey={helpdeskKey} />
       <ConversationBlock bundle={bundle} />

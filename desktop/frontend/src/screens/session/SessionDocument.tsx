@@ -291,6 +291,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
             assignee={detail.assignee}
             helpdeskKey={detail.helpdeskKey}
             onOpenFolder={openBundleFolder}
+            folderPath={detail.bundleDir}
           />
         </Drawer>
         <Drawer

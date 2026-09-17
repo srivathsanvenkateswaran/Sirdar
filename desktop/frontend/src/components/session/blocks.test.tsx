@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest'
 import type { SourcesSummary, Transport } from '../../api/types'
 import type { IndexedEvent } from '../../lib/events'
+import { runDirOf } from '../../lib/pathAction'
 import { setSessionsShow } from '../../lib/sessionsShow'
 import { createFakeTransport } from '../../store/fakeTransport'
 import { parseNote } from '../../lib/note'
@@ -210,6 +211,26 @@ describe('RunHeader', () => {
     fireEvent.keyDown(about, { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: 'About this run' })).toBeNull()
     expect(screen.getByRole('button', { name: 'About this run' })).toHaveFocus()
+  })
+
+  it('offers the run folder as a path to copy when the shell cannot open it', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    // A browser's transport: no openRunDir, so nothing can reveal a folder.
+    render(<RunHeader detail={triage.detail} title={triage.detail.title} transport={{} as Transport} workspaceId="ws1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'About this run' }))
+    const about = screen.getByRole('dialog', { name: 'About this run' })
+    // The row is there rather than missing, and says what pressing it does.
+    expect(within(about).queryByRole('button', { name: 'Open run folder' })).toBeNull()
+    const copy = within(about).getByRole('button', { name: 'Copy run folder path' })
+    const runDir = runDirOf(triage.detail.bundleDir)
+    expect(runDir).not.toBe(triage.detail.bundleDir)
+    expect(copy.getAttribute('title')).toContain(runDir)
+
+    fireEvent.click(copy)
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(runDir))
+    await waitFor(() => expect(within(about).getByRole('button', { name: 'Copy run folder path' })).toHaveTextContent('Copied'))
   })
 
   it("links the helpdesk number to the page the run's prompt names", async () => {

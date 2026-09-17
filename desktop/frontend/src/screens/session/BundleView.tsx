@@ -8,8 +8,8 @@ import BundlePane from '../../components/session/BundlePane'
  * the playbooks folded under them.
  *
  * The bundle directory is not drawn here at all. It is in the pane's own
- * menu as "Open bundle folder", which the desktop shell answers and a
- * browser leaves out.
+ * menu, which the desktop answers with "Open bundle folder" and a browser
+ * with "Copy bundle path", so the menu is there either way.
  */
 
 export type { Bundle, BundleMessage, Playbook } from '../../components/session/bundleModel'
@@ -25,6 +25,10 @@ export interface BundleViewProps {
   helpdeskKey?: string
   /** Reveals the run's bundle directory; absent in a browser, which cannot. */
   onOpenFolder?: () => void
+  /** Where the bundle is on disk, for the browser's copy of the same menu item. */
+  folderPath?: string
+  /** Told what the prompt carried once it is read, for a tab's count or an outline. */
+  onLoaded?: (bundle: import('../../components/session/bundleModel').Bundle | null) => void
 }
 
 export default function BundleView(props: BundleViewProps): JSX.Element {

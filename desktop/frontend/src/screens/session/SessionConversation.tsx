@@ -831,6 +831,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                     assignee={detail.assignee}
                     helpdeskKey={detail.helpdeskKey}
                     onOpenFolder={openBundleFolder}
+                    folderPath={detail.bundleDir}
                   />
                 </div>
               ) : null}

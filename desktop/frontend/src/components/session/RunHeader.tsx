@@ -1,6 +1,7 @@
 import { memo, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { RunDetail, SourcesSummary, Transport } from '../../api/types'
 import { useAnchor } from '../../lib/anchor'
+import { runDirOf, usePathAction } from '../../lib/pathAction'
 import { probeRender } from '../../lib/renderProbe'
 import { parseBundle } from '../../lib/bundle'
 import { duration, parseTime, usd } from '../../lib/format'
@@ -166,6 +167,11 @@ interface AboutProps {
   detail: RunDetail
   title?: string
   model: string
+  /**
+   * Reveals the run's directory in the desktop's file manager. Absent in a
+   * browser, where the control copies the path instead rather than going
+   * missing.
+   */
   onOpenRunDir?: () => void
 }
 
@@ -177,6 +183,14 @@ interface AboutProps {
  */
 function About({ detail, title, model, onOpenRunDir }: AboutProps): JSX.Element {
   const live = LIVE.has(detail.status)
+  // Open it on the desktop, copy its path in a browser: the run folder is
+  // named either way, so the web UI is not short the row.
+  const folder = usePathAction({
+    path: runDirOf(detail.bundleDir),
+    open: onOpenRunDir,
+    openLabel: 'Open run folder',
+    copyLabel: 'Copy run folder path',
+  })
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -250,16 +264,22 @@ function About({ detail, title, model, onOpenRunDir }: AboutProps): JSX.Element 
           <CopyIcon />
           {copied ? 'Copied' : 'Copy'}
         </button>
-        {onOpenRunDir ? (
-          <button type="button" className="sn-about__act" onClick={onOpenRunDir}>
-            <OpenIcon />
-            Open run folder
+        {folder.disabled ? null : (
+          <button
+            type="button"
+            className="sn-about__act"
+            aria-label={folder.name}
+            title={folder.title}
+            onClick={folder.run}
+          >
+            {folder.canOpen ? <OpenIcon /> : <CopyIcon />}
+            {folder.label}
           </button>
-        ) : null}
+        )}
       </div>
-      {copyFailed ? (
+      {copyFailed || folder.failure ? (
         <p className="sn-about__failed" role="alert">
-          {copyFailed}
+          {copyFailed || folder.failure}
         </p>
       ) : null}
     </>

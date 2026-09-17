@@ -552,6 +552,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
                   assignee={detail.assignee}
                   helpdeskKey={detail.helpdeskKey}
                   onOpenFolder={openBundleFolder}
+                  folderPath={detail.bundleDir}
                   onLoaded={onBundleLoaded}
                 />
               ) : null}
