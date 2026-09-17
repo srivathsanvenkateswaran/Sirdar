@@ -37,6 +37,7 @@ type (
 	RetroReport          = app.RetroReport
 	GoldenEntry          = app.GoldenEntry
 	ConfigSummary        = app.ConfigSummary
+	PlaybookSummary      = app.PlaybookSummary
 	NotifySummary        = app.NotifySummary
 	NotifyDestination    = app.NotifyDestination
 	WebhooksSummary      = app.WebhooksSummary

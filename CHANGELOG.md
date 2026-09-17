@@ -62,6 +62,23 @@ Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, 
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
 
+- Playbooks are editable from the app. They are the files a workspace keeps its hard-won
+  gotchas in and the thing most worth changing as the agent goes wrong, and until now the only
+  way to reach one was to find `.sirdar/playbooks/` in a file manager. **Settings › Playbooks**
+  (`#/settings/playbooks`) lists them in the order the prompt loads them — the filename's
+  numeric prefix, the first H1 as a title, the first paragraph as a lede — with Open in editor,
+  an in-app monospace editor behind Edit, New playbook from a two-line template, and Delete in
+  the row's menu behind a confirm. A workspace with none gets two sentences about what a
+  playbook is and a button that writes the same starting set `sirdar init` scaffolds. Behind
+  it: `Playbooks`, `Playbook`, `SavePlaybook`, `AddPlaybook`, `DeletePlaybook`,
+  `ScaffoldPlaybooks` and `OpenPlaybook` on the service, the matching bridge methods, and
+  `/api/workspaces/{id}/playbooks` on `sirdar serve` (`GET`, `POST`, `GET`/`PUT`/`DELETE`
+  `/{name}`, `POST /{name}/open`, `POST /scaffold`). A name is one plain filename and a new one
+  has to read `20-logs.md`, since the digits are what order the prompt; writes are atomic and
+  confined to `.sirdar`, so a workspace pointing `playbooks:` at its own source tree gets a
+  list it can read and no editor; a delete moves the file to `.sirdar/playbooks/.trash/` rather
+  than unlinking it; and the open route is refused on a listener other machines can reach, the
+  way the fix route is (`docs/concepts.md`).
 - The Queue lane shows bug tickets, not everything with your name on it. A tracker assigns a
   person their story's sub-tasks and chores alongside the bugs, and the board offered a Triage
   button on all of them. `TrackerTicket` now carries `Type` — lower-cased and folded onto one

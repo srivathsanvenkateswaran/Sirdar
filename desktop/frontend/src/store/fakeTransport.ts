@@ -10,6 +10,7 @@ import type {
   MCPCallResult,
   MCPInventory,
   MCPToolList,
+  PlaybookSummary,
   Quota,
   RegisterRow,
   RunDetail,
@@ -43,6 +44,11 @@ export interface TransportCalls {
   mcpCall: { ws: string; server: string; tool: string; args?: unknown }[]
   deleteRun: { ws: string; runId: string }[]
   search: { ws: string; q: string }[]
+  savePlaybook: { ws: string; name: string; body: string }[]
+  addPlaybook: { ws: string; name: string; body: string }[]
+  deletePlaybook: { ws: string; name: string }[]
+  openPlaybook: { ws: string; name: string }[]
+  scaffoldPlaybooks: string[]
   resolveHelpdesk: { ws: string; number: string }[]
   composeIntent: { ws: string; text: string }[]
 }
@@ -62,6 +68,10 @@ export interface FakeTransport extends Transport {
   failDelete(err: Error | null): void
   /** Makes `search()` reject. */
   failSearch(err: Error | null): void
+  /** Makes every playbook call reject, e.g. with the 501 a workspace that keeps them outside .sirdar gives. */
+  failPlaybooks(err: Error | null): void
+  /** The playbooks the fake holds right now, as filename to markdown. */
+  playbookBodies(): Record<string, string>
   subscriberCount(): number
 }
 
@@ -280,6 +290,33 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
   }
 }
 
+/** The name a new playbook must have, as internal/app spells it. */
+const PLAYBOOK_NAME = /^[0-9]{2}-[a-z0-9-]+\.md$/
+
+/** The playbooks a scaffolded workspace has, as filename to markdown. */
+export const SAMPLE_PLAYBOOKS: Record<string, string> = {
+  '10-helpdesk.md':
+    '# Helpdesk\n\nThe helpdesk thread is the customer’s own words. Read all of it before the tracker ticket.\n',
+  '20-logs.md':
+    '# Logs\n\nLoki keeps 30 days. A query with no result over a longer window proves nothing.\n',
+}
+
+/** One playbook's row, derived from its body the way the service derives it. */
+export function playbookRow(name: string, body: string): PlaybookSummary {
+  const lines = body.split('\n').map((l) => l.trim())
+  const heading = lines.find((l) => l.startsWith('# '))
+  const lede = lines.find((l) => l !== '' && !l.startsWith('#') && !l.startsWith('- ')) ?? ''
+  return {
+    name,
+    file: `.sirdar/playbooks/${name}`,
+    title: heading ? heading.slice(2).trim() : name.replace(/\.md$/, ''),
+    lede: lede.length > 160 ? `${lede.slice(0, 160)}…` : lede,
+    order: /^[0-9]{2}-/.test(name) ? name.slice(0, 2) : '',
+    bytes: body.length,
+    modifiedAt: '2026-09-16T09:12:00Z',
+  }
+}
+
 /** A workspace that notifies nowhere and serves no inbound hooks. */
 export function emptyConfigSummary(): ConfigSummary {
   return {
@@ -366,6 +403,11 @@ export function createFakeTransport(seed: {
   /** What `composeIntent()` answers. Absent makes the call reject, as a workspace with no provider does. */
   composed?: ComposedIntent
   /**
+   * The playbooks the workspace has, as filename to markdown. `{}` is the
+   * empty state; leaving it out gives the two-file sample set.
+   */
+  playbooks?: Record<string, string>
+  /**
    * Whole runs by run id — the detail, the log, the note, the prompt and
    * the change — for the session screen: `run`, `events`, `note`, `prompt`
    * and `runDiff` answer from the fixture when asked for one of these ids.
@@ -378,6 +420,8 @@ export function createFakeTransport(seed: {
   let queueError: Error | null = null
   let deleteError: Error | null = null
   let searchError: Error | null = null
+  let playbookError: Error | null = null
+  const playbookBodies: Record<string, string> = { ...(seed.playbooks ?? SAMPLE_PLAYBOOKS) }
   let currentDiff: RunDiff | null = seed.diff === undefined ? diff() : seed.diff
   /** A fixture run's change, edited in place by `dropHunk` like the shared one. */
   const sessionDiffs = new Map<string, RunDiff | null>(
@@ -408,6 +452,11 @@ export function createFakeTransport(seed: {
     mcpCall: [],
     deleteRun: [],
     search: [],
+    savePlaybook: [],
+    addPlaybook: [],
+    deletePlaybook: [],
+    openPlaybook: [],
+    scaffoldPlaybooks: [],
     resolveHelpdesk: [],
     composeIntent: [],
   }
@@ -435,6 +484,10 @@ export function createFakeTransport(seed: {
     failSearch(err) {
       searchError = err
     },
+    failPlaybooks(err) {
+      playbookError = err
+    },
+    playbookBodies: () => ({ ...playbookBodies }),
     subscriberCount: () => handlers.size,
 
     workspaces: async () => seed.workspaces ?? [workspace()],
@@ -536,6 +589,61 @@ export function createFakeTransport(seed: {
     addGolden: async (ws, o) => {
       calls.addGolden.push({ ws, ...o })
       return { key: o.key ?? 'OMNI-1', dir: '/golden/OMNI-1', bundleDir: '/golden/OMNI-1/bundle', assertions: 0, hasExpectedNote: false }
+    },
+    playbooks: async () => {
+      if (playbookError) throw playbookError
+      return Object.keys(playbookBodies)
+        .sort()
+        .map((name) => playbookRow(name, playbookBodies[name]))
+    },
+    playbook: async (_ws, name) => {
+      if (playbookError) throw playbookError
+      const body = playbookBodies[name]
+      if (body === undefined) throw new Error(`not_found: no playbook named ${name}`)
+      return body
+    },
+    savePlaybook: async (ws, name, body) => {
+      calls.savePlaybook.push({ ws, name, body })
+      if (playbookError) throw playbookError
+      if (playbookBodies[name] === undefined && !PLAYBOOK_NAME.test(name)) {
+        throw new Error(`not_found: ${name} is not a playbook filename`)
+      }
+      playbookBodies[name] = body
+      return playbookRow(name, body)
+    },
+    addPlaybook: async (ws, name, body) => {
+      calls.addPlaybook.push({ ws, name, body })
+      if (playbookError) throw playbookError
+      if (!PLAYBOOK_NAME.test(name)) {
+        throw new Error('bad_request: name must be two digits, a hyphen, a lowercase slug and .md')
+      }
+      if (playbookBodies[name] !== undefined) {
+        throw new Error(`conflict: a playbook named ${name} is already there`)
+      }
+      playbookBodies[name] = body
+      return playbookRow(name, body)
+    },
+    deletePlaybook: async (ws, name) => {
+      calls.deletePlaybook.push({ ws, name })
+      if (playbookError) throw playbookError
+      if (playbookBodies[name] === undefined) throw new Error(`not_found: no playbook named ${name}`)
+      delete playbookBodies[name]
+    },
+    scaffoldPlaybooks: async (ws) => {
+      calls.scaffoldPlaybooks.push(ws)
+      if (playbookError) throw playbookError
+      // The service never overwrites a file that is already there.
+      for (const [name, body] of Object.entries(SAMPLE_PLAYBOOKS)) {
+        if (playbookBodies[name] === undefined) playbookBodies[name] = body
+      }
+      return Object.keys(playbookBodies)
+        .sort()
+        .map((name) => playbookRow(name, playbookBodies[name]))
+    },
+    openPlaybook: async (ws, name) => {
+      calls.openPlaybook.push({ ws, name })
+      if (playbookError) throw playbookError
+      if (playbookBodies[name] === undefined) throw new Error(`not_found: no playbook named ${name}`)
     },
     configSummary: async () => seed.configSummary ?? emptyConfigSummary(),
     resume: async () => ({ jobId: 'job-resume' }),

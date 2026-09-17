@@ -340,6 +340,47 @@ describe('http transport', () => {
       'forbidden: not on loopback',
     )
   })
+
+  it('reads, writes, creates, deletes and opens a playbook on its own route', async () => {
+    const fetchMock = mockFetch({ name: '10-helpdesk.md' })
+    const t = createTransport()
+
+    await t.playbooks('ws1')
+    await t.savePlaybook('ws1', '10-helpdesk.md', '# Helpdesk\n')
+    await t.addPlaybook('ws1', '40-database.md', '# Database\n')
+    await t.deletePlaybook('ws1', '10-helpdesk.md')
+    await t.scaffoldPlaybooks('ws1')
+    await t.openPlaybook('ws1', '10-helpdesk.md')
+
+    expect(fetchMock.mock.calls.map((c) => [c[0], (c[1] as RequestInit | undefined)?.method])).toEqual([
+      ['/api/workspaces/ws1/playbooks', undefined],
+      ['/api/workspaces/ws1/playbooks/10-helpdesk.md', 'PUT'],
+      ['/api/workspaces/ws1/playbooks', 'POST'],
+      ['/api/workspaces/ws1/playbooks/10-helpdesk.md', 'DELETE'],
+      ['/api/workspaces/ws1/playbooks/scaffold', 'POST'],
+      ['/api/workspaces/ws1/playbooks/10-helpdesk.md/open', 'POST'],
+    ])
+    // The markdown travels as a JSON field, not as the request body: the
+    // server's cross-site guard requires application/json on every route
+    // that writes.
+    const save = fetchMock.mock.calls[1]![1] as RequestInit
+    expect(save.headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(save.body).toBe(JSON.stringify({ body: '# Helpdesk\n' }))
+    expect((fetchMock.mock.calls[2]![1] as RequestInit).body).toBe(
+      JSON.stringify({ name: '40-database.md', body: '# Database\n' }),
+    )
+  })
+
+  it('reads one playbook as markdown, with its name escaped', async () => {
+    const spy = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response('# Helpdesk\n', { headers: { 'Content-Type': 'text/markdown' } }),
+    )
+    vi.stubGlobal('fetch', spy)
+
+    await expect(createTransport().playbook('ws 1', '10-helpdesk.md')).resolves.toBe('# Helpdesk\n')
+    expect(spy.mock.calls[0]![0]).toBe('/api/workspaces/ws%201/playbooks/10-helpdesk.md')
+  })
 })
 
 /*
@@ -578,5 +619,34 @@ describe('wails transport', () => {
 
     delete (window as unknown as { go?: unknown }).go
     expect(createTransport().openConfig).toBeUndefined()
+  })
+
+  // Playbooks are the one editing surface both shells have: the browser
+  // build reaches the same routes, so `openPlaybook` is not optional the
+  // way `openConfig` is.
+  it('reads and writes playbooks through their bound methods, listing null as none', async () => {
+    const row = { name: '10-helpdesk.md', file: '.sirdar/playbooks/10-helpdesk.md', title: 'Helpdesk', lede: '', order: '10', bytes: 12, modifiedAt: '2026-09-16T09:12:00Z' }
+    const bridge = stubBridge({
+      Playbooks: async () => null,
+      Playbook: async () => '# Helpdesk\n',
+      SavePlaybook: async () => row,
+      AddPlaybook: async () => row,
+      DeletePlaybook: async () => undefined,
+      ScaffoldPlaybooks: async () => [row],
+      OpenPlaybook: async () => undefined,
+    })
+    const t = createWailsTransport()
+
+    await expect(t.playbooks('ws1')).resolves.toEqual([])
+    await expect(t.playbook('ws1', '10-helpdesk.md')).resolves.toBe('# Helpdesk\n')
+    await expect(t.savePlaybook('ws1', '10-helpdesk.md', '# New\n')).resolves.toEqual(row)
+    await expect(t.addPlaybook('ws1', '40-database.md', '# Database\n')).resolves.toEqual(row)
+    await expect(t.deletePlaybook('ws1', '10-helpdesk.md')).resolves.toBeUndefined()
+    await expect(t.scaffoldPlaybooks('ws1')).resolves.toEqual([row])
+    await expect(t.openPlaybook('ws1', '10-helpdesk.md')).resolves.toBeUndefined()
+
+    expect(bridge.SavePlaybook).toHaveBeenCalledWith('ws1', '10-helpdesk.md', '# New\n')
+    expect(bridge.AddPlaybook).toHaveBeenCalledWith('ws1', '40-database.md', '# Database\n')
+    expect(bridge.OpenPlaybook).toHaveBeenCalledWith('ws1', '10-helpdesk.md')
   })
 })

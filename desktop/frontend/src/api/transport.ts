@@ -10,6 +10,7 @@ import type {
   MCPCallResult,
   MCPInventory,
   MCPToolList,
+  PlaybookSummary,
   RetroReport,
   Quota,
   RegisterRow,
@@ -197,6 +198,41 @@ export function createHTTPTransport(): Transport {
       postJSON<GoldenEntry>(`/workspaces/${encodeURIComponent(ws)}/golden`, o),
     configSummary: (ws) =>
       getJSON<ConfigSummary>(`/workspaces/${encodeURIComponent(ws)}/config/summary`),
+    playbooks: (ws) =>
+      getJSON<PlaybookSummary[]>(`/workspaces/${encodeURIComponent(ws)}/playbooks`),
+    playbook: (ws, name) =>
+      getText(
+        `/workspaces/${encodeURIComponent(ws)}/playbooks/${encodeURIComponent(name)}`,
+      ),
+    savePlaybook: async (ws, name, body) => {
+      // The markdown crosses as a JSON field rather than as the request
+      // body, so the server's cross-site guard — which requires
+      // application/json on every mutating route — covers this one too.
+      const res = await request(
+        `/workspaces/${encodeURIComponent(ws)}/playbooks/${encodeURIComponent(name)}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body }),
+        },
+      )
+      return (await res.json()) as PlaybookSummary
+    },
+    addPlaybook: (ws, name, body) =>
+      postJSON<PlaybookSummary>(`/workspaces/${encodeURIComponent(ws)}/playbooks`, { name, body }),
+    deletePlaybook: async (ws, name) => {
+      await request(
+        `/workspaces/${encodeURIComponent(ws)}/playbooks/${encodeURIComponent(name)}`,
+        { method: 'DELETE' },
+      )
+    },
+    scaffoldPlaybooks: (ws) =>
+      postJSON<PlaybookSummary[]>(`/workspaces/${encodeURIComponent(ws)}/playbooks/scaffold`),
+    openPlaybook: async (ws, name) => {
+      await postJSON<void>(
+        `/workspaces/${encodeURIComponent(ws)}/playbooks/${encodeURIComponent(name)}/open`,
+      )
+    },
     resume: (ws, runId, answer, model) =>
       postJSON<{ jobId: string }>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/resume`,
@@ -337,6 +373,13 @@ interface BridgeBindings {
   Golden(ws: string): Promise<GoldenEntry[] | null>
   AddGolden(ws: string, key: string, runId: string): Promise<GoldenEntry>
   ConfigSummary(ws: string): Promise<ConfigSummary>
+  Playbooks(ws: string): Promise<PlaybookSummary[] | null>
+  Playbook(ws: string, name: string): Promise<string>
+  SavePlaybook(ws: string, name: string, body: string): Promise<PlaybookSummary>
+  AddPlaybook(ws: string, name: string, body: string): Promise<PlaybookSummary>
+  DeletePlaybook(ws: string, name: string): Promise<void>
+  ScaffoldPlaybooks(ws: string): Promise<PlaybookSummary[] | null>
+  OpenPlaybook(ws: string, name: string): Promise<void>
   Resume(ws: string, runId: string, answer: string, model: string): Promise<string>
   Steer(ws: string, runId: string, text: string, model: string): Promise<string>
   RunDiff(ws: string, runId: string): Promise<RunDiff>
@@ -442,6 +485,17 @@ export function createWailsTransport(): Transport {
     golden: async (ws) => list(await bridge().Golden(ws)),
     addGolden: (ws, o) => bridge().AddGolden(ws, o.key ?? '', o.runId ?? ''),
     configSummary: (ws) => bridge().ConfigSummary(ws),
+    playbooks: async (ws) => list(await bridge().Playbooks(ws)),
+    playbook: (ws, name) => bridge().Playbook(ws, name),
+    savePlaybook: (ws, name, body) => bridge().SavePlaybook(ws, name, body),
+    addPlaybook: (ws, name, body) => bridge().AddPlaybook(ws, name, body),
+    deletePlaybook: async (ws, name) => {
+      await bridge().DeletePlaybook(ws, name)
+    },
+    scaffoldPlaybooks: async (ws) => list(await bridge().ScaffoldPlaybooks(ws)),
+    openPlaybook: async (ws, name) => {
+      await bridge().OpenPlaybook(ws, name)
+    },
     resume: async (ws, runId, answer, model) => ({
       jobId: await bridge().Resume(ws, runId, answer ?? '', model ?? ''),
     }),

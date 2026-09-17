@@ -94,6 +94,16 @@ export function NotesIcon(): JSX.Element {
   )
 }
 
+/** A small closed book — Playbooks. */
+export function PlaybooksIcon(): JSX.Element {
+  return (
+    <Icon>
+      <path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v14H6.5A1.5 1.5 0 0 0 5 18.5z" />
+      <path d="M5 18.5A1.5 1.5 0 0 1 6.5 17H19v4H6.5A1.5 1.5 0 0 1 5 19.5zM9 7h6" />
+    </Icon>
+  )
+}
+
 /** A bell — Notifications. */
 export function NotificationsIcon(): JSX.Element {
   return (

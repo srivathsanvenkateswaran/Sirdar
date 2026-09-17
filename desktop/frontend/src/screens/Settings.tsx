@@ -22,6 +22,7 @@ import {
   NotesIcon,
   NotificationsIcon,
   PermissionsIcon,
+  PlaybooksIcon,
   ProvidersIcon,
   ReadingIcon,
   ServersIcon,
@@ -29,6 +30,7 @@ import {
   WebhooksIcon,
 } from './settings/icons'
 import MCPPage, { type InventoryState } from './settings/MCPPage'
+import PlaybooksPage, { usePlaybooks } from './settings/PlaybooksPage'
 import ProvidersPage from './settings/ProvidersPage'
 import { type DoctorState, type Loaded } from './settings/shared'
 import ToolsPage, { useToolTester } from './settings/ToolsPage'
@@ -52,6 +54,7 @@ export const SETTINGS_GROUPS: ModalNavGroup[] = [
       { id: 'tools', label: 'Try a tool', icon: <ToolIcon /> },
       { id: 'permissions', label: 'Permissions', icon: <PermissionsIcon /> },
       { id: 'notes', label: 'Notes', icon: <NotesIcon /> },
+      { id: 'playbooks', label: 'Playbooks', icon: <PlaybooksIcon /> },
       { id: 'notifications', label: 'Notifications', icon: <NotificationsIcon /> },
       { id: 'webhooks', label: 'Webhooks', icon: <WebhooksIcon /> },
     ],
@@ -228,15 +231,19 @@ export default function Settings(props: {
   }, [transport, ws, connecting])
 
   const tester = useToolTester(transport, currentWorkspaceId, inventory)
+  const playbooks = usePlaybooks(transport, currentWorkspaceId)
 
   // The modal's filled button is the window's one: Call while Try a tool is
-  // up, the footer's Save (disabled, since nothing here is written by the
-  // app) on every other page. Both are drawn in the modal itself, which is
-  // what `placement: 'screen'` tells the sidebar, so its New session steps
-  // down to the bordered style either way. Publishing nothing on the Save
-  // pages left two filled buttons on the window: the sidebar's, and a
-  // disabled Save that is filled all the same.
+  // up, the Playbooks page's own commit while that is (Save in its editor,
+  // New playbook over its list, Create the starting set when it is empty),
+  // and the footer's Save — disabled, since a config page is not written by
+  // the app — on every other page. All of them are drawn in the modal
+  // itself, which is what `placement: 'screen'` tells the sidebar, so its
+  // New session steps down to the bordered style either way. Publishing
+  // nothing on the Save pages left two filled buttons on the window: the
+  // sidebar's, and a disabled Save that is filled all the same.
   const tools = open && page === 'tools'
+  const books = open && page === 'playbooks'
   useProvidePrimaryAction(
     !open
       ? null
@@ -249,13 +256,21 @@ export default function Settings(props: {
             title: tester.problem || undefined,
             placement: 'screen',
           }
-        : {
-            label: 'Save',
-            onRun: () => {},
-            disabled: true,
-            title: SAVE_TITLE,
-            placement: 'screen',
-          },
+        : books
+          ? {
+              label: playbooks.primary.label,
+              onRun: playbooks.primary.run,
+              disabled: playbooks.primary.disabled,
+              busy: playbooks.primary.busy,
+              placement: 'screen',
+            }
+          : {
+              label: 'Save',
+              onRun: () => {},
+              disabled: true,
+              title: SAVE_TITLE,
+              placement: 'screen',
+            },
   )
 
   const inventoryState: InventoryState = { inventory, connecting, tested }
@@ -296,6 +311,7 @@ export default function Settings(props: {
     tools: <ToolsPage currentWorkspaceId={currentWorkspaceId} inventory={inventory} tester={tester} />,
     permissions: <PermissionsPage {...configProps} />,
     notes: <NotesPage {...configProps} />,
+    playbooks: <PlaybooksPage playbooks={playbooks} currentWorkspaceId={currentWorkspaceId} />,
     notifications: <NotificationsPage {...configProps} />,
     webhooks: <WebhooksPage {...configProps} />,
     reading: <ReadingPage />,
@@ -304,29 +320,31 @@ export default function Settings(props: {
   }
 
   /*
-   * The footer. Save is disabled on every page: nothing here has an API to
-   * write through yet, and the note says where the values come from. Try a
-   * tool has its own commit button in the page, so its footer only closes.
+   * The footer. Save is disabled on the config pages: those have no API to
+   * write through, and the note says where the values come from. Try a tool
+   * and Playbooks each have their own commit button in the page, so their
+   * footer only closes.
    */
-  const footer = tools ? (
-    <Button variant="ghost" onClick={onClose}>
-      Close
-    </Button>
-  ) : (
-    <>
-      <p className="settings-foot-note">
-        {APP_PAGES.has(page)
-          ? 'These apply as they are switched.'
-          : 'Settings are read from .sirdar/config.yaml'}
-      </p>
+  const footer =
+    tools || books ? (
       <Button variant="ghost" onClick={onClose}>
-        Cancel
+        Close
       </Button>
-      <Button variant="primary" disabled title={SAVE_TITLE}>
-        Save
-      </Button>
-    </>
-  )
+    ) : (
+      <>
+        <p className="settings-foot-note">
+          {APP_PAGES.has(page)
+            ? 'These apply as they are switched.'
+            : 'Settings are read from .sirdar/config.yaml'}
+        </p>
+        <Button variant="ghost" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button variant="primary" disabled title={SAVE_TITLE}>
+          Save
+        </Button>
+      </>
+    )
 
   return (
     <ModalSheet

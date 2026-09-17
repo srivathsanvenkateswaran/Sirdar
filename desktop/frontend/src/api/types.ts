@@ -272,6 +272,26 @@ export interface BudgetSummary { maxTurns: number; maxMinutes: number; maxUsd: n
 export interface PermissionsSummary { bash: string[]; fixBash: string[]; fetch: string[]; readAlso: string[]; mcp: string[] }
 /** Where notes go and what they are called. `templates` is absent on the embedded defaults. */
 export interface NotesSummary { dir: string; templates?: string; filenames: { triage: string; rca: string; resolution: string } }
+/**
+ * One playbook as the Settings list draws it: what it is called, what it
+ * says it is about, and how big and how old it is. The body is not here —
+ * it is read one at a time, by `playbook(ws, name)`.
+ */
+export interface PlaybookSummary {
+  /** The file's own name, `.md` included. Every other call takes this. */
+  name: string
+  /** The path relative to the workspace root, for finding it outside the app. */
+  file: string
+  /** The first H1, or the name when the file has none. */
+  title: string
+  /** The first paragraph, cut at 160 characters. */
+  lede: string
+  /** The filename's numeric prefix, '' when it has none. The list is in this order. */
+  order: string
+  bytes: number
+  /** RFC 3339, UTC. */
+  modifiedAt: string
+}
 export interface MCPSummary { workspaceOnly: boolean }
 export interface NotifySummary { enabled: boolean; on: string[]; includeTitle: boolean; destinations: NotifyDestination[] }
 export interface NotifyDestination { type: 'slack'|'teams'|'generic'; credential?: string; target?: string; headers?: string[]; signed?: boolean }
@@ -362,6 +382,25 @@ export interface Transport {
   golden(ws: string): Promise<GoldenEntry[]>;
   addGolden(ws: string, o: { key?: string; runId?: string }): Promise<GoldenEntry>;
   configSummary(ws: string): Promise<ConfigSummary>;
+  /** The playbooks under the workspace's playbooks directory, in the order the prompt loads them. */
+  playbooks(ws: string): Promise<PlaybookSummary[]>;
+  /** One playbook's markdown, exactly as the prompt reads it. */
+  playbook(ws: string, name: string): Promise<string>;
+  /** Writes a playbook's body and answers with its row. The change applies to the next run. */
+  savePlaybook(ws: string, name: string, body: string): Promise<PlaybookSummary>;
+  /** Creates a playbook. A name already taken is refused (409). */
+  addPlaybook(ws: string, name: string, body: string): Promise<PlaybookSummary>;
+  /** Moves a playbook into the playbooks directory's `.trash`; the prompt stops loading it. */
+  deletePlaybook(ws: string, name: string): Promise<void>;
+  /** Writes the starting set `sirdar init` scaffolds, skipping files already there. */
+  scaffoldPlaybooks(ws: string): Promise<PlaybookSummary[]>;
+  /**
+   * Opens one playbook's file in whatever the machine running Sirdar
+   * associates with markdown. Unlike `openConfig` both transports have it:
+   * `sirdar serve` runs on the operator's own machine, and the route is
+   * refused on a listener other machines can reach.
+   */
+  openPlaybook(ws: string, name: string): Promise<void>;
   /**
    * Continues a blocked run. `model` puts the continued session, and every
    * session of the run after it, on another model — the way past a run

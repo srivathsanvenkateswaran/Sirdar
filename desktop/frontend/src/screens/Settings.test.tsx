@@ -94,7 +94,7 @@ function go(page: string): void {
 }
 
 describe('the settings nav', () => {
-  it('lists the twelve pages in two groups, General first', () => {
+  it('lists the thirteen pages in two groups, General first', () => {
     open()
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
     expect(within(nav).getByText('Settings')).toBeInTheDocument()
@@ -103,7 +103,7 @@ describe('the settings nav', () => {
       SETTINGS_GROUPS.flatMap((g) => g.items.map((i) => i.id)),
     ).toEqual([
       'general', 'providers', 'budgets', 'mcp', 'tools', 'permissions', 'notes',
-      'notifications', 'webhooks', 'reading', 'library', 'about',
+      'playbooks', 'notifications', 'webhooks', 'reading', 'library', 'about',
     ])
     expect(screen.getByRole('dialog', { name: 'General' })).toBeInTheDocument()
     expect(within(nav).getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page')
@@ -137,7 +137,13 @@ describe('the settings nav', () => {
 })
 
 describe('Save', () => {
-  it.each(SETTINGS_GROUPS.flatMap((g) => g.items.map((i) => i.label)).filter((l) => l !== 'Try a tool'))(
+  it.each(
+    SETTINGS_GROUPS.flatMap((g) => g.items.map((i) => i.label)).filter(
+      // The two pages that write have their own commit button in the page,
+      // so the footer's disabled Save is not drawn there at all.
+      (l) => l !== 'Try a tool' && l !== 'Playbooks',
+    ),
+  )(
     'is disabled on %s, with a footer note saying why',
     (label) => {
       open()

@@ -476,6 +476,17 @@ describe('Deep links', () => {
     expect(screen.getByRole('dialog', { name: 'About' })).toBeInTheDocument()
   })
 
+  // The address the Bundle pane's playbooks row links to. It is a deep link
+  // like any other settings page, so the pane needs nothing from this file
+  // beyond the hash.
+  it('#/settings/playbooks opens the modal on the playbooks page', async () => {
+    window.location.hash = '#/settings/playbooks'
+    mount(seeded())
+
+    const dialog = await screen.findByRole('dialog', { name: 'Playbooks' })
+    expect(within(dialog).getByText('Files in .sirdar/playbooks')).toBeInTheDocument()
+  })
+
   it('New session in the footer opens #/new, and Sessions leads back to the newest run', async () => {
     mount(seeded())
     await screen.findByRole('heading', { name: /Queue/ })

@@ -54,6 +54,18 @@ type fake struct {
 	inventory MCPInventory
 	toolList  MCPToolList
 
+	// The playbooks the fake holds, by name, in the order Playbooks
+	// answers with; playbookRows says what the list route returns.
+	playbooks    map[string]string
+	playbookRows []PlaybookSummary
+	// What the playbook handlers passed in, and the failures to inject.
+	gotPlaybookSave   struct{ Name, Body string }
+	gotPlaybookAdd    struct{ Name, Body string }
+	gotPlaybookDelete string
+	gotPlaybookOpen   string
+	scaffolded        bool
+	playbookErr       error
+
 	// Search answers with these, and records the query.
 	hits      []SearchHit
 	gotSearch string
@@ -153,6 +165,13 @@ func newFake() *fake {
 			WorkspaceOnly: true,
 			Permissions:   []string{},
 		},
+		playbooks: map[string]string{
+			"10-helpdesk.md": "# Helpdesk\n\nRead the whole thread first.\n",
+		},
+		playbookRows: []PlaybookSummary{{
+			Name: "10-helpdesk.md", File: ".sirdar/playbooks/10-helpdesk.md",
+			Title: "Helpdesk", Lede: "Read the whole thread first.", Order: "10", Bytes: 44,
+		}},
 		toolList: MCPToolList{
 			Server: knownMCPServer,
 			Tools: []MCPTool{
@@ -458,6 +477,93 @@ func (f *fake) ConfigSummary(wsID string) (ConfigSummary, error) {
 		return ConfigSummary{}, err
 	}
 	return f.summary, nil
+}
+
+// --- playbooks ---
+
+// checkPlaybook is the service's own guard as the fake spells it: an
+// unknown workspace, an injected failure, then a name nothing is filed
+// under.
+func (f *fake) checkPlaybook(wsID, name string) error {
+	if err := f.checkWS(wsID); err != nil {
+		return err
+	}
+	if f.playbookErr != nil {
+		return f.playbookErr
+	}
+	if _, ok := f.playbooks[name]; !ok {
+		return fmt.Errorf("playbook %q: %w", name, ErrNoSuchPlaybook)
+	}
+	return nil
+}
+
+func (f *fake) Playbooks(wsID string) ([]PlaybookSummary, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return nil, err
+	}
+	if f.playbookErr != nil {
+		return nil, f.playbookErr
+	}
+	return f.playbookRows, nil
+}
+
+func (f *fake) Playbook(wsID, name string) (string, error) {
+	if err := f.checkPlaybook(wsID, name); err != nil {
+		return "", err
+	}
+	return f.playbooks[name], nil
+}
+
+func (f *fake) SavePlaybook(wsID, name, body string) (PlaybookSummary, error) {
+	if err := f.checkPlaybook(wsID, name); err != nil {
+		return PlaybookSummary{}, err
+	}
+	f.gotPlaybookSave = struct{ Name, Body string }{name, body}
+	f.playbooks[name] = body
+	return PlaybookSummary{Name: name, File: ".sirdar/playbooks/" + name, Title: "Helpdesk", Bytes: int64(len(body))}, nil
+}
+
+func (f *fake) AddPlaybook(wsID, name, body string) (PlaybookSummary, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return PlaybookSummary{}, err
+	}
+	if f.playbookErr != nil {
+		return PlaybookSummary{}, f.playbookErr
+	}
+	if _, taken := f.playbooks[name]; taken {
+		return PlaybookSummary{}, fmt.Errorf("playbook %q: %w", name, ErrPlaybookExists)
+	}
+	f.gotPlaybookAdd = struct{ Name, Body string }{name, body}
+	f.playbooks[name] = body
+	return PlaybookSummary{Name: name, File: ".sirdar/playbooks/" + name, Title: name, Bytes: int64(len(body))}, nil
+}
+
+func (f *fake) DeletePlaybook(wsID, name string) error {
+	if err := f.checkPlaybook(wsID, name); err != nil {
+		return err
+	}
+	f.gotPlaybookDelete = name
+	delete(f.playbooks, name)
+	return nil
+}
+
+func (f *fake) ScaffoldPlaybooks(wsID string) ([]PlaybookSummary, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return nil, err
+	}
+	if f.playbookErr != nil {
+		return nil, f.playbookErr
+	}
+	f.scaffolded = true
+	return f.playbookRows, nil
+}
+
+func (f *fake) OpenPlaybook(wsID, name string) error {
+	if err := f.checkPlaybook(wsID, name); err != nil {
+		return err
+	}
+	f.gotPlaybookOpen = name
+	return nil
 }
 
 func (f *fake) MCPServers(_ context.Context, wsID string, connect bool) (MCPInventory, error) {
