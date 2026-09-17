@@ -24,8 +24,13 @@ import (
 
 // Event kinds published on Subscribe.
 const (
-	KindRunUpdated  = "run.updated"
-	KindRunEvent    = "run.event"
+	KindRunUpdated = "run.updated"
+	KindRunEvent   = "run.event"
+	// KindRunResync says a reader fell far enough behind that some of a
+	// run's lines never reached it. From is the last index it can trust;
+	// it re-reads the run's log after that index rather than showing a
+	// hole it would never fill.
+	KindRunResync   = "run.resync"
 	KindQuotaUpdate = "quota.updated"
 	KindJobFinished = "job.finished"
 	KindLog         = "log"
@@ -400,16 +405,19 @@ type JobOutcome struct {
 // Event is one message on the fan-out. Kind decides which fields are set;
 // the rest are omitted on the wire, so the union in types.ts holds.
 type Event struct {
-	Kind        string       `json:"kind"`
-	WorkspaceID string       `json:"workspaceId,omitempty"`
-	Run         *RunSummary  `json:"run,omitempty"`
-	RunID       string       `json:"runId,omitempty"`
-	Index       int          `json:"index,omitempty"`
-	Event       *RunEvent    `json:"event,omitempty"`
-	Quota       *Quota       `json:"quota,omitempty"`
-	JobID       JobID        `json:"jobId,omitempty"`
-	Outcomes    []JobOutcome `json:"outcomes,omitempty"`
-	Text        string       `json:"text,omitempty"`
+	Kind        string      `json:"kind"`
+	WorkspaceID string      `json:"workspaceId,omitempty"`
+	Run         *RunSummary `json:"run,omitempty"`
+	RunID       string      `json:"runId,omitempty"`
+	Index       int         `json:"index,omitempty"`
+	Event       *RunEvent   `json:"event,omitempty"`
+	// From carries a run.resync: the last event index the reader can
+	// trust. It re-reads the run's log from after it.
+	From     int          `json:"from,omitempty"`
+	Quota    *Quota       `json:"quota,omitempty"`
+	JobID    JobID        `json:"jobId,omitempty"`
+	Outcomes []JobOutcome `json:"outcomes,omitempty"`
+	Text     string       `json:"text,omitempty"`
 	// Source, Key and Outcome carry a hook.received event: the webhook
 	// source name, the ticket key the delivery named (empty when it named
 	// none), and what the receiver did with it: "started", "skipped",

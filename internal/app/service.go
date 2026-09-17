@@ -54,8 +54,11 @@ type Options struct {
 }
 
 // DefaultBuffer is how many events a subscriber may fall behind by before
-// the oldest is dropped.
-const DefaultBuffer = 256
+// it is told to re-read the run rather than shown a hole. A fast provider
+// under the old 256 could outrun a reader inside one poll; 4096 is more
+// than any burst the executor produces, and what happens past it is
+// reported — see subscriber.send.
+const DefaultBuffer = 4096
 
 // Service is the application layer both desktop shells call: it owns the
 // workspace registry, the run watcher, the derived quota, and the table of
@@ -72,8 +75,12 @@ type Service struct {
 	live *liveRuns
 
 	mu      sync.Mutex
-	subs    map[int]chan Event
+	subs    map[int]*subscriber
 	nextSub int
+	// dropped counts every event that never reached a subscriber, over the
+	// life of the process. Each one is covered by a run.resync the client
+	// acts on, so this is a health figure rather than a data loss figure.
+	dropped int
 	jobs    map[JobID]context.CancelFunc
 	nextJob int
 	// starting holds the workspace-and-key pairs a webhook delivery has a
@@ -99,7 +106,7 @@ func New(reg *Registry, build DepsBuilder, opts Options) *Service {
 		build:    build,
 		opts:     opts,
 		quota:    newQuotaTracker(),
-		subs:     map[int]chan Event{},
+		subs:     map[int]*subscriber{},
 		jobs:     map[JobID]context.CancelFunc{},
 		starting: map[string]struct{}{},
 		live:     newLiveRuns(),
@@ -190,50 +197,155 @@ func (s *Service) observe(e Event) {
 }
 
 // Subscribe returns a channel of events and the func that closes it. A
-// subscriber that stops reading loses its oldest events rather than
-// stalling the watcher.
+// subscriber that stops reading is told what it missed rather than
+// stalling the watcher; see subscriber.
 func (s *Service) Subscribe() (<-chan Event, func()) {
-	ch := make(chan Event, s.opts.Buffer)
+	sub := &subscriber{
+		ch:      make(chan Event, s.opts.Buffer),
+		pending: map[string]int{},
+		told:    map[string]bool{},
+	}
 
 	s.mu.Lock()
 	id := s.nextSub
 	s.nextSub++
-	s.subs[id] = ch
+	s.subs[id] = sub
 	s.mu.Unlock()
 
 	var once sync.Once
-	return ch, func() {
+	return sub.ch, func() {
 		once.Do(func() {
 			s.mu.Lock()
 			defer s.mu.Unlock()
 			if c, ok := s.subs[id]; ok {
 				delete(s.subs, id)
-				close(c)
+				close(c.ch)
 			}
 		})
 	}
 }
 
-// publish fans one event out. Every send is non-blocking: a full
-// subscriber loses its oldest event, and the caller — the watcher's
-// polling goroutine — is never held up by a slow reader.
+// publish fans one event out. Every send is non-blocking: the caller — the
+// run executor's own goroutine, or the watcher's poller — is never held up
+// by a slow reader. What a slow reader misses is reported to it as a
+// run.resync rather than left as a hole in the transcript.
 func (s *Service) publish(e Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, ch := range s.subs {
-		select {
-		case ch <- e:
-		default:
-			select {
-			case <-ch: // drop the oldest
-			default:
-			}
-			select {
-			case ch <- e:
-			default:
+	for _, sub := range s.subs {
+		if n, runID, from := sub.send(e); n > 0 {
+			s.dropped += n
+			if runID != "" {
+				fmt.Fprintf(s.stderr(), "events: a reader fell behind; run %s re-reads from %d (%d events dropped since start)\n",
+					runID, from, s.dropped)
 			}
 		}
 	}
+}
+
+// subscriber is one reader of the fan-out: its channel, and what it has
+// been told about the events that never reached it.
+type subscriber struct {
+	ch chan Event
+
+	// pending holds one entry per run whose lines this reader missed: the
+	// index it must re-read the run's log from. It goes out as a
+	// run.resync as soon as the channel has room.
+	pending map[string]int
+
+	// told names the runs a run.resync has already gone out for. One
+	// marker covers every later line of that run too, because the client
+	// re-reads everything after the index it names, so a long overflow
+	// produces one marker rather than one per line. It is forgotten when
+	// the reader has drained: a reader that caught up and fell behind
+	// again needs telling again.
+	told map[string]bool
+}
+
+// send offers one event, and reports how many events this call cost the
+// reader along with the resync it queued, when it queued one.
+func (sub *subscriber) send(e Event) (dropped int, runID string, from int) {
+	if len(sub.ch) == 0 && len(sub.told) > 0 {
+		clear(sub.told)
+	}
+	sub.flush()
+
+	select {
+	case sub.ch <- e:
+		return 0, "", 0
+	default:
+	}
+
+	// Full. Note the line as missed and take the oldest queued event off
+	// to make room — that one is missed too, and is noted the same way,
+	// both covered by whichever index is lower.
+	sub.miss(e)
+	select {
+	case old := <-sub.ch:
+		sub.miss(old)
+		if old.Kind != KindRunResync {
+			dropped++
+		}
+	default:
+	}
+
+	// What goes into the room just made is the marker, when there is a
+	// hole to report. When there is not — a log or quota line, which
+	// supersedes the one before it rather than adding to it — the event
+	// itself goes in, because the newest is the one worth keeping.
+	if runID, from = sub.flush(); runID == "" {
+		select {
+		case sub.ch <- e:
+			return dropped, "", 0
+		default:
+		}
+	}
+	dropped++
+	return dropped, runID, from
+}
+
+// miss records that e never reached the reader. Only a run event can be
+// re-read: a quota or log line that went missing is superseded by the next
+// one of its kind, which carries the whole figure rather than a delta.
+func (sub *subscriber) miss(e Event) {
+	if e.Kind == KindRunResync {
+		// A marker already queued was taken off to make room. Losing it
+		// is the one thing this must not do, so it goes back.
+		sub.queue(e.RunID, e.From)
+		delete(sub.told, e.RunID)
+		return
+	}
+	if e.Kind != KindRunEvent || e.RunID == "" || e.Index <= 0 || sub.told[e.RunID] {
+		return
+	}
+	sub.queue(e.RunID, e.Index-1)
+}
+
+// queue remembers that runID must be re-read from at, keeping the lowest
+// index asked for: one marker covers every hole after it.
+func (sub *subscriber) queue(runID string, at int) {
+	if runID == "" || at < 0 {
+		return
+	}
+	if have, ok := sub.pending[runID]; !ok || at < have {
+		sub.pending[runID] = at
+	}
+}
+
+// flush moves queued resync markers into the channel while it has room,
+// and names the last one it managed to send.
+func (sub *subscriber) flush() (runID string, from int) {
+	for id, at := range sub.pending {
+		select {
+		case sub.ch <- Event{Kind: KindRunResync, RunID: id, From: at}:
+			delete(sub.pending, id)
+			sub.told[id] = true
+			runID, from = id, at
+		default:
+			return runID, from
+		}
+	}
+	return runID, from
 }
 
 // --- workspaces -------------------------------------------------------
