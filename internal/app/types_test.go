@@ -100,7 +100,7 @@ func TestWireFieldNames(t *testing.T) {
 	wantKeys(t, "DiffFile", DiffFile{}, "path", "status", "additions", "deletions")
 
 	wantKeys(t, "Ticket", Ticket{LatestRun: &summary},
-		"key", "title", "priority", "status", "assignee", "url", "helpdeskRef", "updatedAt", "latestRun")
+		"key", "title", "type", "priority", "status", "assignee", "url", "helpdeskRef", "updatedAt", "latestRun")
 
 	used := 91.0
 	wantKeys(t, "Quota", Quota{

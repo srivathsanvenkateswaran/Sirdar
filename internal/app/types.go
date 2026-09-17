@@ -210,9 +210,15 @@ type RunDiff struct {
 }
 
 // Ticket is one queue row: the tracker record plus the newest run for it.
+//
+// Type is the canonical ticket type the tracker reported — bug, task,
+// story, subtask — or empty when the adapter names none. A queue lane shows
+// it so a reader can see why a card is in front of them, which is the
+// difference between a filter that looks broken and one that is working.
 type Ticket struct {
 	Key         string      `json:"key"`
 	Title       string      `json:"title"`
+	Type        string      `json:"type"`
 	Priority    string      `json:"priority"`
 	Status      string      `json:"status"`
 	Assignee    string      `json:"assignee"`
@@ -276,10 +282,18 @@ type JobID string
 
 // QueueFilter narrows the tracker query behind Queue. Zero fields are
 // unfiltered; Limit zero means no limit.
+//
+// Types is the exception: nil is not "unfiltered" but "whatever the
+// workspace configured", which is bug tickets unless
+// sources.tracker.queue.types says otherwise. A caller that means every
+// type sends an empty list or ["*"], the same two spellings the config
+// takes. It is here so a screen can offer the override; the desktop sends
+// nothing and takes the configured default.
 type QueueFilter struct {
-	Assignee string `json:"assignee"`
-	Status   string `json:"status"`
-	Limit    int    `json:"limit"`
+	Assignee string   `json:"assignee"`
+	Status   string   `json:"status"`
+	Types    []string `json:"types,omitempty"`
+	Limit    int      `json:"limit"`
 }
 
 // TriageOptions are the per-invocation overrides a triage job takes.

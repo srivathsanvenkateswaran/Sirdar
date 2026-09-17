@@ -547,6 +547,10 @@ var recordFields = []string{
 	"company", "company.sys_id",
 	"sys_created_on", "sys_updated_on", "opened_at", "closed_at",
 	"close_notes", "resolved_at", "active",
+	// sys_class_name is the record's own class, which is what the tracker
+	// type is read from on a table that has extensions; parent is the
+	// record it hangs off.
+	"sys_class_name", "parent",
 }
 
 func recordParams() url.Values {

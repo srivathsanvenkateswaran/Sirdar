@@ -17,6 +17,7 @@ import (
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
 // ErrUnsupported is returned by Queue when the workspace has no tracker, or
@@ -497,9 +498,25 @@ func queueAssignee(cfg *config.Config, assignee string) string {
 	return assignee
 }
 
+// queueTypes is the type filter this call should apply: the caller's when
+// it named one, the workspace's configured default otherwise. Both come
+// back folded onto the canonical vocabulary, so a filter written "Defect"
+// and a ticket typed "defect" are one thing.
+func queueTypes(cfg *config.Config, f QueueFilter) []string {
+	if f.Types != nil {
+		return config.NormalizeQueueTypes(f.Types)
+	}
+	return cfg.QueueTypes()
+}
+
 // Queue lists the workspace's tracker tickets, each decorated with its
 // newest run. It returns ErrUnsupported when the workspace configures no
 // tracker or the adapter cannot list.
+//
+// The rows are narrowed by ticket type before they are returned: the board
+// is a support queue, and the sub-tasks and chores a tracker also assigns
+// to the reader are not work a triage session should be offered for. See
+// config.QueueTypes for what the filter defaults to and how to widen it.
 func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Ticket, error) {
 	ws, cfg, err := s.load(wsID)
 	if err != nil {
@@ -530,11 +547,16 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 	}
 
 	self := IdentityOf(cfg)
+	wantTypes := queueTypes(cfg, f)
 	out := make([]Ticket, 0, len(tickets))
 	for _, t := range tickets {
+		if !config.MatchQueueType(wantTypes, t.Type) {
+			continue
+		}
 		row := Ticket{
 			Key:         t.Key,
 			Title:       t.Title,
+			Type:        ticket.CanonicalType(t.Type),
 			Priority:    t.Priority,
 			Status:      t.Status,
 			Assignee:    t.Assignee,

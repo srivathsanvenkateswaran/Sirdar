@@ -265,6 +265,7 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
   return {
     key: 'OMNI-9',
     title: 'Statement export times out',
+    type: 'bug',
     priority: 'P2',
     status: 'Open',
     assignee: 'sri',

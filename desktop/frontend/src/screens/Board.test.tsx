@@ -7,7 +7,13 @@ import { FILTER_DEBOUNCE_MS } from '../lib/useDebounced'
 import type { InboundDelivery } from '../store/appStore'
 import type { MeSummary } from '../api/types'
 import { createFakeTransport, run, ticket, type FakeTransport } from '../store/fakeTransport'
-import Board, { buildColumns, NO_IDENTITY, updatedAgo, type BoardProps } from './Board'
+import Board, {
+  buildColumns,
+  NO_IDENTITY,
+  queueEmptyText,
+  updatedAgo,
+  type BoardProps,
+} from './Board'
 
 /** Who the sample workspace says the reader is. */
 const ME: MeSummary = { email: 'sri@acme.com', names: ['Sri Venkateswaran', 'sri'], source: 'me' }
@@ -619,6 +625,71 @@ describe('buildColumns', () => {
     )
     const gathering = columns.find((c) => c.id === 'gathering')
     expect(gathering?.cards.map((c) => c.key)).toEqual(['OMNI-2', 'OMNI-1'])
+  })
+})
+
+describe('the queue lane’s ticket types', () => {
+  const sources = (queueTypes?: string[]) => ({
+    tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
+    queueTypes,
+  })
+
+  it('shows each queued ticket’s type beside its Triage button', async () => {
+    const tickets = [
+      ticket({ key: 'OMNI-9', title: 'Statement export times out', type: 'bug', assignee: 'sri' }),
+    ]
+    const { container } = mount({ sources: sources(['bug']) }, createFakeTransport({ tickets }))
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    expect(within(lane(container, 'queue')).getByText('bug')).toBeInTheDocument()
+  })
+
+  it('shows no chip for a ticket whose tracker names no type', async () => {
+    const tickets = [ticket({ key: 'OMNI-9', title: 'Statement export', type: '', assignee: 'sri' })]
+    const { container } = mount({ sources: sources(['*']) }, createFakeTransport({ tickets }))
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    expect(lane(container, 'queue').querySelector('.board-ticket__type')).toBeNull()
+  })
+
+  it('says which type the empty lane was looking for', async () => {
+    const { container } = mount({ sources: sources(['bug']) }, createFakeTransport({ tickets: [] }))
+    await screen.findByRole('region', { name: 'Queue (0)' })
+
+    expect(lane(container, 'queue')).toHaveTextContent('No bug tickets assigned to you.')
+  })
+
+  it('keeps the lane’s own sentence when the filter is off', async () => {
+    const { container } = mount({ sources: sources(['*']) }, createFakeTransport({ tickets: [] }))
+    await screen.findByRole('region', { name: 'Queue (0)' })
+
+    expect(lane(container, 'queue')).toHaveTextContent(
+      'Nothing in the tracker is assigned to you and untouched.',
+    )
+  })
+})
+
+describe('queueEmptyText', () => {
+  const unfiltered = 'Nothing in the tracker is assigned to you and untouched.'
+
+  it('names the filter the lane was reading under', () => {
+    expect(queueEmptyText(['bug'], unfiltered)).toBe('No bug tickets assigned to you.')
+    expect(queueEmptyText(['bug', 'incident'], unfiltered)).toBe(
+      'No bug or incident tickets assigned to you.',
+    )
+    expect(queueEmptyText(['bug', 'story', 'task'], unfiltered)).toBe(
+      'No bug, story or task tickets assigned to you.',
+    )
+  })
+
+  it('falls back to the lane’s own sentence when nothing was filtered out', () => {
+    expect(queueEmptyText([], unfiltered)).toBe(unfiltered)
+    expect(queueEmptyText(['*'], unfiltered)).toBe(unfiltered)
+    expect(queueEmptyText(['bug', '*'], unfiltered)).toBe(unfiltered)
+  })
+
+  it('reads an absent filter as the default, which is what an older server sent', () => {
+    expect(queueEmptyText(undefined, unfiltered)).toBe('No bug tickets assigned to you.')
   })
 })
 

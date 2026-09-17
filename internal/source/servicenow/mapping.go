@@ -241,6 +241,8 @@ func (c *Client) mapTracker(r record, tp *timeParser) ticket.TrackerTicket {
 		Priority:    r.str("priority"),
 		Status:      r.str("state"),
 		Assignee:    r.str("assigned_to"),
+		Type:        c.recordType(r),
+		ParentKey:   r.str("parent"),
 		URL:         c.recordURL(sysID),
 		// A ServiceNow incident is both records at once, so the helpdesk
 		// reference is the incident's own number: a workspace with
@@ -252,6 +254,19 @@ func (c *Client) mapTracker(r record, tp *timeParser) ticket.TrackerTicket {
 		UpdatedAt:   tp.parse(r.str("sys_updated_on")),
 		Fields:      fieldsOf(r),
 	}
+}
+
+// recordType is the kind of record this row is. A ServiceNow record's kind
+// is its table: the configured one, which is "incident" by default, except
+// where the row itself names a subclass in sys_class_name — a table with
+// extensions serves several classes and only the row knows which it is.
+// sys_class_name arrives as the class label with display values on
+// ("Incident"), so it is folded the same way every other tracker's name is.
+func (c *Client) recordType(r record) string {
+	if class := r.str("sys_class_name"); class != "" {
+		return ticket.CanonicalType(class)
+	}
+	return ticket.CanonicalType(c.table)
 }
 
 // --- Threads ---

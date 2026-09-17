@@ -175,6 +175,20 @@ func (s *server) removeWorkspace(w http.ResponseWriter, r *http.Request) {
 func (s *server) queue(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := QueueFilter{Assignee: q.Get("assignee"), Status: q.Get("status")}
+	// `types` absent means the workspace's configured default, so the
+	// parameter has to be read as present-or-not rather than as its value:
+	// `types=` is a caller asking for every type, which is not the same
+	// request as not asking at all.
+	if q.Has("types") {
+		f.Types = []string{}
+		for _, raw := range q["types"] {
+			for _, t := range strings.Split(raw, ",") {
+				if t = strings.TrimSpace(t); t != "" {
+					f.Types = append(f.Types, t)
+				}
+			}
+		}
+	}
 	if raw := q.Get("limit"); raw != "" {
 		n, err := strconv.Atoi(raw)
 		if err != nil || n < 0 {

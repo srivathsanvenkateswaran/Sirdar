@@ -251,16 +251,27 @@ func (c *Client) Get(ctx context.Context, key string) (ticket.TrackerTicket, err
 		return tt, err
 	}
 	err := c.call(ctx, "tracker.get", map[string]string{"key": key}, &tt)
+	tt.DeriveTypeAndParent()
 	return tt, err
 }
 
 // List fetches tracker tickets matching f.
+//
+// Type and ParentKey are filled in from the record's Fields when the
+// adapter did not send them outright: an adapter written against the
+// protocol as it stood before those two existed already reports its type
+// as ticket_type, issuetype or type, and reading it there is what keeps
+// such an adapter's tickets in a type-filtered queue instead of silently
+// out of it.
 func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
 	var tts []ticket.TrackerTicket
 	if err := c.hasRole(ctx, "tracker"); err != nil {
 		return tts, err
 	}
 	err := c.call(ctx, "tracker.list", f, &tts)
+	for i := range tts {
+		tts[i].DeriveTypeAndParent()
+	}
 	return tts, err
 }
 

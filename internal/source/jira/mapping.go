@@ -28,6 +28,14 @@ type jiraNamed struct {
 	Name string `json:"name"`
 }
 
+// jiraIssueType is the issuetype field. Subtask is Jira's own answer to
+// "is this a child record", which a renamed or localised sub-task type
+// ("Technical Sub-task", "Untertask") does not carry in its name.
+type jiraIssueType struct {
+	Name    string `json:"name"`
+	Subtask bool   `json:"subtask"`
+}
+
 type jiraStatus struct {
 	Name           string `json:"name"`
 	StatusCategory struct {
@@ -81,7 +89,7 @@ type jiraFields struct {
 	Assignee    *jiraUser        `json:"assignee"`
 	Reporter    *jiraUser        `json:"reporter"`
 	Resolution  *jiraNamed       `json:"resolution"`
-	IssueType   *jiraNamed       `json:"issuetype"`
+	IssueType   *jiraIssueType   `json:"issuetype"`
 	Project     *jiraProject     `json:"project"`
 	Labels      []string         `json:"labels"`
 	Parent      *jiraParent      `json:"parent"`
@@ -260,6 +268,8 @@ func (c *Client) mapTracker(iss *jiraIssue) ticket.TrackerTicket {
 		tt.Status = f.Status.Name
 	}
 	tt.Assignee = displayName(f.Assignee)
+	tt.Type = issueType(f.IssueType)
+	tt.ParentKey = c.parentKey(iss)
 	if isServiceDesk(f.Project) {
 		tt.HelpdeskRef = iss.Key
 	}
@@ -273,8 +283,8 @@ func (c *Client) mapTracker(iss *jiraIssue) ticket.TrackerTicket {
 	if len(f.Labels) > 0 {
 		tt.Fields["labels"] = strings.Join(f.Labels, ",")
 	}
-	if parent := c.parentKey(iss); parent != "" {
-		tt.Fields["parent"] = parent
+	if tt.ParentKey != "" {
+		tt.Fields["parent"] = tt.ParentKey
 	}
 	if r := displayName(f.Reporter); r != "" {
 		tt.Fields["reporter"] = r
@@ -283,6 +293,21 @@ func (c *Client) mapTracker(iss *jiraIssue) ticket.TrackerTicket {
 		tt.Fields["resolution"] = f.Resolution.Name
 	}
 	return tt
+}
+
+// issueType is an issue's canonical type: the instance's own name for it,
+// except that Jira's subtask flag overrules the name. A project that
+// renamed or localised its sub-task type still reports subtask:true, and a
+// sub-task filed under a story is exactly what a bug queue must not show,
+// so the flag is the more trustworthy of the two.
+func issueType(t *jiraIssueType) string {
+	if t == nil {
+		return ""
+	}
+	if t.Subtask {
+		return "subtask"
+	}
+	return ticket.CanonicalType(t.Name)
 }
 
 // parentKey prefers the standard parent field — which on Cloud covers both

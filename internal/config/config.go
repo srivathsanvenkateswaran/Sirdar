@@ -96,10 +96,34 @@ type SourceConfig struct {
 	// this names one.
 	DateFormat string `yaml:"dateFormat,omitempty"`
 
+	// Queue narrows what the board's Queue lane and every other "what is
+	// assigned to me" listing shows. Tracker-only.
+	Queue *QueueConfig `yaml:"queue,omitempty"`
+
 	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
 	// reference out of the ticket description when the tracker's own data
 	// model carries none.
 	HelpdeskRef *HelpdeskRefConfig `yaml:"helpdeskRef,omitempty"`
+}
+
+// QueueConfig narrows the tracker's answer to "what is assigned to me"
+// before it reaches a reader.
+//
+// The board is a support queue, and a support queue is bugs: a project's
+// sub-tasks, spikes and chores are assigned to the same person and are not
+// work Sirdar can triage. Restricting the lane by type is what keeps the
+// Triage button off a ticket it would waste a provider session on.
+type QueueConfig struct {
+	// Types are the ticket types the queue shows, matched case-insensitively
+	// against TrackerTicket.Type. Absent means the default, [bug]. An
+	// explicit empty list, or one containing "*", means every type — which
+	// is also the only setting that shows a ticket whose tracker reports no
+	// type at all.
+	//
+	// It is a pointer to a slice because absent and empty mean opposite
+	// things here: no key at all is the bug-only default, and `types: []`
+	// is the operator saying "show me everything".
+	Types *[]string `yaml:"types,omitempty"`
 }
 
 // HelpdeskRefConfig configures the description-regex fallback for a
@@ -1216,6 +1240,9 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	}
 	if s.HelpdeskRef != nil && !isTracker {
 		return fmt.Errorf("config: %s.helpdeskRef: is only supported for sources.tracker", prefix)
+	}
+	if s.Queue != nil && !isTracker {
+		return fmt.Errorf("config: %s.queue: is only supported for sources.tracker", prefix)
 	}
 	// Hoisted out of the exec case so it covers every adapter: an `auth:`
 	// block on a jira or zendesk source used to be read, ignored, and never

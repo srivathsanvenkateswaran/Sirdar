@@ -24,6 +24,18 @@ type TrackerTicket struct {
 	URL         string
 	HelpdeskRef string // helpdesk ticket id parsed from the tracker record; "" if none
 
+	// Type is what kind of record this is, lower-cased and folded onto one
+	// spelling per kind: bug, task, story, epic, subtask, incident, and so
+	// on, or the tracker's own name lower-cased when it matches none of
+	// them. Empty when the adapter reports no type — which is a fact about
+	// the adapter, not about the ticket, and the queue filter treats it as
+	// such. CanonicalType is the folding.
+	Type string
+	// ParentKey is the key of the record this one hangs off: a sub-task's
+	// story, a story's epic. Empty when the record is top-level or the
+	// adapter does not say.
+	ParentKey string
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

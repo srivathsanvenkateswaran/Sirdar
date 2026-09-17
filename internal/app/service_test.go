@@ -183,9 +183,9 @@ func TestQueueDecoratesWithLatestRun(t *testing.T) {
 	writeState(t, root, "OMNI-1", "20260910T090000Z-dddd", store.StatusCompleted)
 
 	tickets := []ticket.TrackerTicket{
-		{Key: "OMNI-1", Title: "Export fails", Priority: "high", Status: "open", Assignee: "me",
+		{Key: "OMNI-1", Title: "Export fails", Type: "bug", Priority: "high", Status: "open", Assignee: "me",
 			URL: "https://t/OMNI-1", HelpdeskRef: "555", UpdatedAt: time.Date(2026, 9, 10, 8, 0, 0, 0, time.UTC)},
-		{Key: "OMNI-2", Title: "Login loops", Priority: "low", Status: "open"},
+		{Key: "OMNI-2", Title: "Login loops", Type: "bug", Priority: "low", Status: "open"},
 	}
 	svc := newService(t, root, stubBuilder(&stubProvider{script: replay()}, stubTracker{list: tickets}, stubHelpdesk{}))
 

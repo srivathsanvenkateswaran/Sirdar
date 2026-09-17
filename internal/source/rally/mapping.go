@@ -258,6 +258,10 @@ func (c *Client) toTracker(f found) ticket.TrackerTicket {
 		Priority:    f.a.Priority,
 		Status:      f.status(),
 		Assignee:    f.a.Owner.name(),
+		// Rally's type name is the WSAPI one: Defect, Task,
+		// HierarchicalRequirement (a user story), PortfolioItem/Feature.
+		Type:        ticket.CanonicalType(f.typ.Name),
+		ParentKey:   f.parentKey(),
 		URL:         c.artifactURL(f),
 		HelpdeskRef: f.helpdeskRef(c.cfg.HelpdeskField),
 		CreatedAt:   parseRallyTime(f.a.CreationDate),
