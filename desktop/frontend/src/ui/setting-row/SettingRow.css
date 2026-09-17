@@ -6,8 +6,8 @@
 /* 24px of padding, 12 at the foot so the last row's own padding finishes it. */
 .sd-setting-card {
   margin-block-end: var(--sd-space-5);
-  padding-block: var(--sd-space-5) var(--sd-space-3);
-  padding-inline: var(--sd-space-5);
+  padding-block: var(--sd-space-4) var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
   border-radius: var(--sd-radius-md);
   background: var(--sd-card-row);
   /* No border and no shadow: the colour step is the separation. */
@@ -28,8 +28,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sd-space-5);
-  min-block-size: 72px;
-  padding-block: var(--sd-space-3);
+  min-block-size: 56px;
+  padding-block: var(--sd-space-2);
   padding-inline: 0;
 }
 
@@ -81,7 +81,7 @@
 .sd-setting-button {
   min-block-size: var(--sd-control-h);
   padding-block: var(--sd-space-1);
-  padding-inline: 18px;
+  padding-inline: var(--sd-space-3);
   border: 0;
   border-radius: var(--sd-radius-sm);
   background: var(--sd-nav-active);

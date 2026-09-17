@@ -20,7 +20,7 @@ Built. `desktop/frontend/src/ui/setting-row/`. It replaces the
 - `section.sd-setting-card` — the group. `--sd-card-row`, `--sd-radius-md`,
   no border, no shadow.
 - `h3.sd-setting-card__heading` — 11.5px weight 600 `--sd-ink-2`.
-- `div.sd-setting-row` — 64 min-height, `padding-inline: 16px`. Leading side
+- `div.sd-setting-row` — 56 min-height, `padding-inline: 16px`. Leading side
   the label stack, trailing side one control.
 - `span.sd-setting-row__label` — 13px weight 500 `--sd-ink`.
 - `span.sd-setting-row__value` — the current value, 13px `--sd-ink-2`,
@@ -91,6 +91,11 @@ light and **12.51:1** dark, value `--sd-ink-2` at **7.37 / 6.60**, help
 64-tall row. Reduced motion: the control's fill change goes to 1ms.
 
 ## Changelog
+
+### 2026-09-17 (density)
+Rows go 72 → 56 tall on 8px of block padding, the card's
+padding to 16, and every control in one to `--sd-control-h` (32) on 12px of
+inline padding.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: rows go from 64 to 72 tall with 12px block

@@ -8,8 +8,8 @@
 ## What it is
 
 One input with a magnifier before it and a hint after it, in two sizes: the
-64-tall bar a session starts from (a ticket key or a URL), and the 40-tall
-sunk well the board filters with.
+48-tall bar a session starts from (a ticket key or a URL), and the
+`--sd-control-h` sunk well the board filters with.
 
 Built. `desktop/frontend/src/ui/search-bar/`, used in the app on the New
 session screen (bar) and the Board (well). New in the 2026-09-15 screens
@@ -17,14 +17,14 @@ round; the board's filter used to be a bare `.field-input`.
 
 ## Anatomy
 
-- `form.sd-search[role="search"][data-variant]` — flex, `gap: 16px`,
-  `min-block-size: 64px`, `padding-inline: 24px`, 1px `--sd-rule` border,
+- `form.sd-search[role="search"][data-variant]` — flex, `gap: 12px`,
+  `min-block-size: 48px`, `padding-inline: 16px`, 1px `--sd-rule` border,
   `--sd-radius-sheet` (16px), `--sd-sheet` fill, `--sd-text-body-l`. The
-  well: `gap: 8px`, 240 wide, `--sd-control-h` tall, `padding-inline: 12px`,
+  well: `gap: 8px`, 220 wide, `--sd-control-h` tall, `padding-inline: 12px`,
   no visible border, `--sd-radius-sm`, `--sd-sunk` fill, `--sd-text-body`.
 - `label.sd-search__label` — the accessible name, read out and never drawn.
-- `span.sd-search__icon` — lucide `search` at 20px (18 in the well),
-  `--sd-ink-3`, `aria-hidden`.
+- `span.sd-search__icon` — lucide `search` at 16px, `--sd-ink-3`,
+  `aria-hidden`.
 - `input.sd-search__input[type="search"]` — borderless, inherits the font,
   placeholder in `--sd-ink-3`.
 - `span.sd-search__aside` — optional, at the inline end, `--sd-text-meta` in
@@ -77,6 +77,10 @@ placeholder `--sd-ink-3` on the sheet **5.25:1** and on the well's sunk fill
 **4.56:1**, the tightest pair the tokens ship. No motion.
 
 ## Changelog
+
+### 2026-09-17 (density)
+The bar goes 64 → 48 tall on 16px of inline padding, the
+well to `--sd-control-h` (32) and 220 wide, and both icons to 16px.
 
 ### 2026-09-15 (Board build)
 `inputRef` joins the props so the board's `/` shortcut can focus the well.

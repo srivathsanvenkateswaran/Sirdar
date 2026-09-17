@@ -81,6 +81,10 @@ rather than slides, and nothing waits for the transition.
 
 ## Changelog
 
+### 2026-09-17 (density)
+The track reads `--sd-control-h` (32) rather than spelling
+32 out, on 12px of inline padding.
+
 ### 2026-09-15 (New session)
 `disabledOptions` — one option off with a reason, for RCA and Fix before a
 key has a triage note. The arrows walk the options that are on and wrap

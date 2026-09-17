@@ -27,7 +27,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sd-space-2);
-  min-height: 32px;
+  min-height: var(--sd-control-h);
   padding-block: var(--sd-space-1);
   padding-inline: var(--sd-space-3);
   border: 0;
