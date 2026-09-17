@@ -51,22 +51,23 @@ describe('ComposerCard', () => {
     expect(send).toHaveAttribute('data-variant', 'primary')
     expect(send).toHaveAttribute('data-icon-only', 'true')
     expect(send).toHaveAttribute('title', 'Start (⌘↵)')
-    expect(send).toHaveAttribute('aria-keyshortcuts', 'Meta+Enter')
+    expect(send).toHaveAttribute('aria-keyshortcuts', 'Enter')
     expect(send.closest('.composer-send')).not.toBeNull()
   })
 
-  it('sends on the button, on submit, and on Cmd or Ctrl with Enter — and Enter alone does not', () => {
+  it('sends on Enter, on Cmd or Ctrl with Enter, on the button and on submit — and Shift with Enter does not', () => {
     const onClick = vi.fn()
     render(<Harness send={{ onClick }} />)
     const box = screen.getByRole('textbox')
     fireEvent.change(box, { target: { value: 'OMNI-1' } })
-    fireEvent.keyDown(box, { key: 'Enter' })
+    fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
     expect(onClick).not.toHaveBeenCalled()
+    fireEvent.keyDown(box, { key: 'Enter' })
     fireEvent.keyDown(box, { key: 'Enter', metaKey: true })
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true })
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     fireEvent.submit(screen.getByRole('form'))
-    expect(onClick).toHaveBeenCalledTimes(4)
+    expect(onClick).toHaveBeenCalledTimes(5)
   })
 
   it('is off when told so, with the reason as the title, and the keyboard cannot send either', () => {

@@ -112,11 +112,11 @@ export function fitRows(el: HTMLTextAreaElement, maxRows: number): number {
  * filled control, so the screen that draws this card publishes its action
  * with `placement: 'screen'` and the sidebar's New session steps down.
  *
- * Cmd or Ctrl with Enter sends; Enter alone is a new line, because what is
- * typed here is often more than one — an answer to an agent's question, an
- * instruction, a description of what to look at. The box is one line high
- * at rest, with the chip bar directly under it, and grows a line at a time
- * to `maxRows` before the text scrolls inside it.
+ * Enter sends, the way every chat surface does; Shift with Enter inserts a
+ * new line for the answer or instruction that needs more than one, and Cmd
+ * or Ctrl with Enter sends too, for hands that expect it. The box is one
+ * line high at rest, with the chip bar directly under it, and grows a line
+ * at a time to `maxRows` before the text scrolls inside it.
  */
 export default function ComposerCard({
   label,
@@ -158,10 +158,9 @@ export default function ComposerCard({
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      submit()
-    }
+    if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
+    e.preventDefault()
+    submit()
   }
 
   return (
@@ -207,8 +206,8 @@ export default function ComposerCard({
               busy={send.busy}
               disabled={send.disabled && !send.busy}
               title={send.title}
-              shortcut="⌘↵"
-              aria-keyshortcuts="Meta+Enter"
+              shortcut="↵"
+              aria-keyshortcuts="Enter"
             >
               {send.busy ? (send.busyLabel ?? send.label) : send.label}
             </Button>
@@ -221,7 +220,7 @@ export default function ComposerCard({
               busy={send.busy}
               disabled={send.disabled && !send.busy}
               title={send.title}
-              aria-keyshortcuts="Meta+Enter"
+              aria-keyshortcuts="Enter"
             >
               {send.busy ? (send.busyLabel ?? send.label) : send.label}
             </Button>
