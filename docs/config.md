@@ -1581,6 +1581,22 @@ real run rather than after.
 - `cursor.path`: path to the `cursor-agent` binary. Empty (the default) looks it up on `PATH`.
   It sits in the `cursor:` block for the same reason `qwen.path` sits in `qwen:`.
 - `agy.path`: path to the `agy` binary, in the `agy:` block for the same reason.
+- `acp.command` is the whole launch command for `provider: acp`, so it is also where an
+  absolute path to that agent goes; there is no `acp.path`.
+- **Where the binary is looked for.** An empty path setting means `PATH`, and `PATH` is not the
+  same in every shell Sirdar runs from. A desktop app launched from the Dock, from Spotlight or
+  from a Linux launcher inherits launchd's or the session manager's environment, not yours —
+  `/usr/bin:/bin:/usr/sbin:/sbin` on macOS, with no `/opt/homebrew/bin` and no `~/.local/bin`.
+  The app therefore resolves your login shell's `PATH` at startup (`$SHELL -il -c`, falling back
+  to `-l`, each attempt capped at three seconds) and appends `~/.local/bin`,
+  `/opt/homebrew/bin`, `/usr/local/bin`, `~/go/bin`, `~/.npm-global/bin`, `~/.bun/bin`,
+  `~/.cargo/bin`, `~/.claude/local`, `~/.opencode/bin` and `~/bin` when the shell did not name
+  them. Windows is a no-op: a GUI process there already gets your `PATH` from the registry.
+  `sirdar doctor`'s `environment` row says which source the running process's `PATH` came from
+  and where each provider binary resolved; when one does not resolve, the row and the failed
+  run's banner both name the setting above as the override and the directory to install the
+  binary in. Set the path setting when the binary lives somewhere no login shell exports —
+  a version-manager shim, a checkout, a vendored copy.
 - `billing: subscription` (default) removes `ANTHROPIC_API_KEY` from the agent's child
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key

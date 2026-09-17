@@ -154,6 +154,32 @@ It binds to `127.0.0.1` and refuses a non-loopback address unless you pass `--al
 since there is no authentication in front of it. The same frontend also ships as a desktop app
 (Wails, under `desktop/` in the repo) for running Sirdar without a terminal open at all.
 
+### Launched from the Dock
+
+A desktop app started from the Dock, from Spotlight or from a Linux application launcher does
+not inherit your shell's `PATH` — it gets launchd's or the session manager's, which on macOS is
+`/usr/bin:/bin:/usr/sbin:/sbin`. None of the programs Sirdar spawns live there: the provider
+CLIs, `secret-tool` for `keychain:` refs, `xdg-open`, `git`, `gh`. Before this was handled, a
+triage started from the app failed immediately with `exec: "claude": executable file not found
+in $PATH` while the same triage from a terminal ran.
+
+The app now resolves your login shell's own `PATH` at startup — it runs `$SHELL -il -c` once
+(falling back to `-l`) and reads back `$PATH` — and appends `~/.local/bin`, `/opt/homebrew/bin`,
+`/usr/local/bin`, `~/go/bin`, `~/.npm-global/bin`, `~/.bun/bin`, `~/.cargo/bin`,
+`~/.claude/local`, `~/.opencode/bin` and `~/bin` if your shell did not already name them. On
+Windows nothing is done: a GUI process there already gets your `PATH`.
+
+`sirdar doctor`'s **environment** row — in the terminal and in the app's Settings screen — says
+which of the two your `PATH` came from and where each provider binary resolved to:
+
+```
+[OK] environment — PATH from the login shell /bin/zsh, 21 entries; claude → /opt/homebrew/bin/claude
+```
+
+If a binary still cannot be found, the row names `providers.<name>.path` (or `qwen.path`,
+`cursor.path`, `agy.path`, `acp.command`) as the override, and so does the failed run's banner
+in the session screen. See [Configuration](config.md#providers).
+
 ## Close the loop
 
 Once the fix (yours, or one `sirdar fix` made in a worktree and you reviewed) is merged, `sirdar rca` produces the RCA note (why it happened)
