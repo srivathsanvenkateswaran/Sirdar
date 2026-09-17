@@ -279,6 +279,18 @@ export type AppEvent =
    * happened in between was never delivered.
    */
   | { kind: 'live'; state: 'open' | 'lost' };
+/**
+ * One file the bundle downloaded, as the Bundle pane draws it. `path` is
+ * relative to the bundle directory and is the identity the attachment
+ * routes take back; there is never a URL beside the name.
+ */
+export interface Attachment {
+  name: string; path: string; mime: string; size: number;
+  /** RFC 3339, when the file could be stat'd. */
+  modified?: string;
+  /** The bundle-relative path of an audio attachment's transcription, when the run made one. */
+  transcript?: string;
+}
 /** The one-off overrides every start accepts; empty means the workspace's own. */
 export interface Overrides { provider?: string; model?: string }
 export interface TriageStart extends Overrides { dryRun?: boolean }
@@ -299,6 +311,17 @@ export interface Transport {
   search(ws: string, q: string): Promise<SearchHit[]>;
   events(ws: string, runId: string, after: number): Promise<{ events: RunEvent[]; next: number }>;
   note(ws: string, runId: string, kind: NoteKind): Promise<string>; prompt(ws: string, runId: string): Promise<string>;
+  /** The run bundle's attachments with their sizes and types; empty when it downloaded none. */
+  attachments(ws: string, runId: string): Promise<Attachment[]>;
+  /**
+   * A URL the webview can put in an `<img>`, an `<object>` or a media
+   * element for one attachment, named by its bundle-relative `path`. The
+   * browser gets the attachment route; the desktop app gets a `data:` URL,
+   * because WKWebView will not load a `file://` subresource from the page
+   * the Wails shell serves. Rejects when the file is too large to inline,
+   * and the pane offers the bundle folder instead.
+   */
+  attachmentURL(ws: string, runId: string, path: string): Promise<string>;
   startTriage(ws: string, keys: string[], o?: TriageStart): Promise<{ jobId: string }>;
   startRCA(ws: string, key: string, o?: RCAStart): Promise<{ jobId: string }>;
   startFix(ws: string, key: string, o?: FixStart): Promise<{ jobId: string }>;

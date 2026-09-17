@@ -1,0 +1,672 @@
+/*
+ * The session inspector's shared blocks, drawn the same in all three
+ * layouts: the closing card on the transcript, the Bundle pane's ticket,
+ * conversation, attachments and playbooks, the Tools pane's rows, and the
+ * attachment preview.
+ *
+ * The rule these are drawn under (owner, 2026-09-17): three or four things
+ * per pane, with room. So there is no eight-column table, no path in a
+ * card, no URL beside an identifier, and nothing here sets a font size
+ * below the meta face — a pane a support engineer reads at 3 a.m. is not
+ * the place to save a row by shrinking the type.
+ *
+ * Every value comes from `styles/tokens.css`, every inset and margin is
+ * logical, and every element carrying somebody else's words takes
+ * `.sd-bidi` beside its `dir="auto"`.
+ */
+
+/* ---------- the transcript's closing card ---------- */
+
+.si-close {
+  display: grid;
+  gap: var(--sd-space-2);
+  padding: var(--sd-space-4);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+}
+
+.si-close__kicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  margin: 0;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+.si-close__kicker span + span::before {
+  content: '·';
+  margin-inline-end: var(--sd-space-2);
+}
+
+.si-close__title {
+  margin: 0;
+  color: var(--sd-ink);
+  font-family: var(--sd-font-display);
+  font-size: var(--sd-text-title);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.si-close__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+}
+
+.si-close__go {
+  justify-self: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sd-accent);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  cursor: pointer;
+}
+
+.si-close__go--flat {
+  color: var(--sd-ink-3);
+  cursor: default;
+}
+
+.si-close__go:hover:not(.si-close__go--flat) {
+  text-decoration: underline;
+}
+
+/* One line, folded, for an answer a later one replaced. */
+.si-close--prev {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  padding-block: var(--sd-space-2);
+  color: var(--sd-ink-3);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  background: var(--sd-sunk);
+  cursor: pointer;
+}
+
+.si-close--prev:disabled {
+  cursor: default;
+}
+
+/* ---------- blocks shared by the panes ---------- */
+
+.si-bundle {
+  display: grid;
+  gap: var(--sd-space-5);
+  padding: var(--sd-space-4);
+}
+
+/* The pane's own menu: the bundle folder, which only the desktop can open,
+   and never a path drawn in a card. */
+.si-bundle__menu {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-end: calc(var(--sd-space-4) * -1);
+}
+
+.si-block {
+  display: grid;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+}
+
+.si-block__h {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  margin: 0;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.si-block__h--flush {
+  flex: 1;
+}
+
+.si-block__n {
+  color: var(--sd-ink-3);
+  font-weight: 400;
+}
+
+.si-empty {
+  margin: 0;
+  padding: var(--sd-space-4);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+.si-empty--error {
+  color: var(--sd-st-failed);
+}
+
+.si-more {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sd-accent);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  cursor: pointer;
+}
+
+.si-more:hover {
+  text-decoration: underline;
+}
+
+.si-i {
+  inline-size: 14px;
+  block-size: 14px;
+  flex: none;
+}
+
+.si-chev {
+  transition: transform var(--sd-dur-1) var(--sd-ease);
+}
+
+[aria-expanded='true'] > .si-chev {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .si-chev {
+    transition: none;
+  }
+}
+
+.si-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 26px;
+  block-size: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: none;
+  color: var(--sd-ink-3);
+  cursor: pointer;
+}
+
+.si-iconbtn:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+/* ---------- the ticket card ---------- */
+
+.si-card {
+  display: grid;
+  gap: var(--sd-space-2);
+  padding: var(--sd-space-3);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  min-inline-size: 0;
+}
+
+.si-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  flex-wrap: wrap;
+}
+
+/* The identifier is the link. There is no URL beside it and no tooltip
+   carrying one: the external glyph says the click leaves the app. */
+.si-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-body);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+a.si-key:hover {
+  color: var(--sd-accent);
+  text-decoration: underline;
+}
+
+.si-key--sm {
+  font-size: var(--sd-text-meta);
+  font-weight: 500;
+  color: var(--sd-ink-2);
+}
+
+.si-card__title {
+  margin: 0;
+  color: var(--sd-ink);
+  font-size: var(--sd-text-body-l);
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.si-card__line,
+.si-call__line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  margin: 0;
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.si-card__label {
+  color: var(--sd-ink-3);
+}
+
+.si-card__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sd-space-2) var(--sd-space-3);
+  padding-block-start: var(--sd-space-2);
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.si-card__who {
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.si-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 1px;
+  padding-inline: var(--sd-space-2);
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-badge-bg);
+  color: var(--sd-badge-ink);
+  font-size: var(--sd-text-meta);
+}
+
+.si-chip[data-tone='triaged'] {
+  color: var(--sd-st-triaged);
+}
+
+.si-chip[data-tone='done'] {
+  color: var(--sd-st-done);
+}
+
+.si-chip[data-tone='blocked'] {
+  color: var(--sd-st-blocked);
+}
+
+.si-chip[data-tone='failed'] {
+  color: var(--sd-st-failed);
+}
+
+/* ---------- the conversation ---------- */
+
+.si-msgs {
+  display: grid;
+  gap: var(--sd-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.si-msg {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+  padding-inline-start: var(--sd-space-3);
+  border-inline-start: 2px solid var(--sd-rule);
+}
+
+.si-msg[data-role='customer'] {
+  border-inline-start-color: var(--sd-accent-soft);
+}
+
+.si-msg__who {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  margin: 0;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+.si-msg__at {
+  font-family: var(--sd-font-mono);
+}
+
+.si-msg__body {
+  color: var(--sd-ink);
+  font-size: var(--sd-text-body);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- attachments ---------- */
+
+.si-files {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.si-file {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding-inline: var(--sd-space-2);
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: none;
+  color: var(--sd-ink);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.si-file:hover {
+  background: var(--sd-nav-hover);
+}
+
+.si-file__glyph {
+  display: inline-flex;
+  color: var(--sd-ink-3);
+}
+
+.si-file__name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.si-file__meta {
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+}
+
+/* ---------- playbooks ---------- */
+
+.si-fold,
+.si-pb {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  min-block-size: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sd-ink-2);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.si-fold:hover,
+.si-pb:hover {
+  color: var(--sd-ink);
+}
+
+.si-pbs {
+  display: grid;
+  margin: 0;
+  padding-inline-start: var(--sd-space-4);
+  list-style: none;
+}
+
+.si-pb__body {
+  padding-inline-start: var(--sd-space-4);
+  padding-block-end: var(--sd-space-3);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  line-height: 1.6;
+}
+
+/* ---------- the tools pane ---------- */
+
+.si-tools {
+  display: grid;
+  gap: var(--sd-space-2);
+  padding: var(--sd-space-3);
+  min-inline-size: 0;
+}
+
+.si-tools__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+
+.si-rows {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Three columns and no more: what the call was, whether anyone had to
+   answer for it, and how long it took. */
+.si-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-2);
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: none;
+  color: var(--sd-ink);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.si-row:hover {
+  background: var(--sd-nav-hover);
+}
+
+.si-row[data-on='true'] {
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+}
+
+.si-row[data-deny='true'] .si-row__tool {
+  color: var(--sd-st-failed);
+}
+
+.si-row__what {
+  display: grid;
+  gap: 1px;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.si-row__tool {
+  font-family: var(--sd-font-mono);
+  font-weight: 500;
+}
+
+.si-row__why {
+  color: var(--sd-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.si-row__took {
+  flex: none;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+}
+
+.si-row__cites {
+  display: inline-flex;
+  gap: 2px;
+  flex: none;
+}
+
+.si-stamp {
+  flex: none;
+  padding-block: 1px;
+  padding-inline: 6px;
+  border-radius: var(--sd-radius-xs);
+  background: var(--sd-badge-bg);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-micro);
+}
+
+.si-stamp[data-tone='allow'] {
+  color: var(--sd-st-done);
+}
+
+.si-stamp[data-tone='deny'] {
+  color: var(--sd-st-failed);
+}
+
+.si-stamp[data-tone='ask'] {
+  color: var(--sd-st-blocked);
+}
+
+/* ---------- one call, in the drawer ---------- */
+
+.si-call {
+  display: grid;
+  gap: var(--sd-space-3);
+}
+
+.si-call__why {
+  margin: 0;
+  color: var(--sd-ink);
+  font-size: var(--sd-text-body);
+  line-height: 1.5;
+}
+
+.si-call__h {
+  margin: 0;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+  font-weight: 600;
+}
+
+.si-call__pre {
+  margin: 0;
+  max-block-size: 320px;
+  overflow: auto;
+  padding: var(--sd-space-2);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- the note's footer row ---------- */
+
+.si-notefoot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  margin-block-start: var(--sd-space-5);
+  padding-block-start: var(--sd-space-3);
+  border-block-start: 1px solid var(--sd-rule);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+.si-notefoot__path {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sd-font-mono);
+}
+
+/* ---------- the attachment preview ---------- */
+
+.si-prev {
+  display: grid;
+  gap: var(--sd-space-3);
+  justify-items: center;
+  min-inline-size: 0;
+}
+
+.si-prev__meta {
+  margin: 0;
+  justify-self: start;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+}
+
+.si-prev__msg {
+  margin: 0;
+  justify-self: start;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+/* Zoomed to fit: the whole image inside the dialog, never scrolled. */
+.si-prev__img {
+  max-inline-size: 100%;
+  max-block-size: 60vh;
+  object-fit: contain;
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+}
+
+.si-prev__doc {
+  inline-size: 100%;
+  block-size: 60vh;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sm);
+}
+
+.si-prev__media {
+  inline-size: 100%;
+  max-block-size: 60vh;
+}
+
+.si-prev__text {
+  inline-size: 100%;
+  max-block-size: 60vh;
+  margin: 0;
+  overflow: auto;
+  padding: var(--sd-space-3);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

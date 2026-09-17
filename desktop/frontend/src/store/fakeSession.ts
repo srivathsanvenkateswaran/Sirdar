@@ -1,4 +1,4 @@
-import type { RunDetail, RunDiff, RunEvent } from '../api/types'
+import type { Attachment, RunDetail, RunDiff, RunEvent } from '../api/types'
 
 /**
  * Three runs for the session screen's tests and the gallery, shaped on the
@@ -17,6 +17,8 @@ export interface SessionFixture {
   note: string
   prompt: string
   diff: RunDiff | null
+  /** What the bundle downloaded; absent on a run whose ticket carried no files. */
+  attachments?: Attachment[]
 }
 
 const APP = '/repos/sirdar-sandbox/app'

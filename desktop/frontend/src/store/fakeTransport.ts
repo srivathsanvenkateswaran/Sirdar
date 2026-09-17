@@ -489,6 +489,14 @@ export function createFakeTransport(seed: {
       return fixture.note
     },
     prompt: async (_ws, runId) => seed.sessions?.[runId]?.prompt ?? '',
+    attachments: async (_ws, runId) => seed.sessions?.[runId]?.attachments ?? [],
+    attachmentURL: async (_ws, runId, path) => {
+      const found = (seed.sessions?.[runId]?.attachments ?? []).find((a) => a.path === path)
+      if (!found) throw new Error(`not_found: no attachment at ${path}`)
+      // The browser transport answers with the route; the fake answers with
+      // the same shape so a preview has something a src can take.
+      return `/api/workspaces/ws/runs/${runId}/bundle/${path}`
+    },
     startTriage: async (ws, keys, opts) => {
       calls.startTriage.push({ ws, keys, opts })
       return { jobId: `job-${calls.startTriage.length}` }

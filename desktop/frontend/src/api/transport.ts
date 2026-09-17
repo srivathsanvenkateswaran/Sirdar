@@ -1,6 +1,7 @@
 import { coalesce } from './coalesce'
 import type {
   AppEvent,
+  Attachment,
   Check,
   ConfigSummary,
   EvalReport,
@@ -73,6 +74,18 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
 async function getJSON<T>(path: string): Promise<T> {
   const res = await request(path)
   return (await res.json()) as T
+}
+
+/**
+ * One attachment's bundle-relative path as a URL path: each segment
+ * escaped, the `attachments/` prefix kept, and nothing that is not under it
+ * accepted — the route refuses the rest anyway, and a bad path should not
+ * reach it as a request.
+ */
+function attachmentPath(path: string): string {
+  const parts = path.split('/').filter(Boolean)
+  if (parts[0] !== 'attachments' || parts.length < 2) throw new Error(`not a bundle attachment: ${path}`)
+  return parts.map(encodeURIComponent).join('/')
 }
 
 async function getText(path: string): Promise<string> {
@@ -161,6 +174,14 @@ export function createHTTPTransport(): Transport {
       ),
     prompt: (ws, runId) =>
       getText(`/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/prompt`),
+    attachments: (ws, runId) =>
+      getJSON<Attachment[]>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/bundle/attachments`,
+      ),
+    // The route is the URL: the browser loads the bytes straight into the
+    // <img> or the player, so nothing is copied through this process.
+    attachmentURL: async (ws, runId, path) =>
+      `${API}/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/bundle/${attachmentPath(path)}`,
     startTriage: (ws, keys, o) =>
       postJSON<{ jobId: string }>(`/workspaces/${encodeURIComponent(ws)}/triage`, {
         keys,
@@ -337,6 +358,8 @@ interface BridgeBindings {
   Version(): Promise<string>
   OpenConfig(ws: string): Promise<void>
   OpenNote(ws: string, runId: string, path: string): Promise<void>
+  Attachments(ws: string, runId: string): Promise<Attachment[] | null>
+  AttachmentDataURL(ws: string, runId: string, name: string): Promise<string>
   OpenRunDir(ws: string, runId: string): Promise<void>
 }
 
@@ -384,6 +407,9 @@ export function createWailsTransport(): Transport {
     },
     note: (ws, runId, kind) => bridge().Note(ws, runId, kind),
     prompt: (ws, runId) => bridge().Prompt(ws, runId),
+    attachments: async (ws, runId) => list(await bridge().Attachments(ws, runId)),
+    // No HTTP origin in the desktop shell, so the bytes come back inline.
+    attachmentURL: (ws, runId, path) => bridge().AttachmentDataURL(ws, runId, path),
     startTriage: async (ws, keys, o) => ({
       jobId: await bridge().StartTriage(ws, keys, {
         provider: o?.provider ?? '',

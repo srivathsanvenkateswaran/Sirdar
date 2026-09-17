@@ -123,30 +123,26 @@ describe('SessionConversation', () => {
       // Nothing is left to cancel.
       expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
 
+      // The closing card is a closing card: the title, three chips, and the
+      // way into the note. The note is the reading surface.
       const card = await screen.findByTestId('answer-card')
       expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(/^Recording a customer return adds its quantity to stock twice/)
+      expect(within(card).getByRole('heading', { level: 2 })).toHaveAttribute('dir', 'auto')
       expect(within(card).getByText('revised after your steer')).toBeInTheDocument()
-      // The tags a reader scans first: words, with the count.
       expect(within(card).getByText('classification')).toHaveTextContent('classification code')
       expect(within(card).getByText('confidence')).toHaveTextContent('confidence high')
-      expect(within(card).getByText('evidence', { selector: '.sc-tag' })).toHaveTextContent('evidence 7')
-      expect(within(card).getByText('code refs')).toHaveTextContent('code refs 7')
-      expect(within(card).getByText('open questions', { selector: '.sc-tag' })).toHaveTextContent('open questions 2')
-      expect(within(card).getByText('service')).toHaveTextContent('service sandbox/ledger')
+      expect(within(card).getByText('open questions')).toHaveTextContent('open questions 2')
+      expect(card.querySelectorAll('.si-chip')).toHaveLength(3)
+      expect(within(card).getByRole('button', { name: 'Filed as a note →' })).toBeInTheDocument()
 
-      // Five evidence items, the rest behind "more".
-      expect(within(card).getAllByRole('listitem').filter((li) => li.closest('.sc-ev'))).toHaveLength(5)
-      const more = within(card).getByRole('button', { name: /^2 more:/ })
-      expect(more).toHaveTextContent('ledger_test.go:65-86 · thread')
-      fireEvent.click(more)
-      expect(within(card).getAllByRole('listitem').filter((li) => li.closest('.sc-ev'))).toHaveLength(7)
-
-      // The draft, in the customer's language, as a letter.
-      expect(card.querySelector('.sc-draft')).toHaveTextContent(/^وعليكم السلام أستاذ أحمد،/)
-      expect(card.querySelector('.sc-draft')).toHaveAttribute('lang', 'ar')
-      // The footer names the note as the vault does.
-      expect(within(card).getByText('Note saved')).toBeInTheDocument()
-      expect(within(card).getByText('SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice.md')).toBeInTheDocument()
+      // What the transcript no longer repeats from the note.
+      for (const heading of ['Root cause', 'Evidence', 'Blast radius', 'Proposed fix', 'Reply draft']) {
+        expect(within(card).queryByText(heading)).toBeNull()
+      }
+      expect(card.querySelector('.sc-draft')).toBeNull()
+      expect(within(card).queryByText(/وعليكم السلام/)).toBeNull()
+      expect(within(card).queryByText('Raw JSON')).toBeNull()
+      expect(within(card).queryByText(/\.md$/)).toBeNull()
 
       expect(screen.getByTestId('finish-line')).toHaveTextContent('Finished 03:15 · 17 turns · $1.02 · 838k in · 15k out · note written')
       // The composer offers a follow-up, and the sidebar's New session steps down.
@@ -189,7 +185,7 @@ describe('SessionConversation', () => {
       expect(within(stream).queryByText(/stream_event/)).toBeNull()
     })
 
-    it('opens the inspector on the note as a document, with the frontmatter as chips', async () => {
+    it('opens the inspector on the note, from its title, with the vault scaffolding gone', async () => {
       const f = fake({ note: TRIAGE_NOTE })
       renderScene(f)
       const note = await screen.findByRole('tab', { name: 'Note' })
@@ -198,33 +194,35 @@ describe('SessionConversation', () => {
       expect(screen.getByRole('tab', { name: /Tools/ })).toHaveTextContent('Tools13')
 
       const doc = await screen.findByTestId('note-document')
-      const chips = within(doc).getByRole('list', { name: 'Note metadata' })
-      const items = within(chips).getAllByRole('listitem')
-      expect(items[0]).toHaveTextContent('support-duty')
-      expect(items[0]).toHaveAttribute('data-tag', 'true')
-      expect(items[1]).toHaveTextContent('triage')
-      const tracker = items.find((i) => i.textContent?.startsWith('tracker'))!
-      expect(within(tracker).getByRole('link')).toHaveAttribute('href', 'https://sandbox.local/tracker/SBX-1')
-      expect(items.some((i) => i.textContent === 'idSBX-CUST-1')).toBe(true)
-      expect(items.some((i) => i.textContent === 'servicesandbox/ledger')).toBe(true)
-      // No chip for the url alone: it rode on its key.
-      expect(items.some((i) => i.textContent?.startsWith('tracker_url'))).toBe(false)
-
+      // The pane opens on the note's own title.
+      const body = doc.querySelector('.sc-doc__body') as HTMLElement
+      expect(body).toHaveAttribute('dir', 'auto')
+      expect(body.firstElementChild?.tagName).toBe('H1')
       expect(within(doc).getByRole('heading', { level: 1 })).toHaveTextContent(/^Recording a customer return/)
       expect(within(doc).getByRole('heading', { name: 'Root Cause Hypothesis' })).toBeInTheDocument()
+
+      // Neither the frontmatter chips nor the wikilink strip under the title.
+      expect(within(doc).queryByRole('list', { name: 'Note metadata' })).toBeNull()
+      expect(within(doc).queryByText(/Register:/)).toBeNull()
+      expect(within(doc).queryByText(/_Issue Register/)).toBeNull()
+
       // The Arabic block is there, unwrapped from its Obsidian div.
       expect(within(doc).getByText(/السلام عليكم ورحمة الله/)).toBeInTheDocument()
       expect(within(doc).queryByText(/<div dir="rtl">/)).toBeNull()
-      // The vault copy can be opened, or its path copied where nothing opens files.
-      expect(within(doc).getByRole('button', { name: 'Copy path' })).toBeInTheDocument()
+
+      // One footer row at the bottom: where the file is, and the control.
+      const footer = within(doc).getByTestId('note-footer')
+      expect(footer).toHaveTextContent('In Obsidian')
+      expect(footer).toHaveTextContent('SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice.md')
+      expect(within(footer).getByRole('button', { name: 'Copy path' })).toBeInTheDocument()
       expect(f.transport.note).toHaveBeenCalledWith('ws1', TRIAGE_DETAIL.runId, 'triage')
     })
 
-    it('follows a file:line reference in the answer to the call that read the file', async () => {
-      const f = fake()
+    it('follows a file:line reference in the note to the call that read the file', async () => {
+      const f = fake({ note: TRIAGE_NOTE })
       renderScene(f)
-      const card = await screen.findByTestId('answer-card')
-      const ref = within(card).getAllByRole('button', { name: 'ledger.go:33' })[0]
+      const doc = await screen.findByTestId('note-document')
+      const ref = within(doc).getAllByRole('button', { name: 'ledger.go:33' })[0]
       fireEvent.click(ref)
       const stream = screen.getByTestId('conversation')
       const tinted = stream.querySelector('[data-on="true"]') as HTMLElement
@@ -239,7 +237,7 @@ describe('SessionConversation', () => {
       renderScene(f)
       const card = await screen.findByTestId('answer-card')
       expect(screen.queryByRole('tab', { name: 'Note' })).toBeNull()
-      fireEvent.click(within(card).getByRole('button', { name: 'Open in Note' }))
+      fireEvent.click(within(card).getByRole('button', { name: 'Filed as a note →' }))
       expect(await screen.findByRole('tab', { name: 'Note' })).toHaveAttribute('aria-selected', 'true')
     })
   })
@@ -371,41 +369,70 @@ describe('SessionConversation', () => {
   })
 
   describe('S4 — the bundle', () => {
-    it('draws the ticket as cards, the thread as bubbles, the empty attachments honestly, and the playbooks', async () => {
+    it('shows three blocks: one ticket card, the conversation, the attachments — and no path or URL', async () => {
       const f = fake({ prompt: TRIAGE_PROMPT })
       renderScene(f)
       fireEvent.click(await screen.findByRole('tab', { name: 'Bundle' }))
       const bundle = await screen.findByTestId('bundle-view')
 
-      const tracker = within(bundle).getByRole('region', { name: 'Tracker' })
-      expect(within(tracker).getByText('SBX-1')).toBeInTheDocument()
-      expect(within(tracker).getByText('normal')).toBeInTheDocument()
-      expect(within(tracker).getByRole('heading', { level: 3 })).toHaveTextContent('Product 00219 stock shows 1 more than the movement report')
-      expect(within(tracker).getByRole('link')).toHaveAttribute('href', 'https://sandbox.local/tracker/SBX-1')
-      expect(within(tracker).getByText('متجر الفهد للأدوات المنزلية')).toBeInTheDocument()
+      // One ticket card: the key is the link, the title wraps on its own
+      // line, the helpdesk number sits under it with the contact.
+      const ticket = within(bundle).getByRole('region', { name: 'Ticket' })
+      const key = within(ticket).getByRole('link', { name: /SBX-1/ })
+      expect(key).toHaveAttribute('href', 'https://sandbox.local/tracker/SBX-1')
+      expect(within(ticket).getByText('normal')).toBeInTheDocument()
+      const title = within(ticket).getByRole('heading', { level: 3 })
+      expect(title).toHaveTextContent('Product 00219 stock shows 1 more than the movement report')
+      expect(title).toHaveAttribute('dir', 'auto')
+      expect(title).toHaveClass('sd-bidi')
+      expect(within(ticket).getByRole('link', { name: /88341/ })).toHaveAttribute('href', 'https://sandbox.local/desk/88341')
+      const customer = within(ticket).getByText('متجر الفهد للأدوات المنزلية')
+      expect(customer).toHaveAttribute('dir', 'auto')
+      expect(customer).toHaveClass('sd-bidi')
+      expect(within(ticket).getByText('أحمد الفهد')).toBeInTheDocument()
 
-      const helpdesk = within(bundle).getByRole('region', { name: 'Helpdesk' })
-      expect(within(helpdesk).getByText('#88341')).toBeInTheDocument()
-      expect(within(helpdesk).getByText('أحمد الفهد')).toBeInTheDocument()
+      // No URL text beside an identifier, and no bundle path anywhere.
+      expect(within(bundle).queryByText(/https:\/\//)).toBeNull()
+      expect(within(bundle).queryByText(/\/repos\//)).toBeNull()
+      expect(within(bundle).queryByText(/prompt\.md/)).toBeNull()
 
       const thread = within(bundle).getByRole('region', { name: 'Conversation' })
-      expect(within(thread).getByText('4 messages · original language')).toBeInTheDocument()
-      const bubbles = thread.querySelectorAll('.sc-bub')
-      expect(bubbles).toHaveLength(4)
-      expect(bubbles[0]).toHaveAttribute('data-role', 'customer')
-      expect(bubbles[1]).toHaveAttribute('data-role', 'agent')
-      expect(bubbles[1]).toHaveTextContent('Layla (L1)')
-      expect(bubbles[3]).toHaveTextContent('تمام، وصلتنا التفاصيل.')
+      expect(within(thread).getByText(/messages · original language/)).toHaveTextContent('4 messages · original language')
+      const messages = within(thread).getAllByRole('listitem')
+      expect(messages).toHaveLength(4)
+      expect(messages[1]).toHaveTextContent('Layla (L1)')
+      expect(messages[3]).toHaveTextContent('تمام، وصلتنا التفاصيل.')
+      for (const m of messages) {
+        expect(m.querySelector('.si-msg__body')).toHaveAttribute('dir', 'auto')
+      }
 
       expect(within(bundle).getByRole('region', { name: 'Attachments' })).toHaveTextContent('None in this bundle.')
 
+      // The playbooks are one folded row at rest: no seven chips, no blob.
       const playbooks = within(bundle).getByRole('region', { name: 'Playbooks' })
-      expect(within(playbooks).getByText('3 in the prompt')).toBeInTheDocument()
-      const chips = within(playbooks).getAllByRole('tab')
-      expect(chips.map((c) => c.textContent)).toEqual(['00-environment', '10-helpdesk', '50-code'])
-      expect(within(playbooks).getByRole('tabpanel')).toHaveTextContent(/^This workspace is a single Go module/)
-      fireEvent.click(chips[1])
-      expect(within(playbooks).getByRole('tabpanel')).toHaveTextContent('The helpdesk is the sandbox desk.')
+      const fold = within(playbooks).getByRole('button', { name: /3 playbooks in the prompt/ })
+      expect(fold).toHaveAttribute('aria-expanded', 'false')
+      expect(within(playbooks).queryByText('00-environment')).toBeNull()
+      fireEvent.click(fold)
+      expect(within(playbooks).getAllByRole('button').map((b) => b.textContent)).toContain('00-environment')
+      fireEvent.click(within(playbooks).getByRole('button', { name: '10-helpdesk' }))
+      expect(playbooks).toHaveTextContent('The helpdesk is the sandbox desk.')
+    })
+
+    it('caps the conversation at the last six messages, with the rest one click away', async () => {
+      const many = TRIAGE_PROMPT.replace(
+        '## 2026-09-13T11:02:00+03:00 · agent · Layla (L1)',
+        [4, 5, 6, 7, 8]
+          .map((n) => `## 2026-09-1${n}T11:02:00+03:00 · agent · Layla (L1)\n\nFollow-up ${n}.\n`)
+          .join('\n') + '\n## 2026-09-13T11:02:00+03:00 · agent · Layla (L1)',
+      )
+      const f = fake({ prompt: many })
+      renderScene(f)
+      fireEvent.click(await screen.findByRole('tab', { name: 'Bundle' }))
+      const thread = within(await screen.findByTestId('bundle-view')).getByRole('region', { name: 'Conversation' })
+      expect(within(thread).getAllByRole('listitem')).toHaveLength(6)
+      fireEvent.click(within(thread).getByRole('button', { name: /^Show all 9$/ }))
+      expect(within(thread).getAllByRole('listitem')).toHaveLength(9)
     })
 
     it('says so when the prompt has not been written', async () => {
@@ -413,58 +440,60 @@ describe('SessionConversation', () => {
       renderScene(f)
       fireEvent.click(await screen.findByRole('tab', { name: 'Bundle' }))
       const bundle = await screen.findByTestId('bundle-view')
-      expect(within(bundle).getByText('The prompt has not been written yet.')).toBeInTheDocument()
       expect(within(bundle).getByText('The prompt carried no conversation.')).toBeInTheDocument()
+      expect(within(bundle).queryByRole('region', { name: 'Ticket' })).toBeNull()
+      expect(within(bundle).queryByRole('region', { name: 'Playbooks' })).toBeNull()
     })
   })
 
   describe('S5 — the tools table', () => {
-    it('lists every call with its decision, took and output, totals them, sorts, and pairs a row with its card', async () => {
+    it('heads with two numbers and draws three cells a row, with the rest in a drawer', async () => {
       const f = fake()
       renderScene(f)
       fireEvent.click(await screen.findByRole('tab', { name: /Tools/ }))
+      const tools = await screen.findByTestId('tools-table')
 
-      expect(document.querySelector('.sc-ttsum')).toHaveTextContent(/^13 calls11 by policy2 denied0 asked you[\d.]+ k?B out$/)
+      // The headline is what a support engineer acts on. The
+      // "41 calls 38 by policy 0 denied 3 asked you" string is gone.
+      expect(within(tools).getByRole('heading', { level: 3 })).toHaveTextContent('13 calls · 2 needed your approval')
+      expect(within(tools).queryByText(/by policy/)).toBeNull()
+      expect(within(tools).queryByRole('table')).toBeNull()
 
-      const table = screen.getByRole('table', { name: 'Tool calls' })
-      const rows = within(table).getAllByRole('row').slice(1)
+      const rows = within(tools).getAllByRole('listitem')
       expect(rows).toHaveLength(13)
-      expect(rows[0]).toHaveTextContent('1')
-      expect(rows[0]).toHaveTextContent('00:03')
-      expect(rows[0]).toHaveTextContent('Bash')
-      expect(rows[0]).toHaveTextContent('policy')
-      expect(rows[8]).toHaveAttribute('data-deny', 'true')
-      expect(within(rows[8]).getByText('denied')).toBeInTheDocument()
-      expect(rows[2]).toHaveTextContent(/\d+ B · 7 ln/)
+      // Three cells: what the call was, the decision when it was not the
+      // policy's own, and how long it took. No `#`, no output size.
+      const first = within(rows[0]).getByRole('button')
+      expect(first.querySelector('.si-row__tool')).toHaveTextContent('Bash')
+      expect(first.querySelector('.si-stamp')).toBeNull()
+      expect(first.querySelector('.si-row__took')).toBeInTheDocument()
+      expect(first.children).toHaveLength(2)
 
-      // Sort by tool: the Bash calls first, and the header says so.
-      fireEvent.click(within(table).getByRole('button', { name: 'tool' }))
-      const sorted = within(table).getAllByRole('row').slice(1)
-      expect(sorted[0]).toHaveTextContent('Bash')
-      expect(within(table).getByRole('columnheader', { name: 'tool' })).toHaveAttribute('aria-sort', 'ascending')
-      fireEvent.click(within(table).getByRole('button', { name: 'tool' }))
-      expect(within(table).getByRole('columnheader', { name: 'tool' })).toHaveAttribute('aria-sort', 'descending')
-      expect(within(table).getAllByRole('row').slice(1)[0]).toHaveTextContent('Read')
+      const denied = rows.find((r) => r.querySelector('[data-deny="true"]'))!
+      expect(within(denied).getByText('denied')).toBeInTheDocument()
 
-      // Clicking a row tints it and its card.
-      const target = within(table).getByRole('row', { name: 'Show call 12 in the transcript' })
-      fireEvent.click(target)
-      expect(target).toHaveAttribute('data-on', 'true')
-      const stream = screen.getByTestId('conversation')
-      const card = stream.querySelector('[data-on="true"]') as HTMLElement
-      expect(card).toHaveTextContent('rg -n "Return|restock" --type go')
+      // Sorting is in the menu, not on chevrons over every column.
+      fireEvent.click(within(tools).getByRole('button', { name: 'Tools options' }))
+      fireEvent.click(await screen.findByRole('menuitem', { name: /Sort by tool/ }))
+      expect(within(within(tools).getAllByRole('listitem')[0]).getByRole('button').querySelector('.si-row__tool')).toHaveTextContent('Bash')
+
+      // A row opens the drawer with the input, the output and the way back.
+      fireEvent.click(within(rows[2]).getByRole('button'))
+      const detail = await screen.findByTestId('tool-detail')
+      expect(within(detail).getByRole('heading', { name: 'Input' })).toBeInTheDocument()
+      expect(within(detail).getByRole('heading', { name: 'Output' })).toBeInTheDocument()
     })
 
-    it('Open in Tools on a card opens the table on that row', async () => {
+    it('Open in Tools on a card opens the pane on that row', async () => {
       const f = fake()
       renderScene(f)
       const stream = await screen.findByTestId('conversation')
       fireEvent.click(within(stream).getByRole('button', { name: /Search Go code for partial-return handling/ }))
       fireEvent.click(within(stream).getByRole('button', { name: 'Open in Tools' }))
       expect(screen.getByRole('tab', { name: /Tools/ })).toHaveAttribute('aria-selected', 'true')
-      const table = screen.getByRole('table', { name: 'Tool calls' })
-      const on = table.querySelector('tr[data-on="true"]') as HTMLElement
-      expect(on).toHaveTextContent('rg -n -i "partial|Quantity" --type go')
+      const tools = screen.getByTestId('tools-table')
+      const on = tools.querySelector('[data-on="true"]') as HTMLElement
+      expect(on).toHaveTextContent('Search Go code for partial-return handling')
     })
   })
 
@@ -478,14 +507,11 @@ describe('SessionConversation', () => {
 
       const card = await screen.findByRole('region', { name: 'Fix report' })
       expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent("Apply a return's quantity to stock once in ApplyMovement")
-      expect(within(card).getByText('tests')).toHaveTextContent('tests 4 run · 3 ok')
-      expect(within(card).getByText('files')).toHaveTextContent('files ledger.go · ledger_test.go')
-      expect(within(card).getByText('deviation from note')).toHaveTextContent('deviation from note none')
-      expect(within(card).getByRole('heading', { name: 'What changed' })).toBeInTheDocument()
-      expect(within(card).getByRole('heading', { name: 'Risks' })).toBeInTheDocument()
-      expect(within(card).getByText('Committed')).toBeInTheDocument()
-      expect(within(card).getByText('f144936')).toBeInTheDocument()
-      expect(within(card).getByText('fix-sbx-1-recording-a-customer-return-adds-its-qua', { selector: '.sc-ans__branch' })).toBeInTheDocument()
+      expect(within(card).getByRole('button', { name: 'Review the changes →' })).toBeInTheDocument()
+      // The report itself is the Changes pane, not a second copy on the path.
+      expect(within(card).queryByRole('heading', { name: 'What changed' })).toBeNull()
+      expect(within(card).queryByRole('heading', { name: 'Risks' })).toBeNull()
+      expect(within(card).queryByText('Raw JSON')).toBeNull()
 
       // The stamps on the way: the report written, the failing test, the passing run.
       const stream = screen.getByTestId('conversation')
@@ -513,7 +539,7 @@ describe('SessionConversation', () => {
       expect(onOpenReview).toHaveBeenCalled()
       // The card's footer opens the same tab.
       fireEvent.click(screen.getByRole('tab', { name: 'Note' }))
-      fireEvent.click(within(card).getByRole('button', { name: 'Review changes' }))
+      fireEvent.click(within(card).getByRole('button', { name: 'Review the changes →' }))
       expect(screen.getByRole('tab', { name: /Changes/ })).toHaveAttribute('aria-selected', 'true')
     })
   })

@@ -263,6 +263,14 @@ export default function SessionConversation(props: SessionConversationProps): JS
     setChanged(diff ? diff.files.length : null)
   }, [])
 
+  // Where the bundle is on disk, offered rather than printed: only the
+  // desktop shell can reveal a folder, so a browser gets no item at all
+  // and the pane never shows a path it cannot act on.
+  const openBundleFolder = useMemo(
+    () => (transport.openRunDir ? () => void transport.openRunDir!(workspaceId, runId) : undefined),
+    [transport, workspaceId, runId],
+  )
+
   const noteOwnWords = useCallback(
     (text: string) => {
       if (!text) return
@@ -530,7 +538,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
         if (item.superseded) {
           return (
             <div key={item.index} data-item={item.index}>
-              <SupersededAnswer at={item.at} seconds={item.seconds} />
+              <SupersededAnswer at={item.at} />
             </div>
           )
         }
@@ -541,10 +549,6 @@ export default function SessionConversation(props: SessionConversationProps): JS
               at={item.at}
               revised={item.revised}
               kind={detail.kind}
-              notePath={notePath}
-              notesDir={notesDir}
-              fix={detail.fix}
-              onRef={onRef}
               onOpenNote={
                 isFix
                   ? undefined
@@ -720,6 +724,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                     kinds={noteKinds}
                     reload={finished}
                     notePaths={detail.notes}
+                    notesDir={notesDir}
                     onRef={onRef}
                   />
                 </div>
@@ -730,8 +735,9 @@ export default function SessionConversation(props: SessionConversationProps): JS
                     transport={transport}
                     workspaceId={workspaceId}
                     runId={runId}
-                    bundleDir={detail.bundleDir}
-                    promptPath={detail.promptPath}
+                    assignee={detail.assignee}
+                    helpdeskKey={detail.helpdeskKey}
+                    onOpenFolder={openBundleFolder}
                   />
                 </div>
               ) : null}
@@ -740,12 +746,11 @@ export default function SessionConversation(props: SessionConversationProps): JS
                   <ToolsTable
                     calls={model.calls}
                     highlighted={highlighted}
-                    onLocate={locate}
-                    markers={markers}
-                    onMarker={(id) => {
-                      const step = model.calls.find((c) => markers.find((m) => m.id === id)?.steps.includes(c.index))
+                    onLocate={(index) => {
+                      const step = model.calls.find((c) => c.index === index)
                       if (step) locate(step)
                     }}
+                    markers={markers}
                   />
                 </div>
               ) : null}
