@@ -43,6 +43,13 @@ var bridgeMethods = []string{
 	"MCPServers",
 	"MCPTools",
 	"MCPCall",
+	"Playbooks",
+	"Playbook",
+	"SavePlaybook",
+	"AddPlaybook",
+	"DeletePlaybook",
+	"ScaffoldPlaybooks",
+	"OpenPlaybook",
 }
 
 // notBridged is every other exported method of *app.Service, with the

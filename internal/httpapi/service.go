@@ -37,6 +37,13 @@ type Service interface {
 	Golden(wsID string) ([]GoldenEntry, error)
 	AddGolden(wsID, key, runID string) (GoldenEntry, error)
 	ConfigSummary(wsID string) (ConfigSummary, error)
+	Playbooks(wsID string) ([]PlaybookSummary, error)
+	Playbook(wsID, name string) (string, error)
+	SavePlaybook(wsID, name, body string) (PlaybookSummary, error)
+	AddPlaybook(wsID, name, body string) (PlaybookSummary, error)
+	DeletePlaybook(wsID, name string) error
+	ScaffoldPlaybooks(wsID string) ([]PlaybookSummary, error)
+	OpenPlaybook(wsID, name string) error
 	MCPServers(ctx context.Context, wsID string, connect bool) (MCPInventory, error)
 	MCPTools(ctx context.Context, wsID, server string) (MCPToolList, error)
 	MCPCall(ctx context.Context, wsID, server, tool string, args json.RawMessage) (MCPCallResult, error)
@@ -68,6 +75,12 @@ var (
 	// ErrNoSuchMCPServer is a server name the workspace does not
 	// configure. It becomes 404.
 	ErrNoSuchMCPServer = app.ErrNoSuchMCPServer
+	// ErrNoSuchPlaybook is a playbook the workspace does not have, or a
+	// name that could not address one at all. It becomes 404.
+	ErrNoSuchPlaybook = app.ErrNoSuchPlaybook
+	// ErrPlaybookExists is a create asked for a name already taken. It
+	// becomes 409: edit that playbook, or pick another name.
+	ErrPlaybookExists = app.ErrPlaybookExists
 	// ErrNoDiff is a run with no change to review. It becomes 404 with the
 	// reason, which is what the screen shows instead of a diff.
 	ErrNoDiff = app.ErrNoDiff
@@ -95,14 +108,15 @@ func classify(err error) (int, string) {
 		return 409, "conflict"
 	case errors.Is(err, app.ErrMCPDenied):
 		return 403, "forbidden"
-	case errors.Is(err, ErrRefused), errors.Is(err, ErrRunLive):
+	case errors.Is(err, ErrRefused), errors.Is(err, ErrRunLive), errors.Is(err, ErrPlaybookExists):
 		return 409, "conflict"
 	case errors.Is(err, ErrNoDiff):
 		return 404, "no_diff"
 	case errors.Is(err, app.ErrNoSuchWorkspace),
 		errors.Is(err, app.ErrNoSuchRun),
 		errors.Is(err, app.ErrNoSuchJob),
-		errors.Is(err, app.ErrNoSuchMCPServer):
+		errors.Is(err, app.ErrNoSuchMCPServer),
+		errors.Is(err, app.ErrNoSuchPlaybook):
 		return 404, "not_found"
 	default:
 		return 500, "internal"
