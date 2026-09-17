@@ -1,8 +1,11 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
@@ -83,6 +86,127 @@ var notBridged = map[string]string{
 	// in the frontend calls them. See internal/app/live.go.
 	"Append": "the run executor publishes its own event lines through this",
 	"Done":   "the run executor closes its event log through this",
+}
+
+// bridgeOnlyMethods are the desktop's own bindings: methods on *Bridge with
+// no *app.Service counterpart, which is why they are absent from
+// bridgeMethods. Each is something only the machine running the app can do,
+// with the reason a browser served by `sirdar serve` cannot — the web UI
+// copies a path instead, and `desktop/frontend/src/api/parity.test.ts`
+// carries the same list on the TypeScript side.
+var bridgeOnlyMethods = map[string]string{
+	"Version":           "the desktop build's version; a browser is served by whatever `sirdar serve` is running",
+	"OpenConfig":        "opens config.yaml in whatever the machine associates with it",
+	"OpenNote":          "opens a note in whatever the machine associates with Markdown",
+	"OpenRunDir":        "reveals the run directory in the machine's file manager",
+	"AttachmentDataURL": "inlines an attachment, which WKWebView will not load over file://",
+}
+
+// bindingsPath is the frontend's own declaration of what it calls on the
+// bridge. Wails generates typed bindings at build time, but that directory
+// is not in the repository, so the frontend reaches window.go.main.Bridge
+// through a hand-written interface — and nothing checked that interface
+// against the Go side. This file does.
+const bindingsPath = "frontend/src/api/transport.ts"
+
+// frontendBridgeCalls reads the method names off the BridgeBindings
+// interface in bindingsPath. A method declaration is a line beginning with
+// an upper-case name and an open paren; a doc comment, a parameter line and
+// a closing paren are none of those.
+func frontendBridgeCalls(t *testing.T) []string {
+	t.Helper()
+	src, err := os.ReadFile(bindingsPath)
+	if err != nil {
+		t.Fatalf("reading %s: %v", bindingsPath, err)
+	}
+	lines := strings.Split(string(src), "\n")
+	start := -1
+	for i, line := range lines {
+		if strings.HasPrefix(line, "interface BridgeBindings {") {
+			start = i + 1
+			break
+		}
+	}
+	if start == -1 {
+		t.Fatalf("%s no longer declares an interface BridgeBindings; the frontend reaches the bridge some other way now", bindingsPath)
+	}
+	method := regexp.MustCompile(`^\s+([A-Z]\w*)\(`)
+	var names []string
+	for _, line := range lines[start:] {
+		if line == "}" {
+			return names
+		}
+		if m := method.FindStringSubmatch(line); m != nil {
+			names = append(names, m[1])
+		}
+	}
+	t.Fatalf("%s: the BridgeBindings interface is never closed", bindingsPath)
+	return nil
+}
+
+// TestFrontendBridgeCallsExist walks the frontend's BridgeBindings interface
+// and asserts every name on it is a method of *Bridge. A screen that calls a
+// binding the Go side does not have fails in the desktop app only — the
+// browser takes the HTTP route and says nothing — so the mismatch is caught
+// here instead.
+func TestFrontendBridgeCallsExist(t *testing.T) {
+	bridge := reflect.TypeOf(&Bridge{})
+	calls := frontendBridgeCalls(t)
+	if len(calls) < len(bridgeMethods) {
+		t.Fatalf("read %d bindings off %s, fewer than the %d bound methods; the parse is wrong", len(calls), bindingsPath, len(bridgeMethods))
+	}
+	for _, name := range calls {
+		if _, ok := bridge.MethodByName(name); !ok {
+			t.Errorf("the frontend calls Bridge.%s, which desktop/bridge.go does not have", name)
+		}
+	}
+
+	// The other direction: a bound method the frontend never calls is a
+	// route the desktop app carries for nobody.
+	called := map[string]bool{}
+	for _, name := range calls {
+		called[name] = true
+	}
+	for i := 0; i < bridge.NumMethod(); i++ {
+		name := bridge.Method(i).Name
+		if !called[name] {
+			t.Errorf("Bridge.%s is bound but the frontend's BridgeBindings does not name it", name)
+		}
+	}
+}
+
+// TestBridgeSurfaceIsAccountedFor: every exported method of *Bridge is
+// either forwarded to the service (bridgeMethods) or the desktop's own
+// (bridgeOnlyMethods, with its reason). Between the two the shell's surface
+// is named exactly, so what the web UI cannot do is a list somebody wrote
+// rather than a screen that quietly lost a button.
+func TestBridgeSurfaceIsAccountedFor(t *testing.T) {
+	forwarded := map[string]bool{}
+	for _, name := range bridgeMethods {
+		forwarded[name] = true
+	}
+
+	bridge := reflect.TypeOf(&Bridge{})
+	for i := 0; i < bridge.NumMethod(); i++ {
+		name := bridge.Method(i).Name
+		_, own := bridgeOnlyMethods[name]
+		if forwarded[name] && own {
+			t.Errorf("%s is in both bridgeMethods and bridgeOnlyMethods", name)
+		}
+		if !forwarded[name] && !own {
+			t.Errorf("Bridge.%s is neither forwarded to app.Service nor listed in bridgeOnlyMethods;"+
+				" say there why the browser cannot do it and what the web UI offers instead", name)
+		}
+	}
+
+	for name, reason := range bridgeOnlyMethods {
+		if _, ok := bridge.MethodByName(name); !ok {
+			t.Errorf("bridgeOnlyMethods names %s, which *Bridge no longer has", name)
+		}
+		if reason == "" {
+			t.Errorf("bridgeOnlyMethods[%s] has no reason", name)
+		}
+	}
 }
 
 // TestServiceSurfaceIsAccountedFor is the reverse direction: every exported

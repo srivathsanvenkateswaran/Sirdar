@@ -88,6 +88,32 @@ disk is the only interface between them. `flushGrace` keeps tailing an active ru
 a couple of seconds after it leaves `preparing`/`running`, so the poll interval doesn't clip the
 last lines a run writes (the final event, the usage tick).
 
+## One bundle, two transports
+
+The web UI, the macOS app and the Windows app are the same `desktop/frontend` build. Nothing in
+it knows which it is running as: every screen takes a `Transport`
+(`desktop/frontend/src/api/types.ts`) and calls that, and `createTransport()` picks the
+implementation at start-up — `createWailsTransport` when the shell has bound
+`window.go.main.Bridge`, `createHTTPTransport` over the JSON API and the SSE stream otherwise.
+
+So a feature lands on both, or it is listed as desktop-only with a reason. The rule is enforced
+in three places rather than remembered:
+
+- `TRANSPORT_METHODS` beside the `Transport` interface names every method on it, and a
+  type-level check in the same file fails to compile if the list and the interface drift apart.
+- `desktop/frontend/src/api/parity.test.ts` walks that list against both implementations. A name
+  the browser does not answer to must appear in its `DESKTOP_ONLY` map with the reason and what
+  the web UI offers instead; a stale entry — a method the browser has since grown — fails too.
+- `desktop/bridge_test.go` reads the `BridgeBindings` interface the frontend declares and checks
+  every name on it against `*Bridge`, both directions, and accounts for every exported `*Bridge`
+  method as either forwarded to `app.Service` (`bridgeMethods`) or the desktop's own
+  (`bridgeOnlyMethods`, with its reason).
+
+The desktop-only four are `version`, `openConfig`, `openNote` and `openRunDir`: each asks the
+machine running Sirdar to open something, which a browser cannot be allowed to do. None of them
+is a dead control in the web UI — where the desktop opens a file or a folder, the browser copies
+its path.
+
 ## See also
 
 - `docs/adapters.md` — the built-in adapters and the external adapter protocol in full.
