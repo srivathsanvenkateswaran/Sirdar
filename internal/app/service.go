@@ -66,6 +66,10 @@ type Service struct {
 	opts    Options
 	watcher *Watcher
 	quota   *quotaTracker
+	// live is the cursor the in-process event sink and the watcher's tail
+	// share, so a line published by one is not published again by the
+	// other. See live.go.
+	live *liveRuns
 
 	mu      sync.Mutex
 	subs    map[int]chan Event
@@ -98,9 +102,11 @@ func New(reg *Registry, build DepsBuilder, opts Options) *Service {
 		subs:     map[int]chan Event{},
 		jobs:     map[JobID]context.CancelFunc{},
 		starting: map[string]struct{}{},
+		live:     newLiveRuns(),
 	}
 	s.quota.nowFunc = opts.Now
 	s.watcher = NewWatcher(reg, opts.Interval, s.observe)
+	s.watcher.live = s.live
 	return s
 }
 
@@ -716,6 +722,10 @@ func (s *Service) startJob(
 		if err != nil {
 			outcomes = onBuildError(err)
 		} else {
+			// The executor runs in this process, so every line it appends
+			// to events.jsonl is published as it is written rather than
+			// waited for by the watcher's poll. See live.go.
+			deps.Sink = s
 			// A job started from a UI has no terminal behind it, so it
 			// must never inherit the process's stdin: a runner that
 			// asked for an answer would hang on it. Resume, the one

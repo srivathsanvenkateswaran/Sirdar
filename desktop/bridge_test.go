@@ -73,6 +73,11 @@ var notBridged = map[string]string{
 	"HookReceived": "only the hook route reports a delivery",
 	// Diagnostics with no screen behind them.
 	"Jobs": "the frontend tracks the job ids it was given by each start",
+	// run.Sink: the executor calls these as it writes each event line, so
+	// the window sees it without waiting for the watcher's poll. Nothing
+	// in the frontend calls them. See internal/app/live.go.
+	"Append": "the run executor publishes its own event lines through this",
+	"Done":   "the run executor closes its event log through this",
 }
 
 // TestServiceSurfaceIsAccountedFor is the reverse direction: every exported

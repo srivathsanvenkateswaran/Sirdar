@@ -33,6 +33,12 @@ type Watcher struct {
 	interval time.Duration
 	sink     func(Event)
 
+	// live is the cursor shared with this process's in-process event sink
+	// (live.go), nil when nothing publishes that way. A run started here
+	// has its lines delivered by the sink as they are written; the tail
+	// takes the sink's offset so it does not deliver them a second time.
+	live *liveRuns
+
 	// runs is touched only by the polling goroutine.
 	runs map[string]*watchedRun
 
@@ -180,6 +186,11 @@ func (w *Watcher) tick() {
 			w.check(r, path, now)
 			if active(r.status) || now.Before(r.flushUntil) {
 				w.tail(r)
+			} else if w.live != nil {
+				// Nothing more will be tailed here, and the tail has
+				// already taken the sink's final offset, so the cursor
+				// the two shared can go.
+				w.live.releaseIfClosed(r.dir)
 			}
 		}
 	}
@@ -188,8 +199,11 @@ func (w *Watcher) tick() {
 
 	// A workspace that was removed, or a run directory that was deleted,
 	// stops being tracked so the map does not grow without bound.
-	for id := range w.runs {
+	for id, r := range w.runs {
 		if !seen[id] {
+			if w.live != nil {
+				w.live.release(r.dir)
+			}
 			delete(w.runs, id)
 		}
 	}
@@ -238,6 +252,22 @@ func (w *Watcher) tail(r *watchedRun) { w.read(r, true) }
 // read advances the run's offset and index over every complete line it has
 // not consumed yet, publishing each one when emit is set.
 func (w *Watcher) read(r *watchedRun, emit bool) {
+	// A run this process is executing publishes its own lines as it writes
+	// them. Its cursor says how far that has got; taking it here, under the
+	// lock the sink holds across its write, is what keeps one line from
+	// reaching the window twice. The lock is held for the whole read, so
+	// the file either already holds a line the cursor counts, or does not
+	// hold that line yet.
+	if w.live != nil {
+		if c := w.live.lookup(r.dir); c != nil {
+			c.mu.Lock()
+			defer c.mu.Unlock()
+			if c.offset > r.offset {
+				r.offset, r.index = c.offset, c.index
+			}
+		}
+	}
+
 	f, err := os.Open(filepath.Join(r.dir, "events.jsonl"))
 	if err != nil {
 		return
