@@ -4,6 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Check, Transport } from '../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
+import { composerPrefs, resetComposerPrefs } from '../lib/composerPrefs'
 import { resetShowLibrary, showLibrary } from '../lib/library'
 import { prefersRTL, resetPreferRTL, setPreferRTL } from '../lib/rtl'
 import { resetSessionLayout, sessionLayout } from '../lib/sessionLayout'
@@ -41,6 +42,7 @@ afterEach(() => {
   resetTheme()
   resetSessionsShow()
   resetSessionLayout()
+  resetComposerPrefs()
 })
 
 /** A transport over the fake, with whatever a case wants overridden. */
@@ -240,6 +242,18 @@ describe('General', () => {
     expect(
       screen.getByText(/^Workbench: documents over a structured console/, { selector: '.sd-setting-row__value' }),
     ).toBeInTheDocument()
+  })
+
+  it('turns the composer\u2019s reading off for this workspace, and remembers it', () => {
+    open()
+    const control = screen.getByRole('switch', { name: 'Read what I type' })
+    expect(control).toHaveAttribute('aria-checked', 'true')
+    expect(composerPrefs('ws1').intentAssist).toBe(true)
+    fireEvent.click(control)
+    expect(composerPrefs('ws1').intentAssist).toBe(false)
+    expect(screen.getByText('Off', { selector: '.sd-setting-row__value' })).toBeInTheDocument()
+    // Another workspace is unaffected: the habit is per repository.
+    expect(composerPrefs('ws2').intentAssist).toBe(true)
   })
 
   it('switches which ticket number the sessions show, and remembers it', () => {

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RunDetail as RunDetailData, RunEvent } from '../api/types'
 import { stubMatchMedia } from '../lib/mediaStub'
@@ -274,6 +274,27 @@ describe('the Change review screen', () => {
       'https://github.com/x/y/pull/1',
     )
     expect(within(foot).queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument()
+  })
+
+  it('says in the header which mode the fix ran in', async () => {
+    // Nothing pushed: the commit is in the worktree and nowhere else.
+    const local = fake({ diff: diff({ pushed: false }), detail: { fix: { ...RUN.fix, pushed: false } } })
+    renderReview(local)
+    expect(await screen.findByText('local — not pushed')).toBeInTheDocument()
+    cleanup()
+
+    // Pushed with no pull request: `--no-pr`, or a `gh` call that failed.
+    const noPr = fake({ diff: diff({ pushed: true }), detail: { fix: { ...RUN.fix, pushed: true, prUrl: '' } } })
+    renderReview(noPr)
+    expect(await screen.findByText('pushed, no pull request')).toBeInTheDocument()
+    cleanup()
+
+    const withPr = fake({
+      diff: diff({ pushed: true }),
+      detail: { fix: { ...RUN.fix, pushed: true, prUrl: 'https://github.com/x/y/pull/1' } },
+    })
+    renderReview(withPr)
+    expect(await screen.findByText('pushed, pull request opened')).toBeInTheDocument()
   })
 
   it('follows the run live: the status moves and the checks arrive', async () => {

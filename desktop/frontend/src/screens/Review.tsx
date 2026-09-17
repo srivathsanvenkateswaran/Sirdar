@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { RunDiff, Ticket, Transport } from '../api/types'
+import type { FixInfo, RunDiff, Ticket, Transport } from '../api/types'
 import { elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand, rekeyAfterDrop } from '../lib/review'
@@ -47,6 +47,21 @@ function notePathOf(notes: string[] | undefined): string {
  * `dropHunk` with the etag the diff was read under and the screen shows the
  * change as the service answers it afterwards.
  */
+/**
+ * Which mode the fix ran in, for the header: the three `sirdar fix` ends
+ * in, read off what the run recorded rather than off what was asked for.
+ *
+ * `pushed` is what says the work left the machine, and it is the field to
+ * key on: a run started with `--no-pr`, and one whose `gh` call failed,
+ * both push the branch and record no URL. A pushed run with a pull request
+ * says nothing here — the header already carries the link.
+ */
+export function fixModeNote(fix: FixInfo | undefined, pushed: boolean): string {
+  if (!pushed) return 'local \u2014 not pushed'
+  if (fix?.prUrl) return 'pushed, pull request opened'
+  return 'pushed, no pull request'
+}
+
 export default function Review({
   transport,
   workspaceId,
@@ -240,6 +255,11 @@ export default function Review({
         <h2 className="review-key">{detail.key}</h2>
         <KindChip kind={detail.kind} />
         <StatusBadge status={detail.status as SdStatus} />
+        {detail.kind === 'fix' ? (
+          <span className="review-mode" title={fixModeNote(detail.fix, pushed)}>
+            {fixModeNote(detail.fix, pushed)}
+          </span>
+        ) : null}
         <span className="review-title" title={title || undefined}>
           {title}
         </span>

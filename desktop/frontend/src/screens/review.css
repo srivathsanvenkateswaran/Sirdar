@@ -505,3 +505,16 @@
     max-block-size: 70vh;
   }
 }
+
+/*
+ * Which mode the fix ran in, beside the status badge: "local — not pushed",
+ * "pushed, no pull request", or that it was opened as a pull request, which
+ * the footer already links. Words, not a badge: it is a fact about the run
+ * and never a state to act on, and a second coloured pill next to the
+ * status badge would read as one.
+ */
+.review-mode {
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  white-space: nowrap;
+}

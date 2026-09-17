@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import type { ConfigSummary, MeSummary, Transport, Workspace } from '../../api/types'
+import {
+  composerPrefs,
+  setIntentAssist,
+  subscribeComposerPrefs,
+} from '../../lib/composerPrefs'
 import { reasonOf } from '../../lib/format'
 import {
   sessionsShow,
@@ -18,6 +23,7 @@ import { setTheme, subscribeTheme, theme, type Theme } from '../../lib/theme'
 import Avatar from '../../ui/run-card/Avatar'
 import SegmentedControl from '../../ui/segmented-control'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
+import Toggle from '../../ui/toggle'
 import { levelOf, MARKS, OpenConfig, type DoctorState, type Loaded } from './shared'
 
 /** How long a Remove button stays armed before it goes back to asking. */
@@ -116,6 +122,9 @@ export default function GeneralPage({
     subscribeSessionLayout,
     sessionLayout,
     () => 'conversation' as SessionLayout,
+  )
+  const composer = useSyncExternalStore(subscribeComposerPrefs, () =>
+    composerPrefs(currentWorkspaceId ?? ''),
   )
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
@@ -283,6 +292,18 @@ export default function GeneralPage({
               options={SESSIONS_SHOW_OPTIONS}
               value={show}
               onChange={(id) => setSessionsShow(id as SessionsShow)}
+            />
+          }
+        />
+        <SettingRow
+          label="Read what I type"
+          value={composer.intentAssist ? 'On' : 'Off'}
+          help="When the New session box says something the parser cannot settle — no ticket key in it, two keys, or two things asked for at once — one short model call reads the line and offers what it understood. Nothing starts until you confirm it. A line that reads cleanly never spends a call, and neither does an empty box."
+          control={
+            <Toggle
+              label="Read what I type"
+              checked={composer.intentAssist}
+              onChange={(on) => setIntentAssist(currentWorkspaceId ?? '', on)}
             />
           }
         />
