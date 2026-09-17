@@ -3,10 +3,10 @@ import ReactMarkdown from 'react-markdown'
 import type { NoteKind, Transport } from '../../../api/types'
 import { notePathFor, splitFrontmatter } from '../../../lib/events'
 import { reasonOf } from '../../../lib/format'
-import { noteName } from '../../../lib/review'
 import { noteDir, stripRTLBlocks, subscribePreferRTL } from '../../../lib/rtl'
 import Button from '../../../ui/button'
-import { chipsOf } from '../NoteDocument'
+import NoteFooter from '../../../components/session/NoteFooter'
+import { noteFromFirstHeading } from '../../../components/session/noteBody'
 import Document, { type OutlineItem } from './Document'
 
 /**
@@ -107,7 +107,6 @@ export default function NoteDocument({
 }: NoteDocumentProps): JSX.Element {
   const [notes, setNotes] = useState<{ kind: NoteKind; text: string }[] | null>(null)
   const [error, setError] = useState('')
-  const [copiedPath, setCopiedPath] = useState(false)
   const wanted = kinds.join(',')
   const dir = useSyncExternalStore(subscribePreferRTL, noteDir, () => 'auto' as const)
 
@@ -141,9 +140,9 @@ export default function NoteDocument({
   const parsed = useMemo(
     () =>
       (notes ?? []).map((note) => {
-        const { fields, body } = splitFrontmatter(note.text)
-        const { title, sections } = noteSections(stripRTLBlocks(body))
-        return { kind: note.kind, chips: chipsOf(fields), title, sections, path: notePathFor(note.kind, notePaths) }
+        const { body } = splitFrontmatter(note.text)
+        const { title, sections } = noteSections(noteFromFirstHeading(stripRTLBlocks(body)))
+        return { kind: note.kind, title, sections, path: notePathFor(note.kind, notePaths) }
       }),
     [notes, notePaths],
   )
@@ -189,58 +188,20 @@ export default function NoteDocument({
               {note.title}
             </h2>
           ) : null}
-          {note.chips.length > 0 || note.path ? (
-            <div className="wb-facts">
-              {note.chips.map((c, i) => (
-                <span key={`${c.key}-${i}`}>
-                  {c.key}{' '}
-                  {c.url ? (
-                    <a href={c.url} target="_blank" rel="noreferrer" dir="auto">
-                      {c.value}
-                    </a>
-                  ) : (
-                    <b dir="auto">{c.value}</b>
-                  )}
-                </span>
-              ))}
-              {note.path ? (
-                <span className="wb-facts__act">
-                  <Button
-                    variant="pale"
-                    size="sm"
-                    title={transport.openNote ? `Open ${note.path}` : note.path}
-                    onClick={() => {
-                      if (transport.openNote) {
-                        void transport.openNote(workspaceId, runId, note.path).catch(() => {})
-                        return
-                      }
-                      void navigator.clipboard?.writeText(note.path).then(
-                        () => {
-                          setCopiedPath(true)
-                          setTimeout(() => setCopiedPath(false), 2000)
-                        },
-                        () => {},
-                      )
-                    }}
-                  >
-                    {transport.openNote ? 'Open file' : copiedPath ? 'Copied' : 'Copy path'}
-                  </Button>
-                  <span className="wb-mono">{noteName(note.path, notesDir)}</span>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
           {note.sections.map((s) => (
             <section key={s.id} className="wb-sec" data-sec={`${note.kind}-${s.id}`}>
               <div className="wb-sec-h">
                 {s.title}
                 {/reply draft/i.test(s.title) ? <CopyText text={s.body.trim()} /> : null}
               </div>
-              <div className="md wb-md" dir="auto">
+              <div className="md wb-md sd-bidi" dir="auto">
                 <ReactMarkdown>{s.body}</ReactMarkdown>
               </div>
             </section>
           ))}
+          {note.path ? (
+            <NoteFooter transport={transport} workspaceId={workspaceId} runId={runId} path={note.path} notesDir={notesDir} />
+          ) : null}
         </article>
       ))}
     </Document>

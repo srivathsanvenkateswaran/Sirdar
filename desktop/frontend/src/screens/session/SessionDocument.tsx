@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import AnswerCard from '../../components/session/AnswerCard'
-import BundleView from '../../components/session/BundleView'
+import BundlePane from '../../components/session/BundlePane'
 import ChangesView from '../../components/session/ChangesView'
 import ComposerStrip from '../../components/session/ComposerStrip'
 import { BundleIcon, OpenIcon, ToolsIcon } from '../../components/session/icons'
 import type { SessionModel } from '../../components/session/model'
 import NoteDocument, { MetaCell } from '../../components/session/NoteDocument'
 import RunHeader, { LayoutSwitcher } from '../../components/session/RunHeader'
-import ToolsTable from '../../components/session/ToolsTable'
+import ToolsPane from '../../components/session/ToolsPane'
+import { rowsOf } from '../../components/session/toolRows'
 import { PathList } from '../../components/session/TurnGroup'
 import { markersForStep, parseRefs } from '../../lib/evidence'
 import { costOrUnknown } from '../../lib/format'
 import { noteName } from '../../lib/review'
-import { bytes } from '../../lib/toolOutput'
 import Button from '../../ui/button'
 import Drawer from '../../ui/drawer'
 import Toggle from '../../ui/toggle'
@@ -44,7 +44,7 @@ function reveal(el: Element | null | undefined): void {
  * change, with C markers tying each hunk to the edit that wrote it.
  */
 export default function SessionDocument(props: SessionLayoutProps): JSX.Element {
-  const { detail, data, title, notesDir, sources, show, narrow, live, actions, pending, actionError, steerRefusal, sent, canCancel, layout, onLayout } = props
+  const { transport, workspaceId, detail, data, title, notesDir, sources, show, narrow, live, actions, pending, actionError, steerRefusal, sent, canCancel, layout, onLayout } = props
   const { model, note, bundle, changes, drops, everything, setEverything } = data
   // The record's model, else the one the log names, so the header never says "model unknown" for a run that did say.
   const named = useMemo(() => (detail.model || !model.model ? detail : { ...detail, model: model.model }), [detail, model.model])
@@ -55,6 +55,13 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
   const pathRef = useRef<HTMLDivElement | null>(null)
   const docRef = useRef<HTMLDivElement | null>(null)
   const isFix = detail.kind === 'fix'
+  const toolRows = useMemo(() => rowsOf(model.steps), [model.steps])
+  // Only the desktop shell can reveal a folder, so a browser gets no item
+  // at all and the pane never shows a path it cannot act on.
+  const openBundleFolder = useMemo(
+    () => (transport.openRunDir ? () => void transport.openRunDir!(workspaceId, detail.runId) : undefined),
+    [transport, workspaceId, detail.runId],
+  )
 
   // What this screen holds about a run is about that run alone.
   useEffect(() => {
@@ -297,27 +304,25 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
         <Drawer
           open={drawer === 'bundle'}
           title="Bundle"
-          meta={bundle.parsed ? `${bundle.parsed.thread.length} messages · ${bundle.parsed.files.length} attachments` : undefined}
+          meta={bundle.parsed ? `${bundle.parsed.thread.length} messages` : undefined}
           onClose={() => setDrawer(null)}
         >
-          <BundleView bundle={bundle.parsed} error={bundle.error} detail={detail} />
+          <BundlePane
+            transport={transport}
+            workspaceId={workspaceId}
+            runId={detail.runId}
+            assignee={detail.assignee}
+            helpdeskKey={detail.helpdeskKey}
+            onOpenFolder={openBundleFolder}
+          />
         </Drawer>
         <Drawer
           open={drawer === 'tools'}
           title="Tools"
-          meta={`${model.counts.calls} calls${model.counts.denied ? ` · ${model.counts.denied} denied` : ''} · ${bytes(model.counts.outBytes)} out`}
+          meta={model.counts.denied > 0 ? `${model.counts.denied} denied` : undefined}
           onClose={() => setDrawer(null)}
         >
-          <ToolsTable
-            steps={model.steps}
-            markers={model.markers}
-            counts={model.counts}
-            detail={detail}
-            hotMarker={hot}
-            onMarker={onMarker}
-            onOpenStep={goToStep}
-            selected={selectedStep}
-          />
+          <ToolsPane rows={toolRows} markers={model.markers} hotMarker={hot} onMarker={onMarker} highlighted={selectedStep} onRowClick={goToStep} />
         </Drawer>
         <main className="sn-doc">
           <div className="sn-doc__scroll sn-scroll" ref={docRef}>

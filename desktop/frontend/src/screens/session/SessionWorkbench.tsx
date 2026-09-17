@@ -403,6 +403,12 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   const onDiffLoaded = useCallback((diff: RunDiff | null) => setDiffFiles(diff ? diff.files.length : null), [])
   const onNoteLoaded = useCallback((n: number) => setNoteCount(n), [])
   const onBundleLoaded = useCallback((doc: Bundle | null) => setBundle(doc), [])
+  // Only the desktop shell can reveal a folder, so a browser gets no menu
+  // item and the pane never shows a path it cannot act on.
+  const openBundleFolder = useMemo(
+    () => (transport.openRunDir ? () => void transport.openRunDir!(workspaceId, runId) : undefined),
+    [transport, workspaceId, runId],
+  )
 
   // ---- render -------------------------------------------------------------
   if (loadError || !detail) {
@@ -552,9 +558,9 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
                   transport={transport}
                   workspaceId={workspaceId}
                   runId={runId}
-                  bundleDir={detail.bundleDir}
+                  assignee={detail.assignee}
                   helpdeskKey={detail.helpdeskKey}
-                  complaint={typeof answer?.complaint === 'string' ? answer.complaint : undefined}
+                  onOpenFolder={openBundleFolder}
                   onLoaded={onBundleLoaded}
                 />
               ) : null}

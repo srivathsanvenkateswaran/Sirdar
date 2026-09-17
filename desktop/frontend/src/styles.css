@@ -103,6 +103,22 @@ kbd {
   font-family: var(--sd-font-mono);
 }
 
+/*
+ * User content — a ticket title, a customer's name, a message the customer
+ * wrote — laid out from its own first strong character rather than from the
+ * paragraph around it.
+ *
+ * `dir="auto"` on the element decides the direction; this is the other half,
+ * and the half that is easy to forget: without `unicode-bidi: plaintext` an
+ * Arabic name sitting inside an English row is reordered by the row, so
+ * "متجر الفهد (SBX-CUST-1)" comes out with the identifier on the wrong side
+ * and the trailing bracket adrift. A number or a key that must stay left to
+ * right inside such a run goes in a `<bdi>`.
+ */
+.sd-bidi {
+  unicode-bidi: plaintext;
+}
+
 .visually-hidden {
   position: absolute;
   inline-size: 1px;

@@ -25,6 +25,7 @@ var bridgeMethods = []string{
 	"Events",
 	"Note",
 	"Prompt",
+	"Attachments",
 	"RunDiff",
 	"DropHunk",
 	"StartTriage",
@@ -73,6 +74,10 @@ var notBridged = map[string]string{
 	"HookReceived": "only the hook route reports a delivery",
 	// Diagnostics with no screen behind them.
 	"Jobs": "the frontend tracks the job ids it was given by each start",
+	// The bundle's files. A browser fetches one over the attachment
+	// route; the desktop reads it through Bridge.AttachmentDataURL, which
+	// calls this and hands the webview a data URL it can load.
+	"AttachmentFile": "the desktop reaches it through Bridge.AttachmentDataURL",
 }
 
 // TestServiceSurfaceIsAccountedFor is the reverse direction: every exported

@@ -1,4 +1,4 @@
-import type { RunDetail, RunDiff, RunEvent } from '../api/types'
+import type { Attachment, RunDetail, RunDiff, RunEvent } from '../api/types'
 
 /**
  * Three runs for the session screen's tests and the gallery, shaped on the
@@ -17,6 +17,8 @@ export interface SessionFixture {
   note: string
   prompt: string
   diff: RunDiff | null
+  /** What the bundle downloaded; absent on a run whose ticket carried no files. */
+  attachments?: Attachment[]
 }
 
 const APP = '/repos/sirdar-sandbox/app'
@@ -633,8 +635,38 @@ export function triageEvents(): RunEvent[] {
   return out
 }
 
+/**
+ * A bundle with files on it: the customer's screenshot, their voice note
+ * with the transcript the run made of it, and a PDF export — one of each
+ * shape the preview has to draw, and one Arabic file name so the rows are
+ * read in both directions.
+ */
+export const TRIAGE_ATTACHMENTS: Attachment[] = [
+  { name: 'stock-screen.png', path: 'attachments/stock-screen.png', mime: 'image/png', size: 184_320, modified: '2026-09-12T09:14:00Z' },
+  {
+    name: 'ملاحظة-صوتية.m4a',
+    path: 'attachments/ملاحظة-صوتية.m4a',
+    mime: 'audio/mp4',
+    size: 612_000,
+    modified: '2026-09-12T10:41:00Z',
+    transcript: 'attachments/ملاحظة-صوتية.m4a.transcript.txt',
+  },
+  { name: 'movement-report-00219.pdf', path: 'attachments/movement-report-00219.pdf', mime: 'application/pdf', size: 42_100 },
+]
+
+/** The prompt's Files block, as `internal/prompt` writes it for that bundle. */
+export const TRIAGE_PROMPT_WITH_FILES = TRIAGE_PROMPT.replace(
+  'Files:\n(none)',
+  ['Files:', ...TRIAGE_ATTACHMENTS.map((a) => `- ${a.path}`)].join('\n'),
+)
+
 export function triageFixture(over: Partial<RunDetail> = {}): SessionFixture {
   return { detail: triageDetail(over), events: triageEvents(), note: TRIAGE_NOTE, prompt: TRIAGE_PROMPT, diff: null }
+}
+
+/** The same run, with the bundle's attachments on it. */
+export function triageWithAttachments(over: Partial<RunDetail> = {}): SessionFixture {
+  return { ...triageFixture(over), prompt: TRIAGE_PROMPT_WITH_FILES, attachments: TRIAGE_ATTACHMENTS }
 }
 
 // ---------------------------------------------------------------- the fix

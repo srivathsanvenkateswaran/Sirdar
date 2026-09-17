@@ -26,6 +26,11 @@ type Service interface {
 	Events(wsID, runID string, after int) ([]RunEvent, int, error)
 	Note(wsID, runID string, kind string) (string, error)
 	Prompt(wsID, runID string) (string, error)
+	// Attachments lists the run bundle's attachments; AttachmentFile
+	// resolves one bundle-relative path to a file on disk and the type to
+	// serve it as, refusing anything outside the run's own bundle.
+	Attachments(wsID, runID string) ([]Attachment, error)
+	AttachmentFile(wsID, runID, name string) (string, string, error)
 	RunDiff(wsID, runID string) (RunDiff, error)
 	DropHunk(ctx context.Context, wsID, runID, path string, hunk int, etag string) (RunDiff, error)
 	StartTriage(ctx context.Context, wsID string, keys []string, o TriageOptions) (JobID, error)
