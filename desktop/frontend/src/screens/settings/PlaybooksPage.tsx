@@ -502,7 +502,7 @@ export default function PlaybooksPage({
 
   return (
     <>
-      <SettingCard heading="Playbooks">
+      <SettingCard heading="Files in .sirdar/playbooks">
         {list.status === 'error' ? (
           <p className="form-error" role="alert">
             {list.message}

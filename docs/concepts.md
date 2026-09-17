@@ -35,6 +35,11 @@ retention window clamps to, what a negative result does and doesn't prove. `sird
 scaffolds generic starting playbooks; the value comes from editing them as you learn where the
 agent goes wrong.
 
+Edit them wherever you like — they are markdown files — or from the desktop app and
+`sirdar serve` under **Settings › Playbooks**, which lists them in the order the prompt loads
+them, opens one in your own editor or in the window, and offers the same starting set on a
+workspace that has none. A change applies to the next run, not to one already going.
+
 ## Run
 
 One attempt at producing notes for one key: a directory on disk holding a state, an event log,
