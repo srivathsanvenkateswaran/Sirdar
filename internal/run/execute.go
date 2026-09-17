@@ -293,6 +293,25 @@ func stallWindow(d time.Duration) string {
 	return d.String()
 }
 
+// startFailure is the reason a run that could not start its session ends
+// with — the string the CLI prints and the session screen's failed banner
+// draws.
+//
+// A missing binary gets the fix ahead of the error. `exec: "claude":
+// executable file not found in $PATH` is accurate and leaves an operator
+// nowhere: it is the same sentence whether the CLI was never installed,
+// was installed somewhere the app cannot see (the usual case — a desktop
+// app launched from the Dock has launchd's PATH), or was moved. The raw
+// error stays after it, because it is what names the failing call when the
+// fix does not apply.
+func startFailure(providerName string, err error) string {
+	raw := fmt.Sprintf("provider: %v", err)
+	if fix := provider.NotFoundFix(providerName, err); fix != "" {
+		return fix + ". " + raw
+	}
+	return raw
+}
+
 // execute starts one agent session for a prepared run, streams its events
 // to the log and to the operator, enforces the budgets, and turns whatever
 // the session ended with into a terminal state.
@@ -310,7 +329,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	started := r.now()
 	sess, err := r.Provider.Start(ctx, r.sessionSpec(p, resume))
 	if err != nil {
-		return r.finish(ctx, p, store.StatusFailed, fmt.Sprintf("provider: %v", err), note.DigestRow{})
+		return r.finish(ctx, p, store.StatusFailed, startFailure(r.Provider.Name(), err), note.DigestRow{})
 	}
 
 	p.state.Status = store.StatusRunning
