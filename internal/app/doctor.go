@@ -27,14 +27,19 @@ import (
 const doctorTimeout = 30 * time.Second
 
 // RunDoctor checks everything a run in this workspace depends on: the
-// configuration, the platform's opener and credential store, the agent
-// binary, every configured source, which MCP servers a session will see,
-// the notes directory and the note templates.
+// configuration, the platform's opener and credential store, the PATH the
+// process is looking for binaries on, the agent binary, every configured
+// source, which MCP servers a session will see, the notes directory and
+// the note templates.
 // Both the `sirdar doctor` command and the desktop Settings screen read the
 // same list.
 func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	checks := []Check{{Name: "config", OK: true, Detail: filepath.Join(cfg.Root, ".sirdar", "config.yaml")}}
 	checks = append(checks, platformCheck())
+	// Before the provider rows: when a provider binary cannot be found,
+	// this is the row that says where Sirdar looked, and the ones below
+	// are the symptom.
+	checks = append(checks, environmentCheck(cfg))
 	checks = append(checks, identityCheck(cfg))
 	checks = append(checks, providerChecks(ctx, cfg)...)
 	checks = append(checks, sourceChecks(ctx, cfg)...)

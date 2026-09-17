@@ -80,6 +80,18 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   warns, in as many words, when none of them carries a type. On the board a queued card wears
   its type as a chip, and the empty lane says "No bug tickets assigned to you" rather than
   implying the tracker is empty (`docs/config.md`, "Queue types"; `docs/adapters.md`).
+- The desktop app now sees the same `PATH` as your terminal. Started from the Dock, from
+  Spotlight or from a Linux launcher it inherited launchd's or the session manager's environment
+  — `/usr/bin:/bin:/usr/sbin:/sbin` on macOS — so a triage failed at once with `exec: "claude":
+  executable file not found in $PATH` while the same triage from a terminal ran, and the same
+  went for `codex`, `cursor-agent`, `qwen`, the ACP agents, `secret-tool`, `xdg-open`, `git` and
+  `gh`. It resolves the login shell's `PATH` at startup (`$SHELL -il -c`, falling back to `-l`)
+  and appends the usual user-level bin directories; Windows is untouched, where a GUI process
+  already gets your `PATH`. `sirdar doctor` gains an **environment** row saying which source the
+  `PATH` came from and where each provider binary resolved, and a run that cannot find its
+  binary now fails with the fix — the `providers.<name>.path` override and where to install the
+  binary — ahead of the raw Go error, in the CLI and in the session screen's banner
+  (`docs/config.md`, `docs/getting-started.md`).
 - The UI wave landed at `cccdc55`: the desktop app and `sirdar serve` are now the
   session-first surface the reviewed mocks in `docs/design/2026-09-15-screens` drew, on the
   16px register and the `src/ui` component library. Eight screens — Board, New session,

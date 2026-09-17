@@ -72,6 +72,19 @@ reading `runtime.GOOS`, which is how a macOS laptop covers them at all. `sirdar 
 `xdg-open` or `secret-tool` gets named as a missing package rather than as a button that does
 nothing.
 
+Every one of those programs has to be *found* first, and a GUI process does not get the PATH a
+terminal does: launched from the Dock, from Spotlight or from a Linux launcher, the app
+inherits launchd's or the session manager's environment (`/usr/bin:/bin:/usr/sbin:/sbin` on
+macOS), which has none of the directories a provider CLI, `secret-tool`, `xdg-open` or `gh` is
+installed in. `internal/loginpath` resolves the login shell's own PATH once at desktop startup
+(`$SHELL -il -c 'printf "%s" "$PATH"'`, falling back to `-l`, each attempt capped at 3s) and
+appends `~/.local/bin`, `/opt/homebrew/bin`, `/usr/local/bin`, `~/go/bin`, `~/.npm-global/bin`,
+`~/.bun/bin`, `~/.cargo/bin`, `~/.claude/local`, `~/.opencode/bin` and `~/bin`. Windows is a
+no-op. `sirdar doctor`'s **environment** row says which source the PATH came from and where
+each provider binary resolved; a binary that does not resolve fails that row with the
+`providers.<name>.path` override named, and a run that cannot start says the same thing ahead
+of the raw `exec:` error (`internal/provider/notfound.go`, `run.startFailure`).
+
 Linux is the only platform whose desktop app cannot be produced from this repo on a Mac.
 `make desktop-linux` refuses on a non-Linux host and says why; `.github/workflows/desktop.yml`'s
 `ubuntu-latest` entry is the standing build, and `scripts/package-linux.sh` is the one place the
@@ -449,6 +462,15 @@ from the hicolor theme without a logout; whether `secret-tool` finds a secret st
 `$XDG_DATA_HOME` machine gets its registry where `config.UserDir` says it will. The
 `sirdar.desktop` file has not been through `desktop-file-validate`, which is not installable on
 macOS.
+
+Login-shell PATH resolution on Linux desktops is unverified. `internal/loginpath` is exercised
+on macOS, where the bug was found and the fix confirmed (a Dock-launched app now sees
+`/opt/homebrew/bin`), and its unit tests cover the merge, the dedupe, the `-il` → `-l` fallback
+and the Windows no-op on any platform. What nobody has watched is a real Linux session: whether
+a GNOME or KDE launcher's environment is missing the same directories launchd's is; whether
+`$SHELL -il -c` under a display manager returns in time or blocks on a profile that expects a
+terminal; and whether the fallback to `/bin/sh` is right for a machine whose `$SHELL` is unset
+under the session manager. The extra directories appended are the same list on both platforms.
 
 One thing that is Linux-shaped rather than merely Linux-ported: goreleaser builds the CLI with
 cgo off, so `user.Lookup` — which `~otheruser` expansion in `permissions.readAlso` goes through
