@@ -113,10 +113,15 @@ export interface AppState {
   liveUpdates: LiveUpdates
 }
 
+/**
+ * `instruction` is on all three: what the operator typed around the ticket
+ * key in the composer, which the session reads as its Operator's request.
+ */
 export interface TriageOptions {
   provider?: string
   model?: string
   dryRun?: boolean
+  instruction?: string
 }
 
 export interface RCAOptions {
@@ -124,6 +129,7 @@ export interface RCAOptions {
   resolution?: string
   provider?: string
   model?: string
+  instruction?: string
 }
 
 export interface FixOptions {
@@ -134,6 +140,7 @@ export interface FixOptions {
   acceptDeviation?: boolean
   provider?: string
   model?: string
+  instruction?: string
 }
 
 export interface EvalOptions {

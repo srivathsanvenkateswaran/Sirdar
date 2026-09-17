@@ -178,7 +178,7 @@ describe('New session', () => {
       'secondary',
     )
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Ticket key, URL or what to look at' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'What to look at: a ticket key or URL, and anything you want to say' }), {
       target: { value: 'https://acme.atlassian.net/browse/OMNI-11' },
     })
     fireEvent.click(within(screen.getByRole('form', { name: 'Start' })).getByRole('button', { name: /^Start/ }))
@@ -209,7 +209,7 @@ describe('New session', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
     await screen.findByRole('heading', { name: /What should we look at in/ })
 
-    const bar = screen.getByRole('textbox', { name: 'Ticket key, URL or what to look at' })
+    const bar = screen.getByRole('textbox', { name: 'What to look at: a ticket key or URL, and anything you want to say' })
     fireEvent.change(bar, { target: { value: 'OMNI-2' } })
     fireEvent.click(screen.getByRole('button', { name: /^Mode:/ }))
     fireEvent.click(screen.getByRole('menuitemradio', { name: /RCA/ }))
@@ -236,14 +236,16 @@ describe('New session', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
     await screen.findByRole('heading', { name: /What should we look at in/ })
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Ticket key, URL or what to look at' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'What to look at: a ticket key or URL, and anything you want to say' }), {
       target: { value: 'OMNI-9' },
     })
     fireEvent.click(screen.getByRole('button', { name: /^Mode:/ }))
     expect(screen.getByRole('menuitemradio', { name: /RCA/ })).toHaveAttribute('aria-disabled', 'true')
     expect(screen.getByRole('menuitemradio', { name: /Fix/ })).toHaveAttribute('aria-disabled', 'true')
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
-    expect(screen.getByRole('status')).toHaveTextContent('RCA and Fix need a triage note for OMNI-9 first.')
+    expect(
+      screen.getByText('RCA and Fix need a triage note for OMNI-9 first. Start a triage.'),
+    ).toBeInTheDocument()
   })
 
   it('lists what landed from the queue, and a row starts its own triage', async () => {
@@ -256,7 +258,11 @@ describe('New session', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Triage OMNI-9' }))
     await waitFor(() =>
       expect(transport.calls.startTriage).toEqual([
-        { ws: 'ws1', keys: ['OMNI-9'], opts: { provider: undefined, model: undefined, dryRun: undefined } },
+        {
+          ws: 'ws1',
+          keys: ['OMNI-9'],
+          opts: { provider: undefined, model: undefined, dryRun: undefined, instruction: undefined },
+        },
       ]),
     )
   })

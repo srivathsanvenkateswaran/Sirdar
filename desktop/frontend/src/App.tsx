@@ -302,13 +302,14 @@ function Shell(): JSX.Element {
   // comes back so the screen can open the run the job produces.
   const startSession = useCallback(
     (mode: SessionMode, key: string, o: StartOverrides) => {
+      const shared = { provider: o.provider, model: o.model, instruction: o.instruction }
       switch (mode) {
         case 'rca':
-          return store.startRCA(key, { provider: o.provider, model: o.model })
+          return store.startRCA(key, { ...shared, prUrl: o.prUrl, resolution: o.resolution })
         case 'fix':
-          return store.startFix(key, { provider: o.provider, model: o.model, dryRun: o.dryRun })
+          return store.startFix(key, { ...shared, dryRun: o.dryRun, noPr: o.noPr, local: o.local })
         default:
-          return store.startTriage([key], { provider: o.provider, model: o.model, dryRun: o.dryRun })
+          return store.startTriage([key], { ...shared, dryRun: o.dryRun })
       }
     },
     [store],

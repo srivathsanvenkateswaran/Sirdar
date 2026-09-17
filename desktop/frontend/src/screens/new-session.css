@@ -117,3 +117,85 @@
     margin-block: 0;
   }
 }
+
+/*
+ * The status line's chips: what the box was understood to say. They are
+ * words in the reason line's own type, separated by the ledger's middle
+ * dot, not pills — a row of pills under a card that already carries three
+ * chips would be a second chip bar saying almost the same thing.
+ */
+/* The chips are one line of words in the reason line's own type, separated
+   by the ledger's middle dot; a row of pills under a card that already
+   carries three chips would be a second chip bar saying the same thing. */
+.new-session__chips {
+  color: var(--sd-ink);
+}
+
+.new-session__reason[data-state='confirm'] {
+  color: var(--sd-ink);
+}
+
+/* "Confirm" in front of a reading the model made, so the chips under the
+   box are never mistaken for what the parser itself understood. */
+.new-session__confirm {
+  margin-inline-end: var(--sd-space-2);
+  padding-block: 1px;
+  padding-inline: var(--sd-space-2);
+  border-radius: var(--sd-radius-xs);
+  background: var(--sd-sunk);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  text-transform: none;
+}
+
+/* The mode's own inputs, under the card: Fix's Then, RCA's two fields. */
+.new-session__mode-fields {
+  display: grid;
+  gap: var(--sd-space-3);
+  max-inline-size: 560px;
+  padding-inline: var(--sd-space-1);
+}
+
+.new-session__field {
+  display: grid;
+  gap: var(--sd-space-2);
+}
+
+.new-session__field-label {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.new-session__field > input,
+.new-session__field > textarea {
+  box-sizing: border-box;
+  inline-size: 100%;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font: inherit;
+  font-size: var(--sd-text-body);
+}
+
+.new-session__field > textarea {
+  resize: vertical;
+  min-block-size: calc(var(--sd-space-8) * 2);
+}
+
+.new-session__field > input[aria-invalid='true'] {
+  border-color: var(--sd-st-failed);
+}
+
+.new-session__help {
+  margin: 0;
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+  color: var(--sd-ink-3);
+}
+
+.new-session__help[data-tone='error'] {
+  color: var(--sd-st-failed);
+}
