@@ -54,85 +54,6 @@
   text-decoration: underline;
 }
 
-/* ------------------------------------------------------------------ topbar */
-
-.sc-topbar {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: var(--sd-space-3);
-  min-block-size: 64px;
-  padding-block: var(--sd-space-2);
-  padding-inline: var(--sd-space-5);
-  border-block-end: 1px solid var(--sd-rule);
-}
-
-.sc-topbar > * {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-.sc-key {
-  margin: 0;
-  font-family: var(--sd-font-mono);
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  unicode-bidi: isolate;
-}
-
-.sc-title {
-  flex: 1 1 auto;
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: var(--sd-text-body);
-  color: var(--sd-ink-2);
-}
-
-.sc-stats {
-  display: flex;
-  align-items: center;
-  font-family: var(--sd-font-mono);
-  font-size: 13px;
-  color: var(--sd-ink-3);
-}
-
-.sc-stat {
-  padding-inline: 14px;
-  border-inline-start: 1px solid var(--sd-rule);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.sc-stat:first-child {
-  padding-inline-start: 0;
-  border-inline-start: 0;
-}
-
-.sc-stat b {
-  font-weight: 500;
-  color: var(--sd-ink-2);
-}
-
-.sc-provider {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sc-provider__name {
-  font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-meta);
-  color: var(--sd-ink-2);
-}
-
-.sc-provider__model {
-  font-family: var(--sd-font-mono);
-  font-size: 13px;
-  color: var(--sd-ink-3);
-}
-
 .sc-loading,
 .sc-failed,
 .sc-failed-line {
@@ -1675,14 +1596,9 @@ code.sc-ref {
 
 /* --------------------------------------------------------------- narrower */
 
-/* Compact (under 1200): the topbar tightens and RunHeader folds the
-   provider and the turns into the figures' title. */
+/* Compact (under 1200). The run header's own narrowing is in
+   components/session/session.css, which draws it in every layout. */
 @media (max-width: 1199px) {
-  .sc-topbar {
-    gap: var(--sd-space-2);
-    padding-inline: var(--sd-space-4);
-  }
-
   .sc-stream {
     padding-inline: var(--sd-space-5);
   }

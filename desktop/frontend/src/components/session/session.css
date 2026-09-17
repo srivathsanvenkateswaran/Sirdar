@@ -1842,3 +1842,11 @@ a.sn-head__other:hover {
     border-block-start: 1px solid var(--sd-rule);
   }
 }
+
+/* ----------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  .sn-gauge__fill {
+    transition: inline-size var(--sd-dur-2) var(--sd-ease);
+  }
+}
