@@ -62,6 +62,24 @@ Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, 
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
 
+- The Queue lane shows bug tickets, not everything with your name on it. A tracker assigns a
+  person their story's sub-tasks and chores alongside the bugs, and the board offered a Triage
+  button on all of them. `TrackerTicket` now carries `Type` — lower-cased and folded onto one
+  spelling per kind, so Jira's `Bug`, Rally's `Defect` and Azure DevOps' `Bug` are one word —
+  and `ParentKey`. Every built-in tracker fills them: Jira from `issuetype`, with its subtask
+  flag overruling a renamed sub-task type; Linear from the label that names a type; Azure DevOps
+  from `System.WorkItemType`; Rally from the artifact type; ServiceNow from the row's
+  `sys_class_name`, else the configured table. An external adapter sends the two fields, and one
+  written before they existed has its `ticket_type`/`issuetype`/`type` and
+  `parent_key`/`parent` entries in `Fields` read instead, so nothing had to change on the other
+  side of the protocol. `sources.tracker.queue.types` is the filter, `[bug]` when absent, `[]`
+  or `["*"]` for every type, matched case-insensitively and applied in `Service.Queue`;
+  `QueueFilter.types` is the per-call override, which the desktop does not send. A ticket whose
+  tracker reports no type passes only under the wildcard — a type nobody stated is not a bug —
+  and `sirdar doctor` gains a `sources.tracker queue` row that lists your own tickets once and
+  warns, in as many words, when none of them carries a type. On the board a queued card wears
+  its type as a chip, and the empty lane says "No bug tickets assigned to you" rather than
+  implying the tracker is empty (`docs/config.md`, "Queue types"; `docs/adapters.md`).
 - The UI wave landed at `cccdc55`: the desktop app and `sirdar serve` are now the
   session-first surface the reviewed mocks in `docs/design/2026-09-15-screens` drew, on the
   16px register and the `src/ui` component library. Eight screens — Board, New session,

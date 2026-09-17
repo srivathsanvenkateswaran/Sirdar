@@ -52,6 +52,8 @@ rather than being silently ignored.
 | `sources.tracker.helpdeskField` | string | unset | `azdo`/`rally` only: custom field name/id carrying the helpdesk ticket reference |
 | `sources.tracker.workspace` | string | none (required for `rally`) | Rally workspace `_ref` or ObjectID, scopes all queries |
 | `sources.tracker.types` | list of string | `[Defect, HierarchicalRequirement]` | `rally` only: artifact types `Get` falls back through and `List` sweeps |
+| `sources.tracker.queue` | object, optional | unset | What the board's Queue lane shows; tracker only, see Queue types below |
+| `sources.tracker.queue.types` | list of string | `[bug]` | Ticket types the queue shows, matched case-insensitively; `[]` or `["*"]` means every type. See Queue types below |
 | `sources.tracker.helpdeskRef` | object, optional | unset | Description-regex fallback for the helpdesk reference; tracker only, see helpdeskRef fallback below |
 | `sources.tracker.helpdeskRef.pattern` | string | none (required with `helpdeskRef`) | Go regex matched against the ticket description, with exactly one capture group holding the helpdesk link or id |
 | `sources.tracker.helpdeskRef.idPattern` | string | unset | Go regex applied to `pattern`'s capture, with exactly one capture group holding the helpdesk ticket id |
@@ -331,6 +333,45 @@ project, Rally's current user:
 ```
 [OK] sources.tracker (jira) — reachable (https://acme.atlassian.net)
 ```
+
+### Queue types
+
+The board's Queue lane is the tracker's answer to "what is assigned to me",
+and on a real project that answer is not all support work: the sub-tasks of a
+story, the chores and the spikes carry the same assignee and are nothing a
+triage session can do anything with. `queue.types` is what narrows it.
+
+```yaml
+sources:
+  tracker:
+    queue:
+      types: [bug]        # the default; write it out only to change it
+```
+
+Unset, the filter is `[bug]`. A list is matched case-insensitively against the
+ticket type the adapter reported, after both sides are folded onto one
+spelling — `Defect` is `bug`, `Sub-task` is `subtask`, `User Story` is
+`story` — so you can write your own tracker's word for it. `types: []` and
+`types: ["*"]` both turn the filter off.
+
+A ticket whose tracker reports no type at all passes only when the filter is
+off. That is deliberate: a type nobody stated is not a bug. But it also means
+an adapter that reports no types empties the lane entirely, so `sirdar doctor`
+lists the reader's own tickets once and says as much when none of them carries
+a type:
+
+```
+[WARN] sources.tracker queue — types=bug, but this tracker reported no type on
+       any of the 12 tickets it listed, so the queue will be empty; widen it
+       with sources.tracker.queue.types: ["*"], or have the adapter report a type
+```
+
+Built-in adapters report the type from Jira's `issuetype` (with its subtask
+flag overruling a renamed sub-task type), Linear's type label, Azure DevOps'
+`System.WorkItemType`, Rally's artifact type and a ServiceNow row's class. An
+external adapter sends `Type` on each ticket; one written before that field
+existed has its `ticket_type`, `issuetype` or `type` entry in `Fields` read
+instead. See [Adapters](adapters.md) for the protocol.
 
 ### helpdeskRef fallback
 

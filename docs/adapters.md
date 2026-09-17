@@ -984,6 +984,40 @@ adapter's own default/no cap). An adapter may choose to ignore filters it
 doesn't support rather than error — the reference file adapter ignores
 all of them and always returns its full fixture.
 
+A returned `TrackerTicket` carries these fields. Only `Key` is required;
+anything an adapter cannot answer it leaves out.
+
+| field         | meaning                                                                     |
+|---------------|-----------------------------------------------------------------------------|
+| `Key`          | the tracker's own key, e.g. `OMNI-2510`                                       |
+| `Title`        | the one-line summary                                                          |
+| `Description`  | the body, Markdown or the tracker's own markup                                |
+| `Priority`     | the tracker's priority name                                                   |
+| `Status`       | the tracker's status name                                                     |
+| `Assignee`     | who it belongs to, in the same form `tracker.list`'s `assignee` filter takes    |
+| `Type`         | what kind of record it is, lower-cased: `bug`, `task`, `story`, `epic`, `subtask`, `incident`, …, or the tracker's own name lower-cased when it matches none. See below. |
+| `ParentKey`    | the key of the record this one hangs off: a sub-task's story, a story's epic   |
+| `URL`          | where a person opens it                                                       |
+| `HelpdeskRef`  | the helpdesk ticket id, when the tracker's own data model carries one           |
+| `CreatedAt` / `UpdatedAt` | RFC 3339 timestamps                                                 |
+| `Fields`       | a string map of adapter-specific extras, rendered into notes as they are        |
+
+`Type` is what the board's Queue lane is filtered by
+(`sources.tracker.queue.types`, default `[bug]`), so an adapter that reports
+none has every one of its tickets left out of the lane. Two things make that
+survivable: `sirdar doctor` says so in as many words when a tracker's tickets
+carry no type, and an adapter that predates this field is read for one anyway
+— `Type` falls back to the `ticket_type`, `issuetype` or `type` entry of
+`Fields`, and `ParentKey` to `parent_key` or `parent`, in that order. Sending
+the fields outright is better: the fallback exists so nothing broke, not as
+the interface. Either way the `Fields` entries are kept as the adapter sent
+them.
+
+Sirdar folds a handful of synonyms onto one spelling so a filter written
+`bug` matches every tracker's word for it: `defect` → `bug`, `sub-task` and
+`sub_task` → `subtask`, `user story` and `product backlog item` → `story`.
+Anything else is lower-cased and left alone.
+
 ### `helpdesk.get` / `helpdesk.threads`
 
 Fetch the helpdesk ticket record and its conversation thread,
