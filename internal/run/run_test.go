@@ -1036,7 +1036,7 @@ func TestBlockedOnQuestion(t *testing.T) {
 
 	p.script = replay(finalEvent(triageDoc))
 	r.Stdin = strings.NewReader("answer\n")
-	resumed, err := r.Resume(context.Background(), out.State.RunID)
+	resumed, err := r.Resume(context.Background(), out.State.RunID, ResumeOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -60,6 +60,19 @@ type Steer struct {
 	Continuation string
 }
 
+// ModelSegment records one stretch of a run and the model that answered
+// it. A run has one for every session it took under a model other than the
+// one before: the model it started on, the model a fallback moved it to,
+// the model a `--model` on resume or steer asked for.
+//
+// Why says what put the run on that model, in the operator's words:
+// "start", "model limit: Fable", "resume --model", "steer --model".
+type ModelSegment struct {
+	At    time.Time
+	Model string
+	Why   string
+}
+
 // State is the persisted state of a single run.
 type State struct {
 	RunID, Key           string
@@ -91,6 +104,13 @@ type State struct {
 	// It is empty — and omitted — on a run whose configured model is the
 	// one that answered, and on every run from before this field existed.
 	ModelRequested string `json:",omitempty"`
+
+	// ModelSegments is which model answered which stretch of the run,
+	// oldest first. Model above is the model the run is on now — the one
+	// that finished it, which is what a register row and a session header
+	// name — and this is the record of how it got there, for a run that
+	// changed model partway through. A run that never did omits it.
+	ModelSegments []ModelSegment `json:",omitempty"`
 
 	// Eval marks a run started by `sirdar eval`. An eval replays a stored
 	// bundle to score the agent, so its note is a measurement and not a
