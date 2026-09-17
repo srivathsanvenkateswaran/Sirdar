@@ -92,6 +92,14 @@ describe('each screen scrolls inside the sheet', () => {
     expect(rule(css, '.sd-sidebar__sessions')).toContain('min-block-size: 0')
     expect(rule(css, '.sd-sidebar__sessions')).toContain('flex: 1 1 auto')
   })
+
+  it('the search stays at the top of the sessions list while its rows scroll', () => {
+    const css = sheet('components/shell/sidebar.css')
+    expect(rule(css, '.sd-sidebar__search')).toContain('position: sticky')
+    expect(rule(css, '.sd-sidebar__search')).toContain('inset-block-start: 0')
+    // Rows pass under it, not through it.
+    expect(rule(css, '.sd-sidebar__search')).toContain('background: var(--sd-shell)')
+  })
 })
 
 describe('what floats over the sheet', () => {

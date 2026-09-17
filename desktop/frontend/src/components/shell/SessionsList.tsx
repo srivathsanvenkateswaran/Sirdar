@@ -9,6 +9,7 @@ import {
   useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   type RefObject,
 } from 'react'
 import type { RunSummary, SearchHit, SourcesSummary } from '../../api/types'
@@ -265,6 +266,11 @@ export interface SessionsListProps {
    */
   pinnedCard?: string
   actions?: SessionActions
+  /**
+   * The list's first line, above the groups: the sidebar's search field.
+   * It scrolls with nothing — sidebar.css pins it to the top of the list.
+   */
+  head?: ReactNode
   /** The search field's text. Non-empty, the list is the rows that answer it. */
   query?: string
   /** `notes`: the list is `hits`, one row per run with its excerpt under it. */
@@ -593,6 +599,7 @@ function SessionsList({
   rail = false,
   pinnedCard,
   actions,
+  head,
   query = '',
   mode = 'sessions',
   hits,
@@ -1116,6 +1123,7 @@ function SessionsList({
   return (
     <>
       <nav className="sd-sidebar__sessions" aria-label="Sessions">
+        {head}
         {renderBody()}
       </nav>
       {open ? renderCard(open) : null}
