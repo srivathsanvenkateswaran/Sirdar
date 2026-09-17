@@ -260,6 +260,11 @@ func (c *Client) mapTracker(wi workItem) ticket.TrackerTicket {
 		Priority:    fieldString(f, fieldPriority),
 		Status:      fieldString(f, fieldState),
 		Assignee:    fieldIdentity(f, fieldAssignedTo).DisplayName,
+		// System.WorkItemType is the process template's own name for the
+		// kind of work item: "Bug", "Task", "User Story" on Agile, "Product
+		// Backlog Item" on Scrum, "Issue" on Basic.
+		Type:        ticket.CanonicalType(fieldString(f, fieldWorkItemType)),
+		ParentKey:   strings.TrimSpace(fieldString(f, fieldParent)),
 		URL:         webURL,
 		HelpdeskRef: c.helpdeskRef(wi),
 		CreatedAt:   parseTime(fieldString(f, fieldCreatedDate)),

@@ -106,6 +106,10 @@ func mapIssue(iss *linearIssue) ticket.TrackerTicket {
 	if iss.Assignee != nil {
 		t.Assignee = iss.Assignee.Name
 	}
+	t.Type = issueType(iss.Labels)
+	if iss.Parent != nil {
+		t.ParentKey = iss.Parent.Identifier
+	}
 	if iss.Team != nil && iss.Team.Key != "" {
 		t.Fields["team"] = iss.Team.Key
 	}
@@ -165,6 +169,36 @@ func mapHelpdeskTicket(iss *linearIssue) ticket.HelpdeskTicket {
 		h.Fields = nil
 	}
 	return h
+}
+
+// typeLabels are the label names that say what kind of record an issue is.
+// Linear has no issue-type field of its own — `state.type` is the workflow
+// category (backlog, started, completed), not the kind of work — so a team
+// that wants the distinction spells it as a label, and this is that set
+// folded onto the canonical vocabulary. A label outside it is a label:
+// "payments" is a component, not a type, and an issue whose labels say
+// nothing about its kind reports no type at all rather than a guess.
+var typeLabels = map[string]bool{
+	"bug":         true,
+	"task":        true,
+	"story":       true,
+	"epic":        true,
+	"subtask":     true,
+	"incident":    true,
+	"feature":     true,
+	"improvement": true,
+	"chore":       true,
+}
+
+// issueType is the canonical type an issue's labels name, or "" when none
+// of them names one. The first match in Linear's own label order wins.
+func issueType(l labelConn) string {
+	for _, n := range l.Nodes {
+		if t := ticket.CanonicalType(n.Name); typeLabels[t] {
+			return t
+		}
+	}
+	return ""
 }
 
 func labelNames(l labelConn) string {

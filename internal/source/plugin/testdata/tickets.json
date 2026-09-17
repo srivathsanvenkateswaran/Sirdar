@@ -1,5 +1,9 @@
 {
-  "tracker": {"OMNI-1": {"Key":"OMNI-1","Title":"Export fails","Description":"Zoho Ticket URL: https://desk.example/tickets/555","Priority":"high","Status":"open","URL":"https://t/OMNI-1","HelpdeskRef":"555"}},
+  "tracker": {
+    "OMNI-1": {"Key":"OMNI-1","Title":"Export fails","Description":"Zoho Ticket URL: https://desk.example/tickets/555","Priority":"high","Status":"open","URL":"https://t/OMNI-1","HelpdeskRef":"555"},
+    "OMNI-2": {"Key":"OMNI-2","Title":"Adapter that predates the Type field","Status":"open","Fields":{"ticket_type":"Bug","parent_key":"OMNI-9","parent_type":"Story"}},
+    "OMNI-3": {"Key":"OMNI-3","Title":"Adapter that sends the field outright","Status":"open","Type":"Sub-task","ParentKey":"OMNI-9"}
+  },
   "helpdesk": {"555": {
     "ticket": {"ID":"555","Subject":"تصدير","Customer":"شركة","CustomerID":"4561","URL":"https://h/555"},
     "thread": [
