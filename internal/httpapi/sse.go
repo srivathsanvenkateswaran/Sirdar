@@ -39,6 +39,25 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 	ticker := newTicker(s.keepalive)
 	defer ticker.Stop()
 
+	// A write that cannot be made ends the stream there and then, rather
+	// than leaving the handler, the subscription and one of the browser's
+	// six connections per host held by a reader that has gone. The
+	// deadline is what turns a client that has stopped reading — which
+	// blocks the write for as long as the kernel will hold it — into an
+	// error this loop can act on.
+	rc := http.NewResponseController(w)
+	write := func(format string, args ...any) bool {
+		// ErrNotSupported from a wrapper with no deadline of its own is
+		// not a reason to refuse the stream; the write itself still
+		// reports a connection that has gone.
+		_ = rc.SetWriteDeadline(time.Now().Add(writeTimeout))
+		if _, err := fmt.Fprintf(w, format, args...); err != nil {
+			return false
+		}
+		flusher.Flush()
+		return true
+	}
+
 	for {
 		select {
 		case <-r.Context().Done():
@@ -46,10 +65,9 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 			// handler return so the connection is released.
 			return
 		case <-ticker.C:
-			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
+			if !write(": keepalive\n\n") {
 				return
 			}
-			flusher.Flush()
 		case e, open := <-ch:
 			if !open {
 				return
@@ -60,13 +78,16 @@ func (s *server) events(w http.ResponseWriter, r *http.Request) {
 				// not the stream's.
 				continue
 			}
-			if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.Kind, data); err != nil {
+			if !write("event: %s\ndata: %s\n\n", e.Kind, data) {
 				return
 			}
-			flusher.Flush()
 		}
 	}
 }
+
+// writeTimeout is how long one frame may take to reach the client before
+// the stream is given up on.
+const writeTimeout = 10 * time.Second
 
 // newTicker wraps time.NewTicker so a zero or negative interval, which
 // time.NewTicker panics on, means "no keepalives" instead.

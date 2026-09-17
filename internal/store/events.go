@@ -31,6 +31,15 @@ type event struct {
 
 // Append writes one JSON line: {"t":"<RFC3339Nano UTC>","kind":"<kind>","payload":<payload>}
 func (l *EventLog) Append(kind string, payload any) error {
+	_, err := l.AppendLine(kind, payload)
+	return err
+}
+
+// AppendLine is Append that also hands back the bytes it wrote, newline
+// included. A shell hosting the run in its own process publishes that line
+// to its readers as it is written rather than waiting for a poller to find
+// it, and counts the bytes so the poller knows not to send it twice.
+func (l *EventLog) AppendLine(kind string, payload any) ([]byte, error) {
 	e := event{
 		T:       time.Now().UTC().Format(time.RFC3339Nano),
 		Kind:    kind,
@@ -38,13 +47,13 @@ func (l *EventLog) Append(kind string, payload any) error {
 	}
 	data, err := json.Marshal(e)
 	if err != nil {
-		return fmt.Errorf("store: marshal event: %w", err)
+		return nil, fmt.Errorf("store: marshal event: %w", err)
 	}
 	data = append(data, '\n')
 	if _, err := l.f.Write(data); err != nil {
-		return fmt.Errorf("store: write event: %w", err)
+		return nil, fmt.Errorf("store: write event: %w", err)
 	}
-	return nil
+	return data, nil
 }
 
 // Close closes the underlying file.

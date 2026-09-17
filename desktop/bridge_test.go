@@ -78,6 +78,11 @@ var notBridged = map[string]string{
 	// route; the desktop reads it through Bridge.AttachmentDataURL, which
 	// calls this and hands the webview a data URL it can load.
 	"AttachmentFile": "the desktop reaches it through Bridge.AttachmentDataURL",
+	// run.Sink: the executor calls these as it writes each event line, so
+	// the window sees it without waiting for the watcher's poll. Nothing
+	// in the frontend calls them. See internal/app/live.go.
+	"Append": "the run executor publishes its own event lines through this",
+	"Done":   "the run executor closes its event log through this",
 }
 
 // TestServiceSurfaceIsAccountedFor is the reverse direction: every exported

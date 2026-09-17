@@ -13,6 +13,36 @@
 
 /* ------------------------------------------------------------- the frame */
 
+/*
+ * What holds whichever layout is chosen.
+ *
+ * Conversation, Document and Workbench are whole trees, and swapping one
+ * for another used to leave the window empty for as long as the new one
+ * took to render — up to 601ms on a long run. The choice is deferred
+ * (`screens/Session.tsx`), so the layout on screen stays up while its
+ * replacement renders behind it; this frame is what stays put across the
+ * swap, and `data-switching` says the wait is past the settle window in
+ * `lib/pending`.
+ */
+.sn-frame {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+.sn-frame[data-switching] {
+  opacity: 0.55;
+  transition: opacity var(--sd-dur-1) var(--sd-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sn-frame[data-switching] {
+    transition: none;
+  }
+}
+
 .sn {
   display: flex;
   flex: 1;

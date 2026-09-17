@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useDeferredValue, useEffect, useState, useSyncExternalStore } from 'react'
 import type { FixStart, SourcesSummary, Transport } from '../api/types'
 import type { Decision } from '../components/session/ComposerStrip'
 import { useSessionModel, withoutCode } from '../components/session/useSessionModel'
@@ -6,6 +6,7 @@ import { LIVE, useRunFeed } from '../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import { reasonOf } from '../lib/format'
+import { usePendingLonger } from '../lib/pending'
 import { sessionLayout, setSessionLayout, subscribeSessionLayout, type SessionLayout } from '../lib/sessionLayout'
 import { stateWord } from '../ui/status-badge'
 import type { SessionLayoutProps } from './session/layoutProps'
@@ -73,10 +74,29 @@ export interface SessionProps {
  * sidebar's New session steps down.
  */
 export default function Session(props: SessionProps): JSX.Element {
-  const layout = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
-  if (layout === 'conversation') return <SessionConversation {...props} />
-  if (layout === 'workbench') return <SessionWorkbench {...props} />
-  return <SessionShared {...props} layout={layout} />
+  const wanted = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
+  /*
+   * The switcher used to unmount one layout and mount another whole tree
+   * with nothing on screen in between: 191 to 601ms of empty window on a
+   * long run. Deferring the choice renders the new layout in the background
+   * while the one the reader is looking at stays painted, and the wait is
+   * marked only once it is long enough to notice. See lib/pending.
+   */
+  const layout = useDeferredValue(wanted)
+  const busy = usePendingLonger(layout !== wanted)
+  // The frame is always here, switch or no switch: adding it only while the
+  // switch is on would remount the layout it is meant to keep on screen.
+  return (
+    <div className="sn-frame" data-switching={busy || undefined} aria-busy={busy || undefined}>
+      {layout === 'conversation' ? (
+        <SessionConversation {...props} />
+      ) : layout === 'workbench' ? (
+        <SessionWorkbench {...props} />
+      ) : (
+        <SessionShared {...props} layout={layout} />
+      )}
+    </div>
+  )
 }
 
 /** The Document and Workbench layouts: one feed, one model, one set of actions, the chosen layout drawing them. */

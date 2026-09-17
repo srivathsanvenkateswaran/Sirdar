@@ -147,6 +147,48 @@ describe('useRunFeed', () => {
     expect(result.current.finished).toBe(1)
   })
 
+  it('re-reads the log from where a run.resync says the transcript can be trusted', async () => {
+    const transport = createFakeTransport({})
+    transport.run = vi.fn(async () => RUN)
+    // The backfill gives lines 1 and 2; the service then says it could not
+    // keep this window supplied past 2, and lines 3 to 5 are re-read.
+    transport.events = vi.fn(async ({}, {}, after: number) =>
+      after === 0
+        ? { events: [ev('one'), ev('two')], next: 2 }
+        : { events: [ev('three'), ev('four'), ev('five')], next: 5 },
+    )
+
+    const { result } = renderHook(() => useRunFeed(transport, 'ws1', 'r1'))
+    await waitFor(() => expect(result.current.events.map((e) => e.index)).toEqual([1, 2]))
+
+    await act(async () => {
+      transport.emit({ kind: 'run.resync', runId: 'r1', from: 2 })
+    })
+    await waitFor(() => expect(result.current.events.map((e) => e.index)).toEqual([1, 2, 3, 4, 5]))
+    expect(result.current.events.map((e) => e.event.payload?.text)).toEqual([
+      'one',
+      'two',
+      'three',
+      'four',
+      'five',
+    ])
+  })
+
+  it('leaves another run alone when a run.resync names it', async () => {
+    const transport = createFakeTransport({})
+    transport.run = vi.fn(async () => RUN)
+    transport.events = vi.fn(async () => ({ events: [ev('one')], next: 1 }))
+
+    const { result } = renderHook(() => useRunFeed(transport, 'ws1', 'r1'))
+    await waitFor(() => expect(result.current.events).toHaveLength(1))
+    const calls = (transport.events as ReturnType<typeof vi.fn>).mock.calls.length
+
+    await act(async () => {
+      transport.emit({ kind: 'run.resync', runId: 'r2', from: 0 })
+    })
+    expect((transport.events as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(calls)
+  })
+
   it('unsubscribes and forgets the run when it is pointed elsewhere', async () => {
     const transport = createFakeTransport({})
     transport.run = vi.fn(async ({}, runId) => ({ ...RUN, runId }))

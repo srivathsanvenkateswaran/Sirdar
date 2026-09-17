@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import { ChevronIcon, toolIcon } from './icons'
 import type { StepCall } from './model'
+import { probeRender } from '../../lib/renderProbe'
 import { formatBytes, formatMs, shapeOutput, type Shaped } from './shape'
 
 /*
@@ -141,7 +142,8 @@ function inputRows(step: StepCall): { key: string; value: string; prose?: boolea
 export interface ToolStepProps {
   step: StepCall
   open: boolean
-  onToggle: () => void
+  /** Told which card was clicked, so the stack can hand every card the same handler. */
+  onToggle: (index: number) => void
   /** Picked from the Tools table or an evidence reference: tinted until the next pick. */
   highlighted?: boolean
   /** The run is working, so a call without a result is running rather than lost. */
@@ -152,7 +154,7 @@ export interface ToolStepProps {
   onOpenInTools?: (step: StepCall) => void
 }
 
-export default function ToolStep({
+function ToolStep({
   step,
   open,
   onToggle,
@@ -161,6 +163,7 @@ export default function ToolStep({
   blocked = false,
   onOpenInTools,
 }: ToolStepProps): JSX.Element {
+  probeRender('ToolStep')
   const [asText, setAsText] = useState(false)
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -202,7 +205,7 @@ export default function ToolStep({
         type="button"
         className="sc-tc"
         aria-expanded={open}
-        onClick={onToggle}
+        onClick={() => onToggle(step.index)}
         title={step.description || step.summary}
       >
         {toolIcon(step.tool)}
@@ -291,6 +294,14 @@ export default function ToolStep({
  * summary row — `8 calls · 00:03 – 00:10 · all within policy` — so eight
  * reads in a row read as one thing that happened.
  */
+/*
+ * Held on its props: a stack redrawn because a call joined it hands every
+ * card above the new one the very `step` object it had, so those cards are
+ * skipped. The model keeps those objects across an appended line and the
+ * screen keeps the handlers, which is what makes the comparison say yes.
+ */
+const MemoToolStep = memo(ToolStep)
+
 export function ToolStack({
   calls,
   head,
@@ -315,11 +326,11 @@ export function ToolStack({
     <div className="sc-tcs" role="group" aria-label={head ?? `${calls.length} ${calls.length === 1 ? 'call' : 'calls'}`}>
       {head ? <div className="sc-tcs__head">{head}</div> : null}
       {calls.map((step) => (
-        <ToolStep
+        <MemoToolStep
           key={step.index}
           step={step}
           open={openIndex === step.index}
-          onToggle={() => onToggle(step.index)}
+          onToggle={onToggle}
           highlighted={highlighted === step.index}
           live={live}
           blocked={blocked}

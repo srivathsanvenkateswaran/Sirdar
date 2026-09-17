@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { RunEvent } from '../../api/types'
 import { parseAnswer } from '../../lib/events'
 import AnswerClosing from '../../components/session/AnswerClosing'
+import { probeRender } from '../../lib/renderProbe'
 
 /*
  * The run's conclusion on the transcript.
@@ -93,6 +94,7 @@ export interface AnswerCardProps {
 }
 
 export default function AnswerCard({ event, at, revised = false, kind, onOpenNote, onOpenChanges }: AnswerCardProps): JSX.Element {
+  probeRender('AnswerCard')
   const text = event.payload?.text ?? ''
   const answer = parseAnswer(text)
   const isFix = kind === 'fix' || (answer !== undefined && (Array.isArray(answer.testsRun) || Array.isArray(answer.filesChanged)))

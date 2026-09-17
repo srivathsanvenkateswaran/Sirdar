@@ -356,7 +356,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
 	}
 
-	log, err := p.run.OpenEventLog()
+	log, err := r.openEventLog(p.run)
 	if err != nil {
 		sess.Cancel()
 		res, _ := sess.Wait() // reap the child before giving up on the run
@@ -700,7 +700,7 @@ func noteKind(kind store.Kind) note.Kind {
 // schema retry the running session could not take adds the fresh session
 // that carried it, whose events are consumed the same way and into the same
 // execution state.
-func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) []provider.Session {
+func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, pl *pool, ex *execution) []provider.Session {
 	sessions := []provider.Session{sess}
 	for {
 		r.consumeSession(ctx, p, sess, log, pl, ex)
@@ -720,7 +720,7 @@ func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session
 
 // consumeSession reads one session's events until it ends, handling an
 // interrupt by cancelling the session and letting the stream drain.
-func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) {
+func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, pl *pool, ex *execution) {
 	done := ctx.Done()
 	events := sess.Events()
 	for events != nil {
@@ -780,7 +780,7 @@ type eventPayload struct {
 	Continuation string `json:"continuation,omitempty"`
 }
 
-func (r *Runner) record(p *prepared, log *store.EventLog, ev provider.Event) {
+func (r *Runner) record(p *prepared, log *eventLog, ev provider.Event) {
 	payload := eventPayload{
 		Tool:     ev.Tool,
 		Decision: ev.Decision,
@@ -884,7 +884,7 @@ func toolDetail(input json.RawMessage) string {
 	return " " + s
 }
 
-func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution, ev provider.Event) {
+func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, pl *pool, ex *execution, ev provider.Event) {
 	if ev.Kind != provider.EvError {
 		ex.malformed = 0
 	}
@@ -1060,7 +1060,7 @@ func (r *Runner) noteModel(p *prepared, ev provider.Event) {
 // maxEmptyTurns): nothing was validated, so it is not the schema retry
 // being spent, and an agent that stops mid-work — the ACP agents do it on
 // a refused tool call — is asked again.
-func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, ex *execution, ev provider.Event) {
+func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, ev provider.Event) {
 	// A session that has already produced a valid note is done. A provider
 	// that emits a second final line — a resumed session replaying its
 	// result, a CLI that repeats itself on the way out — must not file the
@@ -1365,7 +1365,7 @@ func (r *Runner) nextModel(ex *execution) string {
 // leaves ex.modelLimit set: the outcome switch turns that into a blocked
 // run whose reason names the model, and the handle is on the state for
 // whichever model a person picks next.
-func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, ex *execution) {
+func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution) {
 	// The refusal is not an answer, so it is not kept as one: writing it
 	// to result.raw.txt would leave a "previous answer" a later steer
 	// would prime a fresh session with.
@@ -1417,7 +1417,7 @@ func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Ses
 // in the transcript reading "Switched to <model>", the run's own model
 // fields so every screen and the register row name the model that goes on
 // to finish the run, and a segment saying what moved it.
-func (r *Runner) noteSwitch(p *prepared, log *store.EventLog, model, why string) {
+func (r *Runner) noteSwitch(p *prepared, log *eventLog, model, why string) {
 	line := switchedTo(model)
 	r.recordSystem(p, log, line)
 	fmt.Fprintf(r.stderr(), "[%s] %s\n", p.state.Key, line)
@@ -1438,7 +1438,7 @@ func switchedTo(model string) string { return "Switched to " + model }
 // recordSystem writes one of Sirdar's own sentences into the run's event
 // log and returns it to the progress view's caller to print. It carries no
 // provider line, because no provider wrote it.
-func (r *Runner) recordSystem(p *prepared, log *store.EventLog, text string) {
+func (r *Runner) recordSystem(p *prepared, log *eventLog, text string) {
 	r.record(p, log, provider.Event{Kind: provider.EvSystem, At: r.now(), Text: text})
 }
 

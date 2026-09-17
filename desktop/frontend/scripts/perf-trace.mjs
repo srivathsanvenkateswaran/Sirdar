@@ -274,7 +274,11 @@ async function boot(cdp) {
   const loaded = cdp.once('Page.loadEventFired')
   await cdp.send('Page.navigate', { url: BOARD })
   await loaded
-  const painted = await cdp.eval(`__sd.whenPainted(() => document.querySelector('.sd-lane .sd-run-card'))`)
+  // A run card, wherever it is drawn: the board's lanes hold only the runs
+  // that still want something doing, and a workspace whose runs have all
+  // settled shows its cards in the sessions list instead. Either way the
+  // first card is the frame the workspace's runs reached the window in.
+  const painted = await cdp.eval(`__sd.whenPainted(() => document.querySelector('.sd-run-card'))`)
   const nav = await cdp.eval(`(() => {
     const n = performance.getEntriesByType('navigation')[0]
     const fcp = performance.getEntriesByName('first-contentful-paint')[0]
@@ -348,7 +352,7 @@ async function typeFilter(cdp, text) {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
     setter.call(i, '')
     i.dispatchEvent(new Event('input', { bubbles: true }))
-    await __sd.whenPainted(() => document.querySelectorAll('.sd-lane .sd-run-card').length > 0)
+    await __sd.whenPainted(() => document.querySelectorAll('.sd-run-card').length > 0)
   })()`)
   return times
 }
@@ -424,23 +428,40 @@ async function main() {
     const cold = await traced(cdp, () => boot(cdp))
     const warm = []
     const traces = []
+    // A load that never paints is the finding, not a reason to stop: it is
+    // reported with the number of the load it was and the rest are skipped,
+    // since a browser out of sockets stays out of them.
+    let stalled = 0
     for (let i = 0; i < ROUNDS; i++) {
-      const r = await traced(cdp, () => boot(cdp))
-      warm.push(r.result)
-      traces.push(r.trace)
+      try {
+        const r = await traced(cdp, () => boot(cdp))
+        warm.push(r.result)
+        traces.push(r.trace)
+      } catch {
+        stalled = i + 1
+        break
+      }
     }
+    if (warm.length === 0) throw new Error(`the first load after the cold one never painted`)
     out.boot = {
+      stalledAtLoad: stalled || undefined,
       cold: cold.result,
       coldTrace: cold.trace,
       warm: {
         boardPainted: median(warm.map((w) => w.boardPainted)),
+        worst: Math.max(...warm.map((w) => w.boardPainted)),
+        // Every load in order, because a socket pool filling up is not a
+        // median: finding #2 of 14-session-perf.md was the sixth consecutive
+        // load stalling for twelve seconds while the five before it were fine.
+        loads: warm.map((w) => Math.round(w.boardPainted)),
         fcp: median(warm.map((w) => w.fcp)),
         dcl: median(warm.map((w) => w.dcl)),
       },
       warmTrace: { taskTotal: median(traces.map((t) => t.taskTotal)), longest: median(traces.map((t) => t.longest)), over50: median(traces.map((t) => t.over50)) },
       transfer: warm[0].transfer,
     }
-    console.log(`boot   cold ${ms(cold.result.boardPainted)} (fcp ${ms(cold.result.fcp)}); warm median ${ms(out.boot.warm.boardPainted)} (fcp ${ms(out.boot.warm.fcp)}, dcl ${ms(out.boot.warm.dcl)}); main-thread ${ms(out.boot.warmTrace.taskTotal)}, longest task ${ms(out.boot.warmTrace.longest)}, tasks>50ms ${out.boot.warmTrace.over50}`)
+    console.log(`boot   cold ${ms(cold.result.boardPainted)} (fcp ${ms(cold.result.fcp)}); warm median ${ms(out.boot.warm.boardPainted)}, worst ${ms(out.boot.warm.worst)} (fcp ${ms(out.boot.warm.fcp)}, dcl ${ms(out.boot.warm.dcl)}); main-thread ${ms(out.boot.warmTrace.taskTotal)}, longest task ${ms(out.boot.warmTrace.longest)}, tasks>50ms ${out.boot.warmTrace.over50}`)
+    console.log(`       loads in order: ${out.boot.warm.loads.join('ms, ')}ms${stalled ? `, then load ${stalled} never painted` : ''}`)
   }
 
   // (b) nav: Board → Register → Board, and Board → Eval → Board.
@@ -486,7 +507,7 @@ async function main() {
   }
 
   // (d) hover on a sessions row (from the board).
-  {
+  try {
     await clickNav(cdp, 'Board', `document.querySelector('.board-lanes')`)
     await cdp.eval(`new Promise((r) => setTimeout(r, 400))`)
     const times = []
@@ -498,10 +519,12 @@ async function main() {
     }
     out.hover = { card: median(times), longest: median(traces.map((t) => t.longest)), layouts: median(traces.map((t) => t.layouts)) }
     console.log(`hover  row → card painted ${ms(out.hover.card)} (includes the open delay); longest task ${ms(out.hover.longest)}, layouts ${out.hover.layouts}`)
+  } catch (err) {
+    console.log(`hover  skipped: ${err.message}`)
   }
 
   // (e) typing in the board filter.
-  {
+  try {
     const times = []
     const traces = []
     for (let i = 0; i < ROUNDS; i++) {
@@ -511,6 +534,8 @@ async function main() {
     }
     out.type = { keystroke: median(times), worst: Math.max(...times), longest: median(traces.map((t) => t.longest)) }
     console.log(`type   keystroke → lanes painted median ${ms(out.type.keystroke)}, worst ${ms(out.type.worst)}; longest task ${ms(out.type.longest)}`)
+  } catch (err) {
+    console.log(`type   skipped: ${err.message}`)
   }
 
   // (f) at rest on the board.

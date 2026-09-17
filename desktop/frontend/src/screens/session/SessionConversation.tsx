@@ -22,6 +22,7 @@ import { deriveEvidenceMarkers, stepLikeOf } from '../../lib/evidence'
 import { evidenceOf } from '../../components/session/model'
 import { reasonOf, tokens, usd } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
+import { probeRender } from '../../lib/renderProbe'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import PanelToggle from '../../ui/panel-toggle'
 import ProviderMark from '../../ui/provider-mark'
@@ -112,6 +113,7 @@ export interface SessionConversationProps {
 }
 
 export default function SessionConversation(props: SessionConversationProps): JSX.Element {
+  probeRender('SessionConversation')
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } = props
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
   const model = useSessionModel(events, detail)
@@ -140,6 +142,15 @@ export default function SessionConversation(props: SessionConversationProps): JS
   /** The card picked from the Tools table or a reference, tinted with its twin. */
   const [highlighted, setHighlighted] = useState(-1)
   const [showJump, setShowJump] = useState(false)
+  /*
+   * The pill's state, mirrored, so asking for what it already shows is not a
+   * render. React renders a component once more even when the value it is
+   * handed back is the one it holds, and both the scroll handler and the
+   * effect that follows a live tail ask on every line and every wheel event:
+   * a streamed line that draws nothing was costing two renders of this
+   * screen, one for the line and one for this.
+   */
+  const jumpShown = useRef(false)
   const jobId = useRunJob(runId)
   const tabsId = useId()
   const paneId = `${tabsId}-pane`
@@ -194,6 +205,12 @@ export default function SessionConversation(props: SessionConversationProps): JS
     return () => window.removeEventListener('keydown', onKey)
   }, [paneOpen, setPane])
 
+  const showJumpPill = useCallback((on: boolean) => {
+    if (jumpShown.current === on) return
+    jumpShown.current = on
+    setShowJump(on)
+  }, [])
+
   /*
    * Where the stream sits. A finished run opens scrolled to its answer,
    * once; a live one follows the tail while the reader is at the bottom
@@ -208,14 +225,14 @@ export default function SessionConversation(props: SessionConversationProps): JS
       if (card && typeof card.scrollIntoView === 'function') card.scrollIntoView({ block: 'start' })
       else el.scrollTop = el.scrollHeight
       stick.current = false
-      setShowJump(false)
+      showJumpPill(false)
       return
     }
     if (!terminal && stick.current) {
       el.scrollTop = el.scrollHeight
-      setShowJump(false)
+      showJumpPill(false)
     } else if (!terminal && events.length > 0) {
-      setShowJump(true)
+      showJumpPill(true)
     }
   }, [events.length, terminal, detail, model.answerIndex, runId])
 
@@ -224,14 +241,14 @@ export default function SessionConversation(props: SessionConversationProps): JS
     if (!el) return
     const near = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_SLACK
     stick.current = near
-    setShowJump(!near && !terminal && events.length > 0)
+    showJumpPill(!near && !terminal && events.length > 0)
   }
 
   const toBottom = useCallback(() => {
     const el = streamRef.current
     if (el) el.scrollTop = el.scrollHeight
     stick.current = true
-    setShowJump(false)
+    showJumpPill(false)
   }, [])
 
   /** Scrolls the transcript to a call's card and tints the pair. */
@@ -242,13 +259,29 @@ export default function SessionConversation(props: SessionConversationProps): JS
     stick.current = false
   }, [])
 
+  /*
+   * A `file:line` in the answer or the note, taken to the card that produced
+   * it. The calls are read through a ref rather than closed over, so this
+   * handler is one object for the life of the screen: a transcript row is
+   * held on the handlers it was drawn with, and a handler rebuilt for every
+   * call that lands would redraw every row on every call.
+   */
+  const callsRef = useRef(model.calls)
+  useEffect(() => {
+    callsRef.current = model.calls
+  }, [model.calls])
   const onRef = useCallback(
     (ref: string) => {
-      const step = callForRef(model.calls, ref)
+      const step = callForRef(callsRef.current, ref)
       if (step) locate(step)
     },
-    [model.calls, locate],
+    [locate],
   )
+
+  /** One handler for every card in every stack, so a held card stays held. */
+  const toggleCall = useCallback((index: number) => {
+    setOpenCall((prev) => (prev === index ? -1 : index))
+  }, [])
 
   const openInTools = useCallback(
     (step: StepCall) => {
@@ -400,84 +433,8 @@ export default function SessionConversation(props: SessionConversationProps): JS
       : null,
   )
 
-  if (loadError || !detail) {
-    return (
-      <div className="sc">
-        <p className={loadError ? 'sc-failed' : 'sc-loading'}>{loadError || 'Loading run…'}</p>
-      </div>
-    )
-  }
-
-  const tabs: { id: Tab; label: string; count?: number }[] = [
-    ...(isFix ? [{ id: 'changes' as const, label: 'Changes', count: changed ?? undefined }] : []),
-    { id: 'note', label: 'Note' },
-    { id: 'bundle', label: 'Bundle' },
-    { id: 'tools', label: 'Tools', count: model.calls.length },
-  ]
-  const shownIndex = Math.max(
-    tabs.findIndex((t) => t.id === shownTab),
-    0,
-  )
-
-  const onTabKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const rtl = directionOf(e.currentTarget) === 'rtl'
-    let to: number
-    switch (e.key) {
-      case 'ArrowRight':
-        to = rtl ? shownIndex - 1 : shownIndex + 1
-        break
-      case 'ArrowLeft':
-        to = rtl ? shownIndex + 1 : shownIndex - 1
-        break
-      case 'Home':
-        to = 0
-        break
-      case 'End':
-        to = tabs.length - 1
-        break
-      default:
-        return
-    }
-    e.preventDefault()
-    const next = tabs[((to % tabs.length) + tabs.length) % tabs.length]
-    setTab(next.id)
-    e.currentTarget.querySelectorAll<HTMLButtonElement>('.sc-tab')[tabs.indexOf(next)]?.focus()
-  }
-
-  const placeholder =
-    mode.kind === 'answer'
-      ? 'Answer the question — the run resumes with your message'
-      : isFix
-        ? 'Ask for a change to the fix — it resumes in the same worktree'
-        : 'Steer the run or ask a follow-up — it resumes with the note and the transcript in context'
-
-  /** The closing line: when, how many turns, what it cost, what it left. */
-  const finishLine = (): JSX.Element | null => {
-    if (!terminal) return null
-    const u = detail.usage
-    const parts: (string | JSX.Element)[] = []
-    if (u?.turns) parts.push(`${u.turns} ${u.turns === 1 ? 'turn' : 'turns'}`)
-    if (u?.costUsd) parts.push(usd(u.costUsd))
-    if (u?.inputTokens) parts.push(`${tokens(u.inputTokens)} in`)
-    if (u?.outputTokens) parts.push(`${tokens(u.outputTokens)} out`)
-    if (status === 'completed') {
-      if (isFix) parts.push(detail.fix?.pushed ? 'branch pushed' : detail.fix?.commit ? 'local branch, not pushed' : 'no commit')
-      else if (notePath) parts.push('note written')
-    } else if (detail.reason) {
-      parts.push(detail.reason)
-    }
-    const word = status === 'completed' ? 'Finished' : status === 'failed' ? 'Failed' : 'Stopped'
-    return (
-      <div className={`sc-sys${status === 'failed' ? ' sc-sys--error' : ''}`} data-testid="finish-line">
-        <span>
-          {word} <b>{clock(detail.updatedAt, detail.startedAt)}</b>
-          {parts.length > 0 ? ` · ${parts.join(' · ')}` : ''}
-        </span>
-      </div>
-    )
-  }
-
   const renderItem = (item: ChatItem): JSX.Element | null => {
+    if (!detail) return null
     switch (item.kind) {
       case 'sys':
         return (
@@ -492,7 +449,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               calls={item.calls}
               head={item.head}
               openIndex={openCall}
-              onToggle={(index) => setOpenCall((prev) => (prev === index ? -1 : index))}
+              onToggle={toggleCall}
               highlighted={highlighted}
               live={live}
               blocked={blocked}
@@ -607,6 +564,113 @@ export default function SessionConversation(props: SessionConversationProps): JS
     }
   }
 
+  /*
+   * The transcript's rows, each one held until something it draws moves.
+   *
+   * The model keeps a row's object across a streamed line, so a line that
+   * changes one row leaves the others alone — but the rows are drawn here,
+   * and drawing them all again throws that away: a fresh element for a row
+   * React already has is a re-render of that row's subtree. So a row whose
+   * item is the very object of the render before is handed back its own
+   * element, and React, seeing the same element, leaves the subtree where
+   * it is. A line that draws nothing costs nothing; a line that does costs
+   * the rows it touched.
+   *
+   * Everything `renderItem` reads besides the item itself is in `drawnWith`,
+   * and any of those moving redraws every row: a row drawn against a stale
+   * value is a worse fault than a re-render.
+   */
+  const drawnWith = [detail, openCall, highlighted, live, blocked, isFix, notePath, notesDir, onRef, openInTools, toggleCall, setPane]
+  const drawn = useRef<{ with: unknown[]; items: ChatItem[]; rows: (JSX.Element | null)[] }>({ with: [], items: [], rows: [] })
+  const rows = useMemo(
+    () => {
+      const last = drawn.current
+      const same = last.with.length === drawnWith.length && last.with.every((v, i) => v === drawnWith[i])
+      const out = model.items.map((item, i) => (same && last.items[i] === item ? last.rows[i] : renderItem(item)))
+      drawn.current = { with: drawnWith, items: model.items, rows: out }
+      return out
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [model.items, ...drawnWith],
+  )
+
+  if (loadError || !detail) {
+    return (
+      <div className="sc">
+        <p className={loadError ? 'sc-failed' : 'sc-loading'}>{loadError || 'Loading run…'}</p>
+      </div>
+    )
+  }
+
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    ...(isFix ? [{ id: 'changes' as const, label: 'Changes', count: changed ?? undefined }] : []),
+    { id: 'note', label: 'Note' },
+    { id: 'bundle', label: 'Bundle' },
+    { id: 'tools', label: 'Tools', count: model.calls.length },
+  ]
+  const shownIndex = Math.max(
+    tabs.findIndex((t) => t.id === shownTab),
+    0,
+  )
+
+  const onTabKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const rtl = directionOf(e.currentTarget) === 'rtl'
+    let to: number
+    switch (e.key) {
+      case 'ArrowRight':
+        to = rtl ? shownIndex - 1 : shownIndex + 1
+        break
+      case 'ArrowLeft':
+        to = rtl ? shownIndex + 1 : shownIndex - 1
+        break
+      case 'Home':
+        to = 0
+        break
+      case 'End':
+        to = tabs.length - 1
+        break
+      default:
+        return
+    }
+    e.preventDefault()
+    const next = tabs[((to % tabs.length) + tabs.length) % tabs.length]
+    setTab(next.id)
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('.sc-tab')[tabs.indexOf(next)]?.focus()
+  }
+
+  const placeholder =
+    mode.kind === 'answer'
+      ? 'Answer the question — the run resumes with your message'
+      : isFix
+        ? 'Ask for a change to the fix — it resumes in the same worktree'
+        : 'Steer the run or ask a follow-up — it resumes with the note and the transcript in context'
+
+  /** The closing line: when, how many turns, what it cost, what it left. */
+  const finishLine = (): JSX.Element | null => {
+    if (!terminal) return null
+    const u = detail.usage
+    const parts: (string | JSX.Element)[] = []
+    if (u?.turns) parts.push(`${u.turns} ${u.turns === 1 ? 'turn' : 'turns'}`)
+    if (u?.costUsd) parts.push(usd(u.costUsd))
+    if (u?.inputTokens) parts.push(`${tokens(u.inputTokens)} in`)
+    if (u?.outputTokens) parts.push(`${tokens(u.outputTokens)} out`)
+    if (status === 'completed') {
+      if (isFix) parts.push(detail.fix?.pushed ? 'branch pushed' : detail.fix?.commit ? 'local branch, not pushed' : 'no commit')
+      else if (notePath) parts.push('note written')
+    } else if (detail.reason) {
+      parts.push(detail.reason)
+    }
+    const word = status === 'completed' ? 'Finished' : status === 'failed' ? 'Failed' : 'Stopped'
+    return (
+      <div className={`sc-sys${status === 'failed' ? ' sc-sys--error' : ''}`} data-testid="finish-line">
+        <span>
+          {word} <b>{clock(detail.updatedAt, detail.startedAt)}</b>
+          {parts.length > 0 ? ` · ${parts.join(' · ')}` : ''}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div className="sc" data-layout="conversation">
       <RunHeader
@@ -649,7 +713,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                   {events.length === 0 ? 'No events yet. They appear here as the agent works.' : 'Nothing the agent did or said yet.'}
                 </p>
               ) : (
-                model.items.map(renderItem)
+                rows
               )}
               {blocked ? (
                 <AskCard

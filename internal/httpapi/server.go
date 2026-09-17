@@ -39,8 +39,13 @@ type server struct {
 	// secret it carries.
 	hooksWS string
 
-	// keepalive is how often an idle event stream writes its comment line.
-	// A field rather than a constant so the tests need not wait 15 s.
+	// keepalive is how often an idle event stream writes its comment line,
+	// and so how quickly a stream nobody is reading any more is noticed.
+	// A browser allows six connections per host; at 15 s a page that had
+	// opened several streams could accumulate enough dead ones to fill the
+	// pool, and every request — static files included — then waited for
+	// one to fall out. A field rather than a constant so the tests need not
+	// wait for it.
 	keepalive time.Duration
 
 	// logf takes what the caller must not be told. A webhook sender is not
@@ -65,7 +70,7 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	}
 	s := &server{
 		svc: svc, ui: ui, mux: http.NewServeMux(),
-		keepalive: 15 * time.Second,
+		keepalive: 5 * time.Second,
 		logf:      log.Printf,
 	}
 	// loopbackOnly stays false unless a caller passes LoopbackOnly: a

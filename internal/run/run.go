@@ -43,6 +43,12 @@ type Deps struct {
 	Stderr   io.Writer // progress lines
 	Stdin    io.Reader // for resume answers
 	Env      []string  // base child env (os.Environ())
+
+	// Sink publishes each event line to this process's readers as it is
+	// written. The desktop shell and `sirdar serve` set it; the CLI, whose
+	// readers are a terminal and whatever poller another process runs,
+	// leaves it nil. See sink.go.
+	Sink Sink
 }
 
 // Options are the per-invocation flags shared by triage and rca runs.

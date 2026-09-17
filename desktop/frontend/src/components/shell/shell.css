@@ -77,3 +77,25 @@
     margin-inline: var(--sd-space-3);
   }
 }
+
+/*
+ * A screen that is taking a moment to open.
+ *
+ * The page is deferred (`App.tsx`), so the screen the reader came from
+ * stays painted while the next one renders behind it — opening a long run
+ * used to leave the window empty for a third of a second. Past the settle
+ * window in `lib/pending` the wait is long enough to notice, and a window
+ * that looks untouched reads as one that did not hear the click, so what is
+ * still on screen steps back until its replacement is ready. `aria-busy` on
+ * the same element carries this to a reader who is not looking at it.
+ */
+.sd-page[data-opening] {
+  opacity: 0.55;
+  transition: opacity var(--sd-dur-1) var(--sd-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-page[data-opening] {
+    transition: none;
+  }
+}

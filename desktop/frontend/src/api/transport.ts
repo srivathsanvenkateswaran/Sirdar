@@ -38,12 +38,84 @@ interface ApiError {
 const EVENT_KINDS: AppEvent['kind'][] = [
   'run.updated',
   'run.event',
+  'run.resync',
   'run.removed',
   'quota.updated',
   'job.finished',
   'hook.received',
   'log',
 ]
+
+/**
+ * One stream for the whole page, however many screens want it.
+ *
+ * Every subscriber used to open its own — the store, the run feed, Eval,
+ * New session and Register each called `subscribe` — and a browser allows
+ * six connections per host. Opening a session took two of them, and a
+ * server-side stream is held until a write to it fails, so a few reloads
+ * left enough dead ones behind to fill the pool: the sixth consecutive load
+ * of `sirdar serve` stalled for twelve seconds with API calls and fonts
+ * alike waiting for a socket.
+ *
+ * `shared` opens the underlying stream on the first subscriber and closes it
+ * when the last one leaves, fanning what arrives out to whoever is listening.
+ * One handler that throws does not keep the rest from being called.
+ */
+function shared(
+  open: (emit: (e: AppEvent) => void) => () => void,
+): (handler: (e: AppEvent) => void) => () => void {
+  const handlers = new Set<(e: AppEvent) => void>()
+  let close: (() => void) | null = null
+
+  const emit = (e: AppEvent) => {
+    for (const handler of [...handlers]) {
+      try {
+        handler(e)
+      } catch {
+        // One screen's handler must not take the stream down with it.
+      }
+    }
+  }
+
+  const stop = () => {
+    if (!close) return
+    const shut = close
+    close = null
+    shut()
+  }
+
+  /*
+   * A page put into the back/forward cache is not destroyed, and its open
+   * stream goes into the cache with it, still holding one of the browser's
+   * six connections per host. Six loads of `sirdar serve` used to leave six
+   * of them there and the next one waited on a socket for as long as it
+   * took the cache to evict one — the twelve-second stall on the sixth
+   * consecutive load. So the stream is let go when the page is put away and
+   * opened again when it comes back, and the store resyncs off the `live`
+   * events either end of that, as it does for any other break.
+   */
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', stop)
+    window.addEventListener('pageshow', () => {
+      if (handlers.size > 0 && !close) close = open(emit)
+    })
+  }
+
+  return (handler) => {
+    handlers.add(handler)
+    close ??= open(emit)
+    let left = false
+    return () => {
+      if (left) return
+      left = true
+      // The last one out closes the stream, and closing hands over what is
+      // still queued — so it is closed while this handler is still
+      // listening, or that last burst would reach nobody.
+      if (handlers.size === 1) stop()
+      handlers.delete(handler)
+    }
+  }
+}
 
 function query(params: Record<string, string | number | undefined>): string {
   const sp = new URLSearchParams()
@@ -136,6 +208,41 @@ async function postMCPCall(path: string, body: unknown): Promise<MCPCallResult> 
 
 /** HTTP + SSE transport, used by `sirdar serve` and by `npm run dev`. */
 export function createHTTPTransport(): Transport {
+  const subscribe = shared((emit) => {
+    const source = new EventSource(`${API}/events`)
+    // A burst of frames reaches the handlers as one task; see api/coalesce.
+    const out = coalesce(emit)
+    const listeners: [string, (e: MessageEvent) => void][] = []
+    for (const kind of EVENT_KINDS) {
+      const listener = (e: MessageEvent) => {
+        try {
+          out.push({ ...(JSON.parse(e.data) as object), kind } as AppEvent)
+        } catch {
+          // A malformed frame must not tear down the stream.
+        }
+      }
+      source.addEventListener(kind, listener as EventListener)
+      listeners.push([kind, listener])
+    }
+    // The browser reconnects a dropped EventSource by itself, firing
+    // `error` on the way down and `open` on the way back. Nothing sent in
+    // between reaches the window, so both are reported: the store says the
+    // stream is lost, and resyncs when it is back.
+    const onOpen = () => out.push({ kind: 'live', state: 'open' })
+    const onError = () => out.push({ kind: 'live', state: 'lost' })
+    source.addEventListener('open', onOpen)
+    source.addEventListener('error', onError)
+    return () => {
+      for (const [kind, listener] of listeners) {
+        source.removeEventListener(kind, listener as EventListener)
+      }
+      source.removeEventListener('open', onOpen)
+      source.removeEventListener('error', onError)
+      source.close()
+      out.stop()
+    }
+  })
+
   return {
     workspaces: () => getJSON<Workspace[]>('/workspaces'),
     addWorkspace: (root) => postJSON<Workspace>('/workspaces', { root }),
@@ -292,40 +399,7 @@ export function createHTTPTransport(): Transport {
     register: (ws) => getJSON<RegisterRow[]>(`/workspaces/${encodeURIComponent(ws)}/register`),
     doctor: (ws) => getJSON<Check[]>(`/workspaces/${encodeURIComponent(ws)}/doctor`),
     quota: () => getJSON<Quota[]>('/quota'),
-    subscribe: (handler) => {
-      const source = new EventSource(`${API}/events`)
-      // A burst of frames reaches the handler as one task; see api/coalesce.
-      const out = coalesce(handler)
-      const listeners: [string, (e: MessageEvent) => void][] = []
-      for (const kind of EVENT_KINDS) {
-        const listener = (e: MessageEvent) => {
-          try {
-            out.push({ ...(JSON.parse(e.data) as object), kind } as AppEvent)
-          } catch {
-            // A malformed frame must not tear down the stream.
-          }
-        }
-        source.addEventListener(kind, listener as EventListener)
-        listeners.push([kind, listener])
-      }
-      // The browser reconnects a dropped EventSource by itself, firing
-      // `error` on the way down and `open` on the way back. Nothing sent in
-      // between reaches the window, so both are reported: the store says the
-      // stream is lost, and resyncs when it is back.
-      const onOpen = () => out.push({ kind: 'live', state: 'open' })
-      const onError = () => out.push({ kind: 'live', state: 'lost' })
-      source.addEventListener('open', onOpen)
-      source.addEventListener('error', onError)
-      return () => {
-        for (const [kind, listener] of listeners) {
-          source.removeEventListener(kind, listener as EventListener)
-        }
-        source.removeEventListener('open', onOpen)
-        source.removeEventListener('error', onError)
-        source.close()
-        out.stop()
-      }
-    },
+    subscribe,
   }
 }
 
@@ -436,6 +510,24 @@ function list<T>(rows: T[] | null): T[] {
 
 /** Wails transport: bound Go methods plus runtime events, used in the app shell. */
 export function createWailsTransport(): Transport {
+  // The runtime bridge opens no socket, so the pool is not the reason here;
+  // one registration per kind rather than one per screen is, and both
+  // shells then behave the same way.
+  const subscribe = shared((emit) => {
+    const rt = (window as any).runtime as WailsRuntime | undefined
+    if (!rt) return () => {}
+    const out = coalesce(emit)
+    const off = EVENT_KINDS.map((kind) =>
+      rt.EventsOn(kind, (data: unknown) => {
+        out.push({ ...((data as object) ?? {}), kind } as AppEvent)
+      }),
+    )
+    return () => {
+      for (const cancel of off) cancel()
+      out.stop()
+    }
+  })
+
   return {
     workspaces: async () => list(await bridge().Workspaces()),
     addWorkspace: (root) => bridge().AddWorkspace(root),
@@ -568,20 +660,7 @@ export function createWailsTransport(): Transport {
     openRunDir: async (ws, runId) => {
       await bridge().OpenRunDir(ws, runId)
     },
-    subscribe: (handler) => {
-      const rt = (window as any).runtime as WailsRuntime | undefined
-      if (!rt) return () => {}
-      const out = coalesce(handler)
-      const off = EVENT_KINDS.map((kind) =>
-        rt.EventsOn(kind, (data: unknown) => {
-          out.push({ ...((data as object) ?? {}), kind } as AppEvent)
-        }),
-      )
-      return () => {
-        for (const cancel of off) cancel()
-        out.stop()
-      }
-    },
+    subscribe,
   }
 }
 

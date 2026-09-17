@@ -106,6 +106,27 @@ export function classify(event: RunEvent): EventClass {
   }
 }
 
+/**
+ * True when every layout throws this line away: the provider's stream
+ * deltas, and the hook chatter it writes around a tool call. `system/init`
+ * and `system/thinking_tokens` are not this — one is the run's opening line
+ * and the other its thinking stamp — and neither is a line the provider
+ * wrote in its own words, which is drawn small and grey.
+ *
+ * A live run's log is mostly these: 2213 of the 2270 lines of the sandbox's
+ * longest run. What they are for is the reader deciding they are worth
+ * nothing, which the reader cannot do if each one costs a render first.
+ */
+export function drawsNothing(event: RunEvent): boolean {
+  if (classify(event) !== 'system') return false
+  const raw = asRecord(event.payload?.raw)
+  const type = str(raw?.type)
+  if (type === 'stream_event') return true
+  if (type !== 'system') return false
+  const subtype = str(raw?.subtype)
+  return subtype !== 'init' && subtype !== 'thinking_tokens'
+}
+
 export type Filter = 'all' | 'tools' | 'denials' | 'text'
 
 /**
