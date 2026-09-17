@@ -159,8 +159,9 @@ describe('Register', () => {
     mount({ register: [], runs: [] })
     expect(await screen.findByText(/No runs recorded yet/)).toBeInTheDocument()
     expect(screen.getByText('Runs this week').nextElementSibling).toHaveTextContent('0')
-    expect(screen.getByText('Confirmed').nextElementSibling).toHaveTextContent('—')
-    expect(screen.getByText('of 0 verdicts recorded')).toBeInTheDocument()
+    expect(screen.getByText('None in the last seven days')).toBeInTheDocument()
+    expect(screen.getByText('Spend').nextElementSibling).toHaveTextContent('$0.00')
+    expect(screen.getByText('Nothing yet')).toBeInTheDocument()
     // The grid is still drawn: a workspace with no runs is a grid of zeros.
     expect(screen.getByRole('group', { name: 'Runs per day' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
@@ -189,18 +190,40 @@ describe('Register', () => {
     expect(t.querySelectorAll('tr.sd-table__detail')).toHaveLength(1)
   })
 
-  it('computes the three figures from the rows', async () => {
+  it('computes the two figures from the rows, in one compact strip', async () => {
     await shownTable()
     // This week (8-14 Sep): run-4, run-1, run-3, OMNI-2 rca (10th), OMNI-2 triage (9th).
     expect(screen.getByText('Runs this week').nextElementSibling).toHaveTextContent('5')
     expect(screen.getByText('3 triages · 1 fix · 1 RCA')).toBeInTheDocument()
-    // Spent: 0.08 + 0.22 + 0.12 + 0 + 0.05 = 0.47; codex 0.34, claude 0.13, and
+    // Spend: 0.08 + 0.22 + 0.12 + 0 + 0.05 = 0.47; codex 0.34, claude 0.13, and
     // the failed qwen run, which cost nothing and is still a run.
-    expect(screen.getByText('Spent').nextElementSibling).toHaveTextContent('$0.47')
+    expect(screen.getByText('Spend').nextElementSibling).toHaveTextContent('$0.47')
     expect(screen.getByText('codex $0.34 · claude $0.13 · qwen $0.00')).toBeInTheDocument()
-    // Verdicts: confirmed and wrong recorded, one of two confirmed.
-    expect(screen.getByText('Confirmed').nextElementSibling).toHaveTextContent('50%')
-    expect(screen.getByText('of 2 verdicts recorded')).toBeInTheDocument()
+    // Two stats, both compact, in the strip; the share of verdicts confirmed
+    // is no longer a figure on this screen.
+    const strip = document.querySelector('.register-strip')
+    expect(strip?.querySelectorAll('.sd-stat[data-size="compact"]')).toHaveLength(2)
+    expect(screen.queryByText('Confirmed')).toBeNull()
+    expect(screen.queryByText(/verdicts recorded/)).toBeNull()
+    expect(screen.queryByText('Spent')).toBeNull()
+  })
+
+  it('draws the grid compact, with its legend on the title row rather than under it', async () => {
+    await shownTable()
+    const card = document.querySelector('.register-heatcard') as HTMLElement
+    expect(card).toHaveAccessibleName('Runs per day')
+    const grid = card.querySelector('.sd-heatmap')
+    expect(grid).toHaveAttribute('data-size', 'compact')
+    expect(grid?.querySelector('.sd-heatmap__legend')).toBeNull()
+    const head = card.querySelector('.register-heatcard__head')
+    expect(head?.querySelector('.sd-heatmap__legend')).toHaveAttribute('data-size', 'compact')
+    expect(within(head as HTMLElement).getByText('Runs a day')).toBeInTheDocument()
+    expect(within(head as HTMLElement).getByText('10+')).toBeInTheDocument()
+  })
+
+  it('puts the table in a wrapper that takes the rest of the sheet', async () => {
+    const t = await shownTable()
+    expect(t.closest('.register-table')).not.toBeNull()
   })
 
   it('buckets the grid by runs a day and filters the table to the day that is chosen', async () => {

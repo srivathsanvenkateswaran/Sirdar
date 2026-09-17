@@ -298,11 +298,24 @@ describe('the review', () => {
 describe('the register', () => {
   const css = sheet('screens/register.css')
 
-  it('puts the figures beside the heatmap at 1300 and above, in a row over it below', () => {
+  it('puts the stat strip beside the heatmap at 1300 and above, and over it below', () => {
     expect(rule(css, '.register-band')).toContain('display: flex')
+    expect(rule(css, '.register-strip')).toContain('display: flex')
     const below = atMost(css, 1299)
     expect(rule(below, '.register-band')).toContain('flex-direction: column')
-    expect(rule(below, '.register-figs')).toContain('flex-direction: row')
+    // The strip stays one row of two until the phone width.
+    expect(rule(atMost(css, 720), '.register-strip')).toContain('flex-direction: column')
+  })
+
+  it('draws the grid compact, and lets the table take the rest of the sheet', () => {
+    const heat = sheet('ui/heatmap/Heatmap.css')
+    expect(rule(heat, ".sd-heatmap[data-size='compact'] .sd-heatmap__grid")).toContain(
+      'grid-template-rows: repeat(7, 10px)',
+    )
+    expect(rule(heat, ".sd-heatmap[data-size='compact'] .sd-heatmap__grid")).toContain('gap: 2px')
+    expect(rule(css, '.register-table')).toContain('flex: 1 1 auto')
+    expect(rule(css, '.register-table .sd-table__scroll')).toContain('overflow-y: auto')
+    expect(rule(css, '.register')).toContain('overflow-y: auto')
   })
 
   it('scrolls the heatmap inside its card', () => {

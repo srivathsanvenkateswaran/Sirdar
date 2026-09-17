@@ -3,7 +3,6 @@ import type { RegisterRow, RunSummary } from '../api/types'
 import {
   buildLedger,
   computeAccuracy,
-  confirmedShare,
   formatHeld,
   groupDate,
   groupRegisterRows,
@@ -359,18 +358,6 @@ describe('the three figures', () => {
         (n) => `$${n.toFixed(2)}`,
       ),
     ).toBe('claude $3.00 · codex $1.00 · qwen $0.50')
-  })
-
-  it('is the share of recorded verdicts that were confirmed', () => {
-    const c = confirmedShare([
-      row({ triageVerdict: 'confirmed' }),
-      row({ triageVerdict: 'confirmed' }),
-      row({ triageVerdict: 'wrong' }),
-      row({ triageVerdict: '' }),
-      row({ kind: 'fix', triageVerdict: '' }),
-    ])
-    expect(c).toEqual({ recorded: 3, confirmed: 2, percent: 67 })
-    expect(confirmedShare([])).toEqual({ recorded: 0, confirmed: 0, percent: 0 })
   })
 
   it('buckets runs by the day they happened, for the grid', () => {

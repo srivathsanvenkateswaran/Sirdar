@@ -5,7 +5,6 @@ import OutlineChip, { VERDICT_TONES } from '../components/register/OutlineChip'
 import { reasonOf, usd } from '../lib/format'
 import {
   buildLedger,
-  confirmedShare,
   dayOf,
   kindsLine,
   ledgerPerDay,
@@ -17,7 +16,7 @@ import {
 } from '../lib/register'
 import Button from '../ui/button'
 import DataTable, { type DataColumn } from '../ui/data-table'
-import Heatmap, { dayName } from '../ui/heatmap'
+import Heatmap, { HeatmapLegend, dayName } from '../ui/heatmap'
 import PageHead from '../ui/page-head'
 import ProviderMark from '../ui/provider-mark'
 import Avatar from '../ui/run-card/Avatar'
@@ -33,7 +32,7 @@ interface Filters {
 
 const EMPTY_FILTERS: Filters = { kind: '', state: '', provider: '' }
 
-/** How many weeks the grid draws. The card's side label says the same number. */
+/** How many weeks the grid draws. */
 const WEEKS = 26
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -132,9 +131,11 @@ function FilterIcon(): JSX.Element {
  *
  * The screen reads the register and the runs on disk and joins them: the
  * register is what was filed, the runs are what happened, and a run that
- * failed or is still going is only in the second. Three figures and the
- * runs-per-day grid sit over the table and are computed from the same rows
- * the table draws, so the card and the column under it cannot disagree.
+ * failed or is still going is only in the second. Two figures and the
+ * runs-per-day grid sit in one row over the table and are computed from the
+ * same rows the table draws, so the strip and the column under it cannot
+ * disagree. The table takes every pixel under them: it is what the screen
+ * is for, and the figures are a summary of it.
  *
  * Read-only. Nothing here starts, answers or steers a run, so the screen
  * publishes no primary and the one control that acts on the sheet is Export
@@ -226,7 +227,6 @@ export default function Register(props: {
   const ledger = useMemo(() => buildLedger(rows ?? [], runs), [rows, runs])
   const week = useMemo(() => runsThisWeek(ledger), [ledger])
   const spend = useMemo(() => spent(ledger), [ledger])
-  const confirmed = useMemo(() => confirmedShare(rows ?? []), [rows])
   const perDay = useMemo(() => ledgerPerDay(ledger), [ledger])
   const today = dayOf(new Date().toISOString())
 
@@ -377,22 +377,19 @@ export default function Register(props: {
       {loaded && (
         <>
           <div className="register-band">
-            <div className="register-figs">
+            <div className="register-strip">
               <StatCard
+                size="compact"
                 label="Runs this week"
                 value={String(week.total)}
                 detail={week.total > 0 ? kindsLine(week.kinds) : 'None in the last seven days'}
               />
               <StatCard
-                label="Spent"
+                size="compact"
+                label="Spend"
                 value={usd(spend.total)}
                 valueTitle={`$${spend.total.toFixed(4)}`}
                 detail={spend.providers.length > 0 ? spendLine(spend.providers, usd) : 'Nothing yet'}
-              />
-              <StatCard
-                label="Confirmed"
-                value={confirmed.recorded > 0 ? `${confirmed.percent}%` : '—'}
-                detail={`of ${confirmed.recorded} ${confirmed.recorded === 1 ? 'verdict' : 'verdicts'} recorded`}
               />
             </div>
             <section className="register-heatcard" aria-labelledby="register-heat-title">
@@ -400,9 +397,11 @@ export default function Register(props: {
                 <h2 className="register-heatcard__title" id="register-heat-title">
                   Runs per day
                 </h2>
-                <span className="register-heatcard__side">{WEEKS} weeks</span>
+                <HeatmapLegend size="compact" />
               </div>
               <Heatmap
+                size="compact"
+                legend={false}
                 days={perDay}
                 weeks={WEEKS}
                 endDate={today}
@@ -493,16 +492,18 @@ export default function Register(props: {
                 )}
               </div>
 
-              <DataTable
-                caption="Every run"
-                columns={columns}
-                rows={visible}
-                rowKey={(r) => r.runId}
-                sort={{ columnId: 'when', direction: sortDir }}
-                onSort={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
-                detail={detail}
-                empty="Nothing in the register matches these filters."
-              />
+              <div className="register-table">
+                <DataTable
+                  caption="Every run"
+                  columns={columns}
+                  rows={visible}
+                  rowKey={(r) => r.runId}
+                  sort={{ columnId: 'when', direction: sortDir }}
+                  onSort={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+                  detail={detail}
+                  empty="Nothing in the register matches these filters."
+                />
+              </div>
             </>
           )}
         </>
