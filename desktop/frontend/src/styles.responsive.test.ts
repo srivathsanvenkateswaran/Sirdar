@@ -45,6 +45,27 @@ function rule(css: string, selector: string): string {
   return match ? match[1] : ''
 }
 
+/** One declaration's value out of a block of declarations, trimmed. */
+function decl(declarations: string, prop: string): string {
+  const match = declarations.match(new RegExp(`(?:^|[;{\\s])${prop}\\s*:\\s*([^;]+)`))
+  return match ? match[1].trim() : ''
+}
+
+/**
+ * A length in pixels: `12px` as written, `0.875rem` against the 16px root,
+ * and `var(--sd-space-3)` against the tokens the whole app reads. Only what
+ * the sheets actually use — no calc, no nesting deeper than one var.
+ */
+function len(value: string): number {
+  const varName = value.match(/^var\(\s*(--[\w-]+)\s*\)$/)
+  if (varName) {
+    const tokens = rule(sheet('styles/tokens.css'), ':root')
+    return len(decl(tokens, varName[1]))
+  }
+  if (value.endsWith('rem')) return Number.parseFloat(value) * 16
+  return Number.parseFloat(value)
+}
+
 const BANDS = { standard: 1439, compact: 1199, narrow: 1023 } as const
 
 describe('the breakpoints', () => {
@@ -316,6 +337,56 @@ describe('the register', () => {
     expect(rule(css, '.register-table')).toContain('flex: 1 1 auto')
     expect(rule(css, '.register-table .sd-table__scroll')).toContain('overflow-y: auto')
     expect(rule(css, '.register')).toContain('overflow-y: auto')
+  })
+
+  /*
+   * The band's height, added up from the boxes the sheets declare.
+   *
+   * jsdom lays nothing out, so the sum is done here — the arithmetic a
+   * browser does, over the numbers the stylesheets carry. Brave at 1440x900
+   * measures the strip at 72.9px and the grid card at 144px against the 72.8
+   * and 144 below, and leaves the table 498px: its caption, its header and
+   * eight whole rows with a ninth part way up.
+   */
+  it('adds up to a strip of about 72px and a grid card of about 144px', () => {
+    const stat = sheet('ui/stat-card/StatCard.css')
+    const heat = sheet('ui/heatmap/Heatmap.css')
+    const compactStat = rule(stat, ".sd-stat[data-size='compact']")
+
+    // Figure and label on one baseline (the 28px figure is the taller box,
+    // at line-height 1), the detail line under them, 12px padding each side.
+    const strip =
+      2 * len(decl(compactStat, 'padding-block')) +
+      len(decl(rule(stat, ".sd-stat[data-size='compact'] .sd-stat__value"), 'font-size')) +
+      len(decl(compactStat, 'row-gap')) +
+      len(decl(rule(stat, '.sd-stat__detail'), 'font-size')) *
+        Number(decl(rule(stat, '.sd-stat__detail'), 'line-height'))
+    expect(strip).toBeCloseTo(72.8, 1)
+    expect(strip).toBeGreaterThanOrEqual(72)
+    expect(strip).toBeLessThanOrEqual(88)
+
+    // The month row, the grid's seven 10px rows and their 2px gaps.
+    const grid =
+      len(decl(rule(heat, ".sd-heatmap[data-size='compact'] .sd-heatmap__months"), 'block-size')) +
+      len(decl(rule(heat, ".sd-heatmap[data-size='compact'] .sd-heatmap__scroll"), 'gap')) +
+      7 * 10 +
+      6 * len(decl(rule(heat, ".sd-heatmap[data-size='compact'] .sd-heatmap__grid"), 'gap'))
+    expect(grid).toBe(98)
+
+    // The card: its padding, the taller of the title and the legend on the
+    // head row (the legend's micro text on the body's 1.5 leading), the gap
+    // under it, and the grid.
+    const title =
+      len(decl(rule(css, '.register-heatcard__title'), 'font-size')) *
+      Number(decl(rule(css, '.register-heatcard__title'), 'line-height'))
+    const legend =
+      len(decl(rule(heat, ".sd-heatmap__legend[data-size='compact']"), 'font-size')) * 1.5
+    const card =
+      2 * len(decl(rule(css, '.register-heatcard'), 'padding-block')) +
+      Math.max(title, legend) +
+      len(decl(rule(css, '.register-heatcard__head'), 'margin-block-end')) +
+      grid
+    expect(card).toBe(144)
   })
 
   it('scrolls the heatmap inside its card', () => {

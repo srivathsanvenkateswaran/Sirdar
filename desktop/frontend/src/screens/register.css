@@ -4,9 +4,10 @@
  *
  * Sizes are lifted from docs/design/2026-09-15-screens/Register.html for the
  * page inset (40/48/32) and the table's cells. The band over the table is
- * the 2026-09-17 compaction: two compact stat cards in one row and a compact
- * 26-week grid beside them, about 150px tall in all, so the table under
- * them takes the rest of the sheet. Every colour is a token; nothing here
+ * the 2026-09-17 compaction: two compact stat cards in one row (73px) and a
+ * compact 26-week grid beside them (144px: 12px padding, the 18px title and
+ * legend row, 4px, and the grid's 98px), so the table under them takes the
+ * rest of the sheet — nine rows of it at 1440x900. Every colour is a token; nothing here
  * casts a shadow.
  */
 
@@ -66,12 +67,14 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sd-space-4);
-  margin-block-end: var(--sd-space-2);
+  margin-block-end: var(--sd-space-1);
 }
 
+/* The title sits on the strip's label scale: the band reads as one row, not
+   as a card with a heading beside two figures. */
 .register-heatcard__title {
   margin: 0;
-  font-size: var(--sd-text-body);
+  font-size: var(--sd-text-meta);
   font-weight: 500;
   line-height: 1.25;
 }
