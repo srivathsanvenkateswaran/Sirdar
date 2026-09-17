@@ -478,35 +478,41 @@ export default function NewSession(props: {
   const needsNote = key !== '' && !triaged
   const noteReason = key ? `Needs a triage note for ${key} first` : ''
   /**
-   * Whether the model should be asked to read the line: it is ambiguous,
-   * nothing has been confirmed yet, the setting is on, and the line has not
-   * already resolved to a ticket on its own.
+   * Whether the model should be asked to read the line rather than the
+   * screen acting on the parser's own reading: the line is ambiguous — no
+   * ticket in it, two keys, or two things asked for — nothing has been
+   * confirmed yet, and the setting is on.
+   *
+   * Two keys is the case that matters most. The parser takes the first and
+   * could start on it, and starting a session on the wrong one of two
+   * tickets somebody named in the same breath is exactly the mistake worth
+   * a call and a confirmation.
    */
-  const wantsReading =
-    prefs.intentAssist && intent.ambiguity !== '' && !confirmed && key === ''
-  const canStart = (key !== '' && !(needsNote && mode !== 'triage') && !busy) || (wantsReading && !busy)
+  const wantsReading = prefs.intentAssist && intent.ambiguity !== '' && !confirmed
+  const canStart =
+    !busy && (wantsReading || (key !== '' && !(needsNote && mode !== 'triage')))
 
-  /** The chips, or the one line saying why there is nothing to start. */
+  /** The chips, or the one line saying why there is nothing to start yet. */
   const chips = key !== '' ? intentChips({ mode, key, instruction }) : []
   /**
-   * The one line that stops a start. A key with no triage note behind it
-   * stops an RCA or a fix and nothing else, so on a triage it is a note
-   * under the chips rather than in place of them: most keys worth typing
-   * have no note yet, and telling somebody that instead of what they are
-   * about to start would be wrong on nearly every line.
+   * The one line that stands in place of the chips. A key with no triage
+   * note behind it stops an RCA or a fix and nothing else, so on a triage
+   * it is a note under the chips rather than in place of them: most keys
+   * worth typing have no note yet, and telling somebody that instead of
+   * what they are about to start would be wrong on nearly every line.
    */
   const blocked = error
     ? error
-    : needsNote && mode !== 'triage'
-      ? `RCA and Fix need a triage note for ${key} first. Start a triage.`
-      : key !== ''
-        ? ''
-        : resolving
-          ? `Looking up helpdesk ${intent.helpdesk}…`
-          : link && link.number === intent.helpdesk && link.reason
-            ? link.reason
-            : wantsReading
-              ? AMBIGUOUS_REASON[intent.ambiguity]
+    : wantsReading
+      ? AMBIGUOUS_REASON[intent.ambiguity]
+      : needsNote && mode !== 'triage'
+        ? `RCA and Fix need a triage note for ${key} first. Start a triage.`
+        : key !== ''
+          ? ''
+          : resolving
+            ? `Looking up helpdesk ${intent.helpdesk}…`
+            : link && link.number === intent.helpdesk && link.reason
+              ? link.reason
               : NO_KEY_REASON
 
   const start = useCallback(() => {

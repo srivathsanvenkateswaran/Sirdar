@@ -694,6 +694,34 @@ describe('NewSession', () => {
       )
     })
 
+    it('asks about two keys rather than starting on the first of them', async () => {
+      const transport = createFakeTransport({
+        tickets: [],
+        composed: { key: 'OMNI-2', mode: 'triage', instruction: '', confidence: 0.7 },
+      })
+      const { onStart } = mount({ transport })
+      fireEvent.change(bar(), { target: { value: 'is OMNI-1 the same bug as OMNI-2' } })
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Two ticket keys in there — press Enter and I will work out which you meant',
+      )
+      fireEvent.click(sendButton())
+      await waitFor(() => expect(transport.calls.composeIntent).toHaveLength(1))
+      expect(onStart).not.toHaveBeenCalled()
+      expect(await screen.findByText('Confirm')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent('Triage · OMNI-2')
+    })
+
+    it('starts on the first key when the setting is off', async () => {
+      setIntentAssist('ws1', false)
+      const transport = createFakeTransport({ tickets: [] })
+      const { onStart } = mount({ transport })
+      fireEvent.change(bar(), { target: { value: 'is OMNI-1 the same bug as OMNI-2' } })
+      expect(screen.getByRole('status')).toHaveTextContent('Triage · OMNI-1')
+      fireEvent.click(sendButton())
+      await waitFor(() => expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-1', expect.anything()))
+      expect(transport.calls.composeIntent).toEqual([])
+    })
+
     it('drops the reading the moment another character is typed', async () => {
       const transport = createFakeTransport({
         tickets: [],
