@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/loginpath"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -51,6 +52,18 @@ func main() {
 }
 
 func run() error {
+	// First, before anything looks a binary up. An app started from the
+	// Dock, from Spotlight or from a Linux launcher has launchd's or the
+	// session manager's PATH, which on macOS is /usr/bin:/bin:/usr/sbin:/sbin
+	// — no /opt/homebrew/bin, no ~/.local/bin. Every provider CLI, every
+	// credential helper and xdg-open live in one of the directories that
+	// PATH is missing, so a triage started from the app failed with
+	// `exec: "claude": executable file not found in $PATH` while the same
+	// triage from a terminal ran. Resolving the login shell's PATH here
+	// puts the service, every run it starts and every doctor row on the
+	// same PATH the operator's terminal has.
+	loginpath.Apply(context.Background())
+
 	path, err := app.DefaultRegistryPath()
 	if err != nil {
 		return err
