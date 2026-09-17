@@ -72,6 +72,15 @@ func (b *Bridge) ResolveHelpdesk(ws, number string) (app.HelpdeskLink, error) {
 	return b.svc.ResolveHelpdesk(ctx, ws, number)
 }
 
+// ComposeIntent reads one ambiguous composer line with a single short
+// provider call and answers what it was understood as. It starts nothing:
+// the composer draws the reading as chips and waits to be told to go.
+func (b *Bridge) ComposeIntent(ws, text string) (app.ComposedIntent, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return b.svc.ComposeIntent(ctx, ws, text)
+}
+
 // Runs lists a workspace's runs, newest first. An empty key lists all.
 func (b *Bridge) Runs(ws, key string) ([]app.RunSummary, error) { return b.svc.Runs(ws, key) }
 

@@ -355,3 +355,22 @@ func TestResolveHelpdeskAnswersTheLink(t *testing.T) {
 func TestResolveHelpdeskUnknownWorkspace(t *testing.T) {
 	assertError(t, do(t, newFake(), "GET", "/api/workspaces/nope/helpdesk/25312", ""), 404, "not_found")
 }
+
+// TestComposeIntentReadsTheLine pins the fallback route: the text goes in,
+// a reading comes back, and an empty box is refused rather than spending a
+// provider call on nothing.
+func TestComposeIntentReadsTheLine(t *testing.T) {
+	f := newFake()
+	f.composed = ComposedIntent{Key: "OMNI-3233", Mode: "fix", Instruction: "start with the rounding", Confidence: 0.8}
+	var got ComposedIntent
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/compose-intent",
+		`{"text":"sort out the rounding on 3233 or 2510"}`), 200, &got)
+	if f.gotCompose != "sort out the rounding on 3233 or 2510" {
+		t.Fatalf("text %q", f.gotCompose)
+	}
+	if got != f.composed {
+		t.Fatalf("reading %+v", got)
+	}
+
+	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/compose-intent", `{"text":"  "}`), 400, "bad_request")
+}

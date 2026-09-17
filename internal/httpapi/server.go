@@ -79,6 +79,7 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("DELETE /api/workspaces/{id}", s.removeWorkspace)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/queue", s.queue)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/helpdesk/{number}", s.resolveHelpdesk)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/compose-intent", s.composeIntent)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs", s.runs)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}", s.run)
 	s.mux.HandleFunc("DELETE /api/workspaces/{id}/runs/{runId}", s.deleteRun)

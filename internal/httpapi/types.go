@@ -27,6 +27,7 @@ type (
 	Event                = app.Event
 	QueueFilter          = app.QueueFilter
 	HelpdeskLink         = app.HelpdeskLink
+	ComposedIntent       = app.ComposedIntent
 	TriageOptions        = app.TriageOptions
 	RCAOptions           = app.RCAOptions
 	FixOptions           = app.FixOptions

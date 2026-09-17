@@ -74,6 +74,8 @@ type fake struct {
 	gotFilter    QueueFilter
 	gotHelpdesk  string
 	helpdeskLink HelpdeskLink
+	gotCompose   string
+	composed     ComposedIntent
 	gotKey       string
 	gotAfter     int
 	gotNoteKind  string
@@ -231,6 +233,17 @@ func (f *fake) ResolveHelpdesk(_ context.Context, wsID, number string) (Helpdesk
 	f.mu.Unlock()
 	link.Number = number
 	return link, nil
+}
+
+func (f *fake) ComposeIntent(_ context.Context, wsID, text string) (ComposedIntent, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return ComposedIntent{}, err
+	}
+	f.mu.Lock()
+	f.gotCompose = text
+	out := f.composed
+	f.mu.Unlock()
+	return out, nil
 }
 
 func (f *fake) Queue(_ context.Context, wsID string, filter QueueFilter) ([]Ticket, error) {
