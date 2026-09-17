@@ -3,6 +3,7 @@ import type { RunEvent } from '../../api/types'
 import { parseAnswer } from '../../lib/events'
 import type { FixReport } from '../../lib/review'
 import { noteName } from '../../lib/review'
+import { probeRender } from '../../lib/renderProbe'
 import Button from '../../ui/button'
 import { AnswerFields } from '../../components/session/AnswerCard'
 import { BracesIcon, ChevronIcon, NoteIcon } from './icons'
@@ -465,6 +466,7 @@ export default function AnswerCard({
   onOpenNote,
   onOpenChanges,
 }: AnswerCardProps): JSX.Element {
+  probeRender('AnswerCard')
   const text = event.payload?.text ?? ''
   const answer = parseAnswer(text)
   let raw = text

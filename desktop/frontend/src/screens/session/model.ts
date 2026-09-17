@@ -332,6 +332,8 @@ class SessionBuilder {
   private itemsStale = true
   private callsStale = true
   private trail = '\n'
+  /** The last model handed out, returned again when nothing has moved. */
+  private last: SessionModel | null = null
   /** The whole-log reads, kept until an event of a kind they read lands. */
   private derived: { answer?: Record<string, unknown>; report?: FixReport; checks: RunCheck[] } | null = null
 
@@ -736,7 +738,7 @@ class SessionBuilder {
       }
     }
 
-    return {
+    const model: SessionModel = {
       items,
       calls,
       answer: this.derived.answer,
@@ -750,7 +752,30 @@ class SessionBuilder {
       asked: calls.filter((c) => c.decision === 'approved' || c.decision === 'accepted').length,
       outBytes: calls.reduce((n, c) => n + c.size.bytes, 0),
     }
+    // A line that changed nothing hands back the model the layout already
+    // has, not a copy of it: every memo downstream is keyed on this object.
+    if (this.last && same(this.last, model)) return this.last
+    this.last = model
+    return model
   }
+}
+
+/** True when two models say the same thing, field for field. */
+function same(a: SessionModel, b: SessionModel): boolean {
+  return (
+    a.items === b.items &&
+    a.calls === b.calls &&
+    a.answer === b.answer &&
+    a.report === b.report &&
+    a.answerIndex === b.answerIndex &&
+    a.checks === b.checks &&
+    a.start === b.start &&
+    a.root === b.root &&
+    a.pendingCall === b.pendingCall &&
+    a.denied === b.denied &&
+    a.asked === b.asked &&
+    a.outBytes === b.outBytes
+  )
 }
 
 /** The event kinds the whole-log reads in `snapshot` are derived from. */
