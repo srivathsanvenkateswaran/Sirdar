@@ -166,7 +166,7 @@ export default function RunHeader({
       </h1>
       <KindChip kind={detail.kind} />
       <StatusBadge status={detail.status as SdStatus} detail={badgeDetail(detail, notePath)} />
-      <span className="sn-head__title sd-bidi" title={title} dir="auto">
+      <span className="sn-head__title" title={title} dir="auto">
         {title ?? ''}
       </span>
       <AssignedTo name={detail.assignee ?? ''} />

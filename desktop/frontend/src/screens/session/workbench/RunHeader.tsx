@@ -87,7 +87,7 @@ export default function RunHeader({
         status={detail.status as SdStatus}
         detail={detail.status === 'blocked' ? 'waiting on you' : undefined}
       />
-      <span className="wb-title sd-bidi" title={title ?? detail.title} dir="auto">
+      <span className="wb-title" title={title ?? detail.title} dir="auto">
         {title ?? detail.title ?? ''}
       </span>
       <div className="wb-gauges">

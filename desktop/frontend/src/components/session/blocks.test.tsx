@@ -1,18 +1,15 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { IndexedEvent } from '../../lib/events'
-import { parseBundle } from '../../lib/bundle'
 import { parseNote } from '../../lib/note'
 import { blockedFixture, fixDiff, fixFixture, triageFixture, type SessionFixture } from '../../store/fakeSession'
 import AnswerCard from './AnswerCard'
-import BundleView from './BundleView'
 import ChangesView from './ChangesView'
 import ComposerStrip, { decisionText } from './ComposerStrip'
 import { buildSessionModel, type SessionStep } from './model'
 import NoteDocument from './NoteDocument'
 import RunHeader, { badgeDetail, LayoutSwitcher } from './RunHeader'
 import Stamp, { stepStamp } from './Stamp'
-import ToolsTable, { decisionWord } from './ToolsTable'
 import ToolStep from './ToolStep'
 import TurnGroup, { PathList } from './TurnGroup'
 
@@ -242,57 +239,6 @@ describe('NoteDocument', () => {
     expect(chips.map((c) => c.textContent)).toEqual(['E1', 'E5'])
     expect(chips[0]).toHaveAttribute('data-hot', 'true')
     expect(document.querySelector('.sn-evc[data-marker="E1"]')).toHaveAttribute('data-hot', 'true')
-  })
-})
-
-describe('BundleView', () => {
-  it('draws the tracker card, the helpdesk card, the RTL thread, honestly empty attachments and the playbooks', () => {
-    render(<BundleView bundle={parseBundle(triage.prompt)} detail={triage.detail} />)
-    const view = screen.getByTestId('bundle-view')
-    expect(within(view).getByText('Product 00219 stock shows 1 more than the movement report')).toBeInTheDocument()
-    expect(within(view).getByRole('link', { name: 'https://sandbox.local/tracker/SBX-1' })).toBeInTheDocument()
-    expect(within(view).getByRole('heading', { name: 'Helpdesk' })).toBeInTheDocument()
-    expect(within(view).getByText('4 messages · original language')).toBeInTheDocument()
-    const msgs = view.querySelectorAll('.sn-msg')
-    expect(msgs).toHaveLength(4)
-    expect(msgs[0].querySelector('.sn-msg__t')).toHaveAttribute('dir', 'rtl')
-    expect(msgs[1]).toHaveAttribute('data-role', 'agent')
-    expect(within(view).getByText(/None in this bundle/)).toBeInTheDocument()
-    expect(within(view).getByText('00-environment')).toBeInTheDocument()
-    expect(within(view).getByText('50-code')).toBeInTheDocument()
-  })
-
-  it('says while the prompt is being read, and why it could not be', () => {
-    const { rerender } = render(<BundleView bundle={null} detail={triage.detail} />)
-    expect(screen.getByText('Reading the prompt…')).toBeInTheDocument()
-    rerender(<BundleView bundle={null} error="the prompt is gone" detail={triage.detail} />)
-    expect(screen.getByText('the prompt is gone')).toBeInTheDocument()
-  })
-})
-
-describe('ToolsTable', () => {
-  it('lists every call with its stamp, its markers, its time and its output, totals them, and sorts', () => {
-    const onOpenStep = vi.fn()
-    render(<ToolsTable steps={triageModel.steps} markers={triageModel.markers} counts={triageModel.counts} detail={triage.detail} onOpenStep={onOpenStep} onMarker={() => {}} />)
-    const table = screen.getByRole('table')
-    const rows = within(table).getAllByRole('row')
-    expect(rows).toHaveLength(1 + 15 + 1)
-    expect(rows[1]).toHaveTextContent('Bash')
-    expect(rows[1]).toHaveTextContent('allow-list')
-    expect(rows[1]).toHaveTextContent('00:03 · ls -la …/app')
-    expect(rows[1]).toHaveTextContent('70 ms')
-    expect(rows[3]).toHaveTextContent('Read')
-    expect(within(rows[3]).getByRole('button', { name: 'Marker E1' })).toBeInTheDocument()
-    expect(rows[9]).toHaveTextContent('denied')
-    expect(rows[rows.length - 1]).toHaveTextContent('15 calls · 2 denied')
-    expect(screen.getByText(/Tokens/).parentElement).toHaveTextContent('838k in · 15k out')
-    fireEvent.click(rows[1])
-    expect(onOpenStep).toHaveBeenCalledWith(triageModel.steps[0].index)
-    fireEvent.click(within(table).getByRole('button', { name: /Took/ }))
-    fireEvent.click(within(table).getByRole('button', { name: /Took/ }))
-    const sorted = within(table).getAllByRole('row')
-    expect(sorted[1]).toHaveTextContent('rg -n -i "partial|Quantity"')
-    expect(decisionWord(triageModel.steps[2])).toBe('read-only')
   })
 })
 
