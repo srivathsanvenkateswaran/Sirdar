@@ -55,6 +55,11 @@ async function opened(key = 'SBX-1'): Promise<HTMLElement> {
   return screen.getByTestId('session-document')
 }
 
+/** The run header, which the Session draws above the layout rather than inside it. */
+function head(): HTMLElement {
+  return document.querySelector('.sn-head') as HTMLElement
+}
+
 beforeEach(() => {
   resetRunJobs()
   localStorage.clear()
@@ -69,8 +74,8 @@ describe('S1 · the completed triage', () => {
   it('opens on the note as the document, the path grouped by turn on the left, Steer under it', async () => {
     mount([triageFixture()], TRIAGE_RUN_ID)
     const doc = await opened()
-    expect(within(doc).getByText('completed')).toBeInTheDocument()
-    expect(within(doc).getByTitle('completed · note saved')).toBeInTheDocument()
+    expect(within(head()).getByText('completed')).toBeInTheDocument()
+    expect(within(head()).getByTitle('completed · note saved')).toBeInTheDocument()
     const note = await within(doc).findByTestId('note-document')
     expect(within(note).getByRole('heading', { level: 1 })).toHaveTextContent(/Recording a customer return adds its quantity to stock twice/)
     expect(within(note).getByText(/written by the agent at 03:13 after your steer/)).toBeInTheDocument()
@@ -108,7 +113,7 @@ describe('S1 · the completed triage', () => {
     fireEvent.change(box, { target: { value: 'Now check the adjustment path too.' } })
     fireEvent.click(within(doc).getByRole('button', { name: /Steer/ }))
     await waitFor(() => expect(transport.calls.steer).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN_ID, text: 'Now check the adjustment path too.', model: '' }]))
-    await waitFor(() => expect(within(doc).getByText('running')).toBeInTheDocument())
+    await waitFor(() => expect(within(head()).getByText('running')).toBeInTheDocument())
     expect(within(doc).getAllByTestId('you-card')).toHaveLength(2)
     // The run went running, so the strip's button became the Stop.
     expect(within(doc).getByRole('button', { name: 'Stop the run' })).toBeInTheDocument()
@@ -120,8 +125,8 @@ describe('S2 · the fix run blocked on go test', () => {
   it('shows the amber badge, the waiting step expanded with the policy, and the Reply strip with the decision segment', async () => {
     mount([blockedFixture()], FIX_RUN_ID)
     const doc = await opened()
-    expect(within(doc).getByText('blocked')).toBeInTheDocument()
-    expect(within(doc).getByTitle('blocked · waiting on you')).toBeInTheDocument()
+    expect(within(head()).getByText('blocked')).toBeInTheDocument()
+    expect(within(head()).getByTitle('blocked · waiting on you')).toBeInTheDocument()
     const path = within(doc).getByRole('log', { name: 'Path' })
     // The open step is re-drawn on its card, so the line is found again each time.
     await waitFor(() =>
@@ -276,8 +281,8 @@ describe('S6 · the fix run\'s change as the document', () => {
   it('shows the green badge with the commit, the strip, the checks, both files with Keep/Drop and C markers, and Push', async () => {
     mount([fixFixture()], FIX_RUN_ID)
     const doc = await opened()
-    expect(within(doc).getByText('completed')).toBeInTheDocument()
-    expect(within(doc).getByTitle('completed · committed f144936')).toBeInTheDocument()
+    expect(within(head()).getByText('completed')).toBeInTheDocument()
+    expect(within(head()).getByTitle('completed · committed f144936')).toBeInTheDocument()
     const change = await within(doc).findByTestId('changes-view')
     expect(within(change).getByText('f144936 · not pushed')).toBeInTheDocument()
     expect(within(change).getByText('2 · +15 −11')).toBeInTheDocument()
@@ -314,7 +319,7 @@ describe('the live states', () => {
     f.note = ''
     mount([f], TRIAGE_RUN_ID)
     const doc = await opened()
-    expect(within(doc).getByText('running')).toBeInTheDocument()
+    expect(within(head()).getByText('running')).toBeInTheDocument()
     expect(await within(doc).findByTestId('document-pending')).toHaveTextContent('The note arrives when the agent finishes')
     const box = within(doc).getByRole('textbox')
     expect(box).toBeDisabled()
@@ -378,7 +383,7 @@ describe('the frame', () => {
     expect(onBack).not.toHaveBeenCalled()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onBack).toHaveBeenCalledTimes(1)
-    fireEvent.click(within(doc).getByRole('radio', { name: 'Workbench' }))
+    fireEvent.click(within(head()).getByRole('radio', { name: 'Workbench' }))
     expect(localStorage.getItem('sirdar.sessionLayout')).toBe('workbench')
   })
 })

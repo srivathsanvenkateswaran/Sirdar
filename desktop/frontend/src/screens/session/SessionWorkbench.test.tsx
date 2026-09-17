@@ -6,7 +6,6 @@ import { resetRunJobs, setRunJob } from '../../lib/jobs'
 import { resetSessionLayout, setSessionLayout } from '../../lib/sessionLayout'
 import { configSummary, createFakeTransport, type FakeTransport } from '../../store/fakeTransport'
 import Session from '../Session'
-import SessionWorkbench from './SessionWorkbench'
 import { CONSOLE_COLLAPSED_KEY, CONSOLE_HEIGHT_KEY } from './workbench/Console'
 import {
   BLOCKED_FIX_RUN,
@@ -51,13 +50,18 @@ function Published(): JSX.Element {
   return <span data-testid="published">{action ? `${action.label}${action.placement === 'screen' ? ' inline' : ''}` : 'none'}</span>
 }
 
+/*
+ * Mounted through the Session: the header is hoisted above the layouts and
+ * the feed the Workbench draws from is the dispatcher's. `beforeEach` pins
+ * the preference to `workbench`.
+ */
 function renderWorkbench(f: Fake, detail: RunDetail = TRIAGE_RUN) {
   const onBack = vi.fn()
   const onOpenReview = vi.fn()
   const view = render(
     <PrimaryActionProvider>
       <Published />
-      <SessionWorkbench
+      <Session
         transport={f.transport}
         workspaceId="ws1"
         runId={detail.runId}
@@ -80,7 +84,7 @@ describe('SessionWorkbench', () => {
   beforeEach(() => {
     resetRunJobs()
     localStorage.clear()
-    resetSessionLayout()
+    setSessionLayout('workbench')
   })
   afterEach(() => {
     localStorage.clear()
@@ -601,6 +605,7 @@ describe('SessionWorkbench', () => {
         onBack: vi.fn(),
         onOpenReview: vi.fn(),
       }
+      act(() => setSessionLayout('conversation'))
       const { unmount } = render(
         <PrimaryActionProvider>
           <Session {...props} />

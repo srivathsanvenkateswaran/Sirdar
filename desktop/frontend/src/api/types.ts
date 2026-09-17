@@ -479,3 +479,45 @@ export interface Transport {
    */
   openRunDir?(ws: string, runId: string): Promise<void>;
 }
+
+/**
+ * Every method name on `Transport`, as a value the parity test can walk.
+ *
+ * The web UI, the macOS app and the Windows app are one bundle over two
+ * transports — `createHTTPTransport` for `sirdar serve` in a browser,
+ * `createWailsTransport` for the desktop shell — so a feature that lands on
+ * one and not the other is a platform that quietly lost it. `api/
+ * parity.test.ts` walks this list against both implementations and fails on
+ * any name one of them does not answer to, except the handful listed there
+ * as desktop-only with a reason each.
+ *
+ * The declaration below makes the compiler keep the list honest: a method
+ * added to `Transport` and not added here, or a name here that `Transport`
+ * no longer has, is a type error in this file.
+ */
+export const TRANSPORT_METHODS = [
+  'workspaces', 'addWorkspace', 'removeWorkspace',
+  'queue', 'resolveHelpdesk', 'composeIntent',
+  'runs', 'run', 'deleteRun', 'search', 'events', 'note', 'prompt',
+  'attachments', 'attachmentURL',
+  'startTriage', 'startRCA', 'startFix', 'startEval',
+  'evalReports', 'latestRetro', 'golden', 'addGolden',
+  'configSummary',
+  'playbooks', 'playbook', 'savePlaybook', 'addPlaybook', 'deletePlaybook',
+  'scaffoldPlaybooks', 'openPlaybook',
+  'resume', 'cancel', 'steer',
+  'runDiff', 'dropHunk',
+  'mcpServers', 'mcpTools', 'mcpCall',
+  'register', 'doctor', 'quota', 'subscribe',
+  'version', 'openConfig', 'openNote', 'openRunDir',
+] as const;
+/** One of the names above. */
+export type TransportMethod = (typeof TRANSPORT_METHODS)[number];
+/** Fails to compile unless `T` is `true`. */
+type Exhaustive<T extends true> = T;
+/** The two directions: nothing on `Transport` is unlisted, nothing listed is gone from `Transport`. */
+export type TransportMethodsAreComplete = Exhaustive<
+  [Exclude<keyof Transport, TransportMethod>, Exclude<TransportMethod, keyof Transport>] extends [never, never]
+    ? true
+    : false
+>;

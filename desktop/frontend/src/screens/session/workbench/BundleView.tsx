@@ -26,6 +26,8 @@ export interface BundleViewProps {
   helpdeskKey?: string
   /** Reveals the run's bundle directory; absent in a browser, which cannot. */
   onOpenFolder?: () => void
+  /** Where the bundle is on disk, for the browser's copy of the same menu item. */
+  folderPath?: string
   /** Called with the bundle once the prompt is read, for the tab's count. */
   onLoaded?: (doc: Bundle | null) => void
 }
@@ -37,6 +39,7 @@ export default function BundleView({
   assignee,
   helpdeskKey,
   onOpenFolder,
+  folderPath,
   onLoaded,
 }: BundleViewProps): JSX.Element {
   const [bundle, setBundle] = useState<Bundle | null>(null)
@@ -68,6 +71,7 @@ export default function BundleView({
         assignee={assignee}
         helpdeskKey={helpdeskKey}
         onOpenFolder={onOpenFolder}
+        folderPath={folderPath}
         onLoaded={onRead}
       />
     </Document>

@@ -14,7 +14,7 @@ import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../
 import ChangesView, { withoutCode } from '../../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
-import { LIVE, TERMINAL, useRunFeed } from '../../components/run/useRunFeed'
+import { LIVE, TERMINAL, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import ModelLimitBanner from '../../components/session/ModelLimitBanner'
 import { askedQuestion, modelLimited, notePathFor } from '../../lib/events'
@@ -33,7 +33,6 @@ import BundleView from './BundleView'
 import { BracesIcon, ThinkIcon } from './icons'
 import { callForRef, useSessionModel, type ChatItem, type StepCall } from './model'
 import NoteDocument from './NoteDocument'
-import RunHeader from '../../components/session/RunHeader'
 import { clock } from './shape'
 import { ToolStack } from './ToolStep'
 import ToolsTable from './ToolsTable'
@@ -110,12 +109,18 @@ export interface SessionConversationProps {
   onOpenReview: () => void
   /** Reruns the fix with the deviation accepted; the shell owns the job. */
   onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
+  /**
+   * The run and its log, read once by the Session above and shared with the
+   * header it draws. The layout never opens a feed of its own: that is what
+   * kept the header re-reading the run on every layout switch.
+   */
+  feed: RunFeed
 }
 
 export default function SessionConversation(props: SessionConversationProps): JSX.Element {
   probeRender('SessionConversation')
-  const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } = props
-  const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
+  const { transport, workspaceId, runId, notesDir, onBack, onOpenReview, onStartFix } = props
+  const { detail, setDetail, events, setEvents, loadError, finished } = props.feed
   const model = useSessionModel(events, detail)
   // E1…En off the answer's evidence, on the calls that produced each item:
   // the same derivation the Document layout draws its markers from.
@@ -673,16 +678,6 @@ export default function SessionConversation(props: SessionConversationProps): JS
 
   return (
     <div className="sc" data-layout="conversation">
-      <RunHeader
-        detail={detail}
-        title={title}
-        sources={sources}
-        notePath={notePath}
-        fallbackModel={model.start?.model}
-        transport={transport}
-        workspaceId={workspaceId}
-      />
-
       <span className="visually-hidden" aria-live="polite">
         {`Run ${stateWord(detail.status)}`}
       </span>
@@ -836,6 +831,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                     assignee={detail.assignee}
                     helpdeskKey={detail.helpdeskKey}
                     onOpenFolder={openBundleFolder}
+                    folderPath={detail.bundleDir}
                   />
                 </div>
               ) : null}

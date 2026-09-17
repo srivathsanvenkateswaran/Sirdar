@@ -1,9 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import type { Check, CheckLevel, MCPVerdict, Transport } from '../../api/types'
-import { reasonOf } from '../../lib/format'
-
-/** How long the copy control says "Copied" before it goes back to offering. */
-const COPIED_MS = 2000
+import { usePathAction } from '../../lib/pathAction'
 
 /**
  * The control on a row whose value lives in `.sirdar/config.yaml`.
@@ -26,59 +23,32 @@ export function OpenConfig({
   /** The setting the row is about, so six buttons are not all called "Open config". */
   setting: string
 }): JSX.Element {
-  const [copied, setCopied] = useState(false)
-  const [failure, setFailure] = useState('')
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current)
-    },
-    [],
-  )
+  const config = usePathAction({
+    path: path ?? '',
+    open: transport.openConfig && workspaceId ? () => transport.openConfig!(workspaceId) : undefined,
+    openLabel: 'Open config',
+    copyLabel: 'Copy config path',
+  })
 
-  const canOpen = Boolean(transport.openConfig && workspaceId)
-
-  async function act(): Promise<void> {
-    setFailure('')
-    if (canOpen) {
-      try {
-        await transport.openConfig!(workspaceId!)
-      } catch (err) {
-        setFailure(reasonOf(err))
-      }
-      return
-    }
-    if (!path) return
-    try {
-      await navigator.clipboard?.writeText(path)
-      setCopied(true)
-      if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCopied(false), COPIED_MS)
-    } catch {
-      setFailure('The path could not be copied')
-    }
-  }
-
-  const label = canOpen ? 'Open config' : copied ? 'Copied' : 'Copy config path'
   return (
     <>
       <button
         type="button"
         className="sd-setting-button"
-        aria-label={`${canOpen ? 'Open config' : 'Copy config path'}: ${setting}`}
+        aria-label={`${config.name}: ${setting}`}
         title={
-          canOpen
+          config.canOpen
             ? `Opens ${path ?? '.sirdar/config.yaml'}`
             : `Copies ${path ?? 'the config path'}; the app cannot open files from a browser`
         }
-        disabled={!canOpen && !path}
-        onClick={() => void act()}
+        disabled={config.disabled}
+        onClick={config.run}
       >
-        {label}
+        {config.label}
       </button>
-      {failure && (
+      {config.failure && (
         <span className="form-error" role="alert">
-          {failure}
+          {config.failure}
         </span>
       )}
     </>

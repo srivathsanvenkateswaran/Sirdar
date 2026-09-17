@@ -24,12 +24,20 @@
  * swap, and `data-switching` says the wait is past the settle window in
  * `lib/pending`.
  */
+/*
+ * The window under the shell: the run header first, then whichever layout
+ * the preference names. The header is the Session's own row rather than
+ * each layout's, so the sheet's ground and ink belong to the frame — the
+ * layout below paints its own over the same colours.
+ */
 .sn-frame {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-inline-size: 0;
   min-block-size: 0;
+  color: var(--sd-ink);
+  background: var(--sd-sheet);
 }
 
 .sn-frame[data-switching] {

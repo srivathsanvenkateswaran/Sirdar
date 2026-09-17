@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
 import type { Transport } from '../../api/types'
-import { reasonOf } from '../../lib/format'
+import { usePathAction } from '../../lib/pathAction'
 import Button from '../../ui/button'
 import { noteLabel } from './noteBody'
 import './inspector.css'
@@ -18,9 +17,6 @@ import './inspector.css'
  * path instead.
  */
 
-/** How long the control says "Copied" before it goes back to offering. */
-const COPIED_MS = 2000
-
 export interface NoteFooterProps {
   transport: Transport
   workspaceId: string
@@ -32,36 +28,12 @@ export interface NoteFooterProps {
 }
 
 export default function NoteFooter({ transport, workspaceId, runId, path, notesDir }: NoteFooterProps): JSX.Element {
-  const [copied, setCopied] = useState(false)
-  const [failure, setFailure] = useState('')
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current)
-    },
-    [],
-  )
-  const canOpen = Boolean(transport.openNote)
-
-  async function act(): Promise<void> {
-    setFailure('')
-    if (canOpen) {
-      try {
-        await transport.openNote!(workspaceId, runId, path)
-      } catch (err) {
-        setFailure(reasonOf(err))
-      }
-      return
-    }
-    try {
-      await navigator.clipboard?.writeText(path)
-      setCopied(true)
-      if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCopied(false), COPIED_MS)
-    } catch {
-      setFailure('The path could not be copied')
-    }
-  }
+  const note = usePathAction({
+    path,
+    open: transport.openNote ? () => transport.openNote!(workspaceId, runId, path) : undefined,
+    openLabel: 'Open',
+    copyLabel: 'Copy path',
+  })
 
   return (
     <div className="si-notefoot" data-testid="note-footer">
@@ -69,12 +41,12 @@ export default function NoteFooter({ transport, workspaceId, runId, path, notesD
       <span className="si-notefoot__path" title={path} dir="ltr">
         <bdi>{noteLabel(path, notesDir)}</bdi>
       </span>
-      <Button variant="pale" size="sm" onClick={() => void act()} title={canOpen ? `Open ${path}` : path}>
-        {canOpen ? 'Open' : copied ? 'Copied' : 'Copy path'}
+      <Button variant="pale" size="sm" onClick={note.run} title={note.canOpen ? `Open ${path}` : path}>
+        {note.label}
       </Button>
-      {failure ? (
+      {note.failure ? (
         <span role="alert" className="si-notefoot__path">
-          {failure}
+          {note.failure}
         </span>
       ) : null}
     </div>

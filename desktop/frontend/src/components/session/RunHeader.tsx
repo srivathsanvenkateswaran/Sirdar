@@ -1,6 +1,8 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { memo, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import type { RunDetail, SourcesSummary, Transport } from '../../api/types'
 import { useAnchor } from '../../lib/anchor'
+import { runDirOf, usePathAction } from '../../lib/pathAction'
+import { probeRender } from '../../lib/renderProbe'
 import { parseBundle } from '../../lib/bundle'
 import { duration, parseTime, usd } from '../../lib/format'
 import { SESSION_LAYOUT_OPTIONS, sessionLayout, setSessionLayout, subscribeSessionLayout, type SessionLayout } from '../../lib/sessionLayout'
@@ -165,6 +167,11 @@ interface AboutProps {
   detail: RunDetail
   title?: string
   model: string
+  /**
+   * Reveals the run's directory in the desktop's file manager. Absent in a
+   * browser, where the control copies the path instead rather than going
+   * missing.
+   */
   onOpenRunDir?: () => void
 }
 
@@ -176,6 +183,14 @@ interface AboutProps {
  */
 function About({ detail, title, model, onOpenRunDir }: AboutProps): JSX.Element {
   const live = LIVE.has(detail.status)
+  // Open it on the desktop, copy its path in a browser: the run folder is
+  // named either way, so the web UI is not short the row.
+  const folder = usePathAction({
+    path: runDirOf(detail.bundleDir),
+    open: onOpenRunDir,
+    openLabel: 'Open run folder',
+    copyLabel: 'Copy run folder path',
+  })
   const [copied, setCopied] = useState(false)
   const [copyFailed, setCopyFailed] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -249,16 +264,22 @@ function About({ detail, title, model, onOpenRunDir }: AboutProps): JSX.Element 
           <CopyIcon />
           {copied ? 'Copied' : 'Copy'}
         </button>
-        {onOpenRunDir ? (
-          <button type="button" className="sn-about__act" onClick={onOpenRunDir}>
-            <OpenIcon />
-            Open run folder
+        {folder.disabled ? null : (
+          <button
+            type="button"
+            className="sn-about__act"
+            aria-label={folder.name}
+            title={folder.title}
+            onClick={folder.run}
+          >
+            {folder.canOpen ? <OpenIcon /> : <CopyIcon />}
+            {folder.label}
           </button>
-        ) : null}
+        )}
       </div>
-      {copyFailed ? (
+      {copyFailed || folder.failure ? (
         <p className="sn-about__failed" role="alert">
-          {copyFailed}
+          {copyFailed || folder.failure}
         </p>
       ) : null}
     </>
@@ -299,8 +320,15 @@ export interface RunHeaderProps {
  * and needs it to say what run this is, not to recite the run. Stopping a
  * live run belongs to the composer's Stop, beside the box the reader is
  * already looking at.
+ *
+ * The Session renders it once, above the layout, and it is memoised on its
+ * props: a layout that redraws for a streamed line — or is swapped for
+ * another layout entirely — leaves the header's own DOM nodes alone, so the
+ * popover stays open and the row does not blink. Everything it takes is a
+ * value or an identity the dispatcher holds still; pass no `switcher` and
+ * it wires its own, which keeps the prop stable across a switch.
  */
-export default function RunHeader({
+function RunHeaderRow({
   detail,
   title,
   sources,
@@ -311,6 +339,7 @@ export default function RunHeader({
   transport,
   workspaceId,
 }: RunHeaderProps): JSX.Element {
+  probeRender('RunHeader')
   const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const [open, setOpen] = useState(false)
   const [links, setLinks] = useState<{ trackerUrl?: string; helpdeskUrl?: string }>({})
@@ -440,6 +469,14 @@ export default function RunHeader({
     </header>
   )
 }
+
+/**
+ * The header as the Session mounts it: the same row, redrawn only when one
+ * of its own props changes.
+ */
+const RunHeader = memo(RunHeaderRow)
+RunHeader.displayName = 'RunHeader'
+export default RunHeader
 
 /**
  * The number the row does not head with: the helpdesk's when the reader is

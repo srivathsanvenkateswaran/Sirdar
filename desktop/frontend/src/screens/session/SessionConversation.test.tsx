@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppEvent, RunDetail, RunEvent } from '../../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../../components/shell/primaryAction'
 import { resetRunJobs, setRunJob } from '../../lib/jobs'
+import { resetSessionLayout, setSessionLayout } from '../../lib/sessionLayout'
 import { createFakeTransport, diff, type FakeTransport } from '../../store/fakeTransport'
 import {
   FIX_DETAIL,
@@ -13,7 +14,7 @@ import {
   fixEvents,
   triageEvents,
 } from './fixtures'
-import SessionConversation from './SessionConversation'
+import Session from '../Session'
 
 /*
  * The six scenes of the mock (docs/design/2026-09-16-session/A), against
@@ -57,7 +58,12 @@ function Published(): JSX.Element {
   )
 }
 
-function renderScene(f: Fake, props: Partial<React.ComponentProps<typeof SessionConversation>> = {}) {
+/*
+ * The scenes are mounted through the Session, not through the layout: the
+ * run header lives above the layouts now, and the feed they draw from is
+ * the dispatcher's. `beforeEach` pins the preference to `conversation`.
+ */
+function renderScene(f: Fake, props: Partial<React.ComponentProps<typeof Session>> = {}) {
   const onBack = vi.fn()
   const onOpenReview = vi.fn()
   const onStartFix = vi.fn()
@@ -65,7 +71,7 @@ function renderScene(f: Fake, props: Partial<React.ComponentProps<typeof Session
   const view = render(
     <PrimaryActionProvider>
       <Published />
-      <SessionConversation
+      <Session
         transport={f.transport}
         workspaceId="ws1"
         runId={runId}
@@ -104,9 +110,11 @@ describe('SessionConversation', () => {
   beforeEach(() => {
     resetRunJobs()
     localStorage.clear()
+    setSessionLayout('conversation')
   })
   afterEach(() => {
     localStorage.clear()
+    resetSessionLayout()
   })
 
   describe('S1 — the finished triage', () => {

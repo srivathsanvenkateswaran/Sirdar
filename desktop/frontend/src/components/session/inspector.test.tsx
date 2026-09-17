@@ -202,7 +202,18 @@ describe('the bundle pane', () => {
     expect(onOpenFolder).toHaveBeenCalled()
   })
 
-  it('leaves the menu out where nothing can open a folder', async () => {
+  it('copies the bundle path in a browser, which can open no folder', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const dir = '/ws/.sirdar/runs/SBX-1/r1/bundle'
+    render(<BundlePane transport={transport()} workspaceId="ws1" runId={TRIAGE_RUN_ID} folderPath={dir} />)
+    await screen.findByTestId('bundle-view')
+    fireEvent.click(screen.getByRole('button', { name: 'Bundle options' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Copy bundle path' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(dir))
+  })
+
+  it('leaves the menu out where there is neither a folder to open nor a path to copy', async () => {
     render(<BundlePane transport={transport()} workspaceId="ws1" runId={TRIAGE_RUN_ID} />)
     await screen.findByTestId('bundle-view')
     expect(screen.queryByRole('button', { name: 'Bundle options' })).toBeNull()
