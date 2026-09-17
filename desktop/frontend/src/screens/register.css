@@ -4,10 +4,10 @@
  *
  * Sizes are lifted from docs/design/2026-09-15-screens/Register.html for the
  * page inset (40/48/32) and the table's cells. The band over the table is
- * the 2026-09-17 compaction: two compact stat cards in one row (73px) and a
- * compact 26-week grid beside them (144px: 12px padding, the 18px title and
+ * the 2026-09-17 compaction: two compact stat cards in one row (64px) and a
+ * compact 26-week grid beside them (142px: 12px padding, the 16px title and
  * legend row, 4px, and the grid's 98px), so the table under them takes the
- * rest of the sheet — nine rows of it at 1440x900. Every colour is a token; nothing here
+ * rest of the sheet — twelve rows of it at 1440x900. Every colour is a token; nothing here
  * casts a shadow.
  */
 
@@ -205,7 +205,7 @@
 .register-provider {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sd-space-2);
 }
 
 .register-when {
@@ -222,12 +222,12 @@
 
 .register-chip {
   display: inline-block;
-  padding-block: 3px;
-  padding-inline: 10px;
+  padding-block: 2px;
+  padding-inline: var(--sd-space-2);
   border: 1px solid var(--sd-rule-strong);
   border-radius: 6px;
   color: var(--sd-ink-3);
-  font-size: var(--sd-text-ledger);
+  font-size: var(--sd-text-micro);
   line-height: 1.5;
   white-space: nowrap;
 }

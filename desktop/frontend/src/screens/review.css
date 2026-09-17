@@ -34,7 +34,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: var(--sd-space-4);
-  min-block-size: 72px;
+  min-block-size: 48px;
   padding-inline: var(--sd-space-6);
   border-block-end: 1px solid var(--sd-rule);
 }
@@ -47,7 +47,7 @@
 .review-key {
   margin: 0;
   font-family: var(--sd-font-mono);
-  font-size: 18px;
+  font-size: var(--sd-text-body-l);
   font-weight: 600;
   letter-spacing: 0.01em;
   unicode-bidi: isolate;
@@ -153,7 +153,7 @@
   align-items: center;
   gap: var(--sd-space-2);
   inline-size: 100%;
-  min-block-size: 44px;
+  min-block-size: 30px;
   padding-block: 0;
   padding-inline: var(--sd-space-4);
   border: 0;
@@ -249,8 +249,8 @@
   flex: 0 0 auto;
   align-items: center;
   gap: var(--sd-space-4);
-  min-block-size: 56px;
-  padding-inline: 20px;
+  min-block-size: 44px;
+  padding-inline: var(--sd-space-4);
   border-block-end: 1px solid var(--sd-rule);
 }
 
@@ -314,7 +314,7 @@
   min-block-size: 0;
   padding: var(--sd-space-5);
   overflow-y: auto;
-  font-size: 15px;
+  font-size: var(--sd-text-body);
   line-height: 1.5;
 }
 
@@ -353,7 +353,7 @@
 }
 
 .review-note__label {
-  font-size: 15px;
+  font-size: var(--sd-text-body);
   font-weight: 500;
   color: var(--sd-ink);
 }
@@ -374,7 +374,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sd-space-3);
-  min-block-size: 64px;
+  min-block-size: 48px;
   padding-block: var(--sd-space-2);
   padding-inline: var(--sd-space-6);
   border-block-start: 1px solid var(--sd-rule);
