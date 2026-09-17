@@ -68,7 +68,7 @@ export default function ComposerStrip({ state, detail, busy, error, onSend, sent
         ? reply
           ? 'Type the answer first'
           : 'Type the instruction first'
-        : `${label} (⌘↵)`
+        : `${label} (↵)`
   const placeholder =
     state.kind === 'disabled'
       ? state.reason

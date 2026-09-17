@@ -375,7 +375,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
           onRun: () => {},
           disabled: mode.kind === 'disabled',
           busy: sendBusy,
-          shortcut: '⌘↵',
+          shortcut: '↵',
           title: mode.kind === 'disabled' ? mode.reason : undefined,
           placement: 'screen',
         }

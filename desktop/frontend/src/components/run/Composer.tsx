@@ -83,7 +83,7 @@ export default function Composer({
         ? mode.kind === 'answer'
           ? 'Type the answer first'
           : 'Type the instruction first'
-        : `${label} (⌘↵)`
+        : `${label} (↵)`
   const placeholder =
     mode.kind === 'disabled'
       ? mode.reason

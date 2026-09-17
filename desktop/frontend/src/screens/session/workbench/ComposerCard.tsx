@@ -33,7 +33,7 @@ export interface ComposerStripProps {
   placeholder: string
   /** Text put into the field from outside — a question option the reader picked. Changes on each pick. */
   prefill?: { text: string; n: number }
-  /** Focused when the reader presses ⌘↵ with nothing typed, or when the run blocks. */
+  /** Focused when the reader presses ↵ with nothing typed, or when the run blocks. */
   autoFocus?: boolean
 }
 
@@ -83,7 +83,7 @@ export default function ComposerCard({
         ? mode.kind === 'answer'
           ? 'Type the answer first'
           : 'Type the instruction first'
-        : `${label} (⌘↵)`
+        : `${label} (↵)`
 
   const submit = () => {
     if (disabled || busy) return
@@ -91,7 +91,7 @@ export default function ComposerCard({
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       submit()
     }
@@ -154,7 +154,7 @@ export default function ComposerCard({
       <Button
         type="submit"
         variant="primary"
-        shortcut="⌘↵"
+        shortcut="↵"
         busy={busy}
         disabled={disabled && !busy}
         title={title}

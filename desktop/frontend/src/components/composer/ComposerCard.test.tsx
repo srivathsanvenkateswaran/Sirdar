@@ -42,7 +42,7 @@ function Harness({
 
 describe('ComposerCard', () => {
   it('is a form holding the labelled textarea, the chips with hairlines between, and one round primary send', () => {
-    render(<Harness send={{ title: 'Start (⌘↵)' }} />)
+    render(<Harness send={{ title: 'Start (↵)' }} />)
     const form = screen.getByRole('form', { name: 'Start' })
     const box = within(form).getByRole('textbox', { name: 'Ticket key or URL' })
     expect(box).toHaveAttribute('placeholder', 'Paste a ticket key')
@@ -50,7 +50,7 @@ describe('ComposerCard', () => {
     const send = within(form).getByRole('button', { name: 'Start' })
     expect(send).toHaveAttribute('data-variant', 'primary')
     expect(send).toHaveAttribute('data-icon-only', 'true')
-    expect(send).toHaveAttribute('title', 'Start (⌘↵)')
+    expect(send).toHaveAttribute('title', 'Start (↵)')
     expect(send).toHaveAttribute('aria-keyshortcuts', 'Enter')
     expect(send.closest('.composer-send')).not.toBeNull()
   })
