@@ -18,6 +18,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/transcribe"
 )
 
@@ -37,6 +38,9 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	checks = append(checks, identityCheck(cfg))
 	checks = append(checks, providerChecks(ctx, cfg)...)
 	checks = append(checks, sourceChecks(ctx, cfg)...)
+	if c, ok := queueTypesCheck(ctx, cfg); ok {
+		checks = append(checks, c)
+	}
 	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg), transcribeCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
 	return levelled(checks)
@@ -275,6 +279,72 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 	default:
 		return []Check{{Name: name, Detail: fmt.Sprintf("unknown adapter %q", sc.Adapter)}}
 	}
+}
+
+// queueProbeLimit is how many of the reader's own tickets the queue check
+// asks for. Enough to be sure a tracker that types its records typed at
+// least one of them, few enough to be one cheap page.
+const queueProbeLimit = 25
+
+// queueTypesCheck says whether the queue's type filter can match anything
+// at all. It reports false when there is nothing to check.
+//
+// A tracker whose adapter reports no type on any ticket and a filter of
+// [bug] make an empty board that looks like an outage: nothing is assigned
+// to you, says a lane that should be full. The filter is right to drop
+// them — a type nobody stated is not a bug — but the operator has to be
+// told, because the fix is theirs: widen the filter, or teach the adapter
+// to report a type. No listing happens when the filter is the wildcard,
+// since then there is nothing it could be hiding.
+func queueTypesCheck(ctx context.Context, cfg *config.Config) (Check, bool) {
+	if cfg.Sources.Tracker == nil {
+		return Check{}, false
+	}
+	types := cfg.QueueTypes()
+	name := "sources.tracker queue"
+	if config.QueueTypesAll(types) {
+		return Check{Name: name, OK: true, Detail: "every ticket type"}, true
+	}
+	shown := "types=" + strings.Join(types, ", ")
+
+	ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
+	defer cancel()
+	tracker, _, cleanup, err := BuildSources(cfg, io.Discard)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil || tracker == nil {
+		// Whatever is wrong with the source, the check above it already
+		// said so; repeating it here would only be a second red line.
+		return Check{Name: name, OK: true, Detail: shown}, true
+	}
+	rows, err := tracker.List(ctx, source.ListFilter{
+		Assignee: queueAssignee(cfg, source.SelfAssignee),
+		Limit:    queueProbeLimit,
+	})
+	if err != nil {
+		return Check{Name: name, OK: true, Detail: shown}, true
+	}
+	return queueTypesVerdict(name, shown, rows), true
+}
+
+// queueTypesVerdict is the reading of what the tracker answered with. It is
+// separate from the call so the sentence an operator has to act on can be
+// tested without a tracker behind it.
+func queueTypesVerdict(name, shown string, rows []ticket.TrackerTicket) Check {
+	if len(rows) == 0 {
+		// Nothing is assigned to the reader right now, so the tickets say
+		// nothing about whether this tracker types them.
+		return Check{Name: name, OK: true, Detail: shown}
+	}
+	for _, r := range rows {
+		if strings.TrimSpace(r.Type) != "" {
+			return Check{Name: name, OK: true, Detail: shown}
+		}
+	}
+	return warn(name, fmt.Sprintf(
+		"%s, but this tracker reported no type on any of the %s it listed, so the queue will be empty; widen it with sources.tracker.queue.types: [\"*\"], or have the adapter report a type",
+		shown, countPhrase(len(rows), "ticket")))
 }
 
 // builtinProbe builds a built-in tracker adapter with the credentials the

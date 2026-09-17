@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -157,8 +158,34 @@ func TestQueue(t *testing.T) {
 	if len(got) != 1 || got[0].Key != "OMNI-2510" {
 		t.Fatalf("tickets %+v", got)
 	}
-	if want := (QueueFilter{Assignee: "sri", Status: "Open", Limit: 20}); f.gotFilter != want {
+	if want := (QueueFilter{Assignee: "sri", Status: "Open", Limit: 20}); !reflect.DeepEqual(f.gotFilter, want) {
 		t.Fatalf("filter %+v, want %+v", f.gotFilter, want)
+	}
+	// No `types` in the query is not an empty list: it is the caller
+	// leaving the workspace's configured filter alone.
+	if f.gotFilter.Types != nil {
+		t.Fatalf("types = %v, want nil when the parameter is absent", f.gotFilter.Types)
+	}
+}
+
+func TestQueueTypesParameter(t *testing.T) {
+	for _, tc := range []struct {
+		query string
+		want  []string
+	}{
+		{"?types=bug", []string{"bug"}},
+		{"?types=bug,incident", []string{"bug", "incident"}},
+		{"?types=bug&types=incident", []string{"bug", "incident"}},
+		{"?types=%20bug%20,,incident", []string{"bug", "incident"}},
+		// Present but empty: the caller asking for every type, which is a
+		// different request from not asking.
+		{"?types=", []string{}},
+	} {
+		f := newFake()
+		do(t, f, "GET", "/api/workspaces/"+knownWS+"/queue"+tc.query, "")
+		if !reflect.DeepEqual(f.gotFilter.Types, tc.want) {
+			t.Errorf("%s: types = %#v, want %#v", tc.query, f.gotFilter.Types, tc.want)
+		}
 	}
 }
 
