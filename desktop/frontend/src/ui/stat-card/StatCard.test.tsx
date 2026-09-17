@@ -25,4 +25,19 @@ describe('StatCard', () => {
     const { container } = render(<StatCard label="Confirmed" value="71%" />)
     expect(container.querySelector('.sd-stat__detail')).toBeNull()
   })
+
+  it('is the default size unless told otherwise, and keeps the label before the figure when compact', () => {
+    const { container, rerender } = render(<StatCard label="Spend" value="$45.53" detail="claude $45.53" />)
+    expect(container.querySelector('.sd-stat')).toHaveAttribute('data-size', 'default')
+
+    rerender(<StatCard label="Spend" value="$45.53" detail="claude $45.53" size="compact" />)
+    const card = container.querySelector('.sd-stat')
+    expect(card).toHaveAttribute('data-size', 'compact')
+    // The eye sees the figure first; the reader still hears "Spend, $45.53".
+    expect([...card!.children].map((el) => el.className)).toEqual([
+      'sd-stat__label',
+      'sd-stat__value',
+      'sd-stat__detail',
+    ])
+  })
 })

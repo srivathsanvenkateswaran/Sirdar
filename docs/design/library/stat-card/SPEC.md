@@ -8,22 +8,30 @@
 ## What it is
 
 One big figure with a small grey label over it and one line of context under
-it. The Register's three — runs this week, spent, confirmed — sit beside the
-heatmap.
+it — or, compact, the figure and its label on one line with the context under
+them. The Register's two — runs this week and spend — sit in a strip beside
+the heatmap.
 
 Built. `desktop/frontend/src/ui/stat-card/`, used in the app on the
 Register. New in the 2026-09-15 screens round.
 
 ## Anatomy
 
-- `div.sd-stat` — a column, `gap: 4px`, `padding-block: 16px`,
-  `padding-inline: 24px`, `--sd-radius-md`, `--sd-card-row` fill.
+- `div.sd-stat[data-size]` — a column, `gap: 4px`, `padding-block: 16px`,
+  `padding-inline: 24px`, `--sd-radius-md`, `--sd-card-row` fill. `default`
+  or `compact`.
 - `span.sd-stat__label` — `--sd-text-body` weight 500 in `--sd-ink-3`.
 - `span.sd-stat__value` — 36px weight 500, tabular, `line-height: 1`,
   `dir="ltr"`, with the exact number as its `title` when the shown one is
   rounded.
 - `span.sd-stat__detail` — `--sd-text-meta` in `--sd-ink-2`, one line, no
   wrapping.
+
+Compact (`size="compact"`): a two-column grid, the 28px figure and the
+`--sd-text-meta` label on one baseline, the detail under both, at 12px block
+and 16px inline padding — about 72px tall. The DOM order is unchanged, so a
+screen reader still hears the label first; the grid areas put the figure
+first for the eye. The label and detail ellipsise rather than wrap.
 
 ## States
 
@@ -59,8 +67,9 @@ one component, which by `01-tokens.md` section 4 keeps it here.
   disagree with the table under it.
 - **Do** keep the detail to one line. It is the denominator or the
   comparison, not a paragraph.
-- **Don't** stack more than three. The Register has three because it has
-  three facts worth a headline.
+- **Don't** stack more than three. The Register has two because it has two
+  facts worth a headline; the share of verdicts that were confirmed was a
+  third until the owner asked what it was for.
 
 ## Accessibility
 
@@ -69,6 +78,11 @@ reads "Runs this week, 38". Contrast: `--sd-ink` on a card row **15.70:1**,
 `--sd-ink-2` **7.37:1**, `--sd-ink-3` **4.73:1** light. No motion.
 
 ## Changelog
+
+### 2026-09-17 (register compact)
+Gained `size="compact"`: the figure at 28px beside its label, the detail
+under the pair, about 72px tall. The Register's stats became a one-row strip
+of two so the table under them gets the height; the Confirmed card is gone.
 
 ### 2026-09-15
 Added, from `.figs .card` in `docs/design/2026-09-15-screens/Register.html`.

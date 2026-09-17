@@ -213,8 +213,6 @@ export interface LedgerRow {
   reason: string
 }
 
-const VERDICTS = new Set(['confirmed', 'partial', 'wrong'])
-
 /** `YYYY-MM-DD` in the reader's own timezone, or '' when the stamp is not one. */
 export function dayOf(stamp: string | undefined): string {
   if (!stamp) return ''
@@ -410,36 +408,6 @@ export function spendLine(
     named.push(`others ${money(rest.reduce((sum, p) => sum + p.costUsd, 0))}`)
   }
   return named.join(' · ')
-}
-
-export interface ConfirmedSummary {
-  /** Register rows carrying a verdict a person recorded. */
-  recorded: number
-  /** Of those, how many said the hypothesis held. */
-  confirmed: number
-  /** confirmed / recorded as a whole percentage; 0 when nothing is recorded. */
-  percent: number
-}
-
-/**
- * The share of recorded verdicts that were "confirmed". Only the register
- * carries verdicts, and only a triage row carries one; a partial or a wrong
- * verdict counts as recorded and not as confirmed.
- */
-export function confirmedShare(rows: RegisterRow[]): ConfirmedSummary {
-  let recorded = 0
-  let confirmed = 0
-  for (const row of rows) {
-    const v = (row.triageVerdict ?? '').toLowerCase()
-    if (!VERDICTS.has(v)) continue
-    recorded += 1
-    if (v === 'confirmed') confirmed += 1
-  }
-  return {
-    recorded,
-    confirmed,
-    percent: recorded === 0 ? 0 : Math.round((confirmed / recorded) * 100),
-  }
 }
 
 /** Runs per day for the grid: every ledger row on a day it can name. */

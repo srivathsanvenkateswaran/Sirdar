@@ -37,3 +37,42 @@
   line-height: 1.2;
   white-space: nowrap;
 }
+
+/*
+ * Compact: the figure at 28px with its label beside it on the baseline, and
+ * the detail under the pair, at 12px block and 16px inline padding. The DOM
+ * order stays label, figure, detail, so a screen reader still hears "Runs
+ * this week, 38"; the grid puts the figure first for the eye.
+ */
+.sd-stat[data-size='compact'] {
+  display: grid;
+  grid-template-areas:
+    'value label'
+    'detail detail';
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: var(--sd-space-2);
+  row-gap: var(--sd-space-1);
+  min-inline-size: 0;
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
+}
+
+.sd-stat[data-size='compact'] .sd-stat__label {
+  grid-area: label;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--sd-text-meta);
+}
+
+.sd-stat[data-size='compact'] .sd-stat__value {
+  grid-area: value;
+  font-size: 28px;
+}
+
+.sd-stat[data-size='compact'] .sd-stat__detail {
+  grid-area: detail;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

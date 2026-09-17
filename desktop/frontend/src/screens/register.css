@@ -2,10 +2,13 @@
  * The Register screen: the page's own frame around the library's Page head,
  * Stat card, Heatmap and Data table.
  *
- * Sizes are lifted from docs/design/2026-09-15-screens/Register.html: a
- * 40/48/32 page inset, a 360px column of figures beside the heat card, a
- * 24px band gap, and the table's own cells. Every colour is a token; nothing
- * here casts a shadow.
+ * Sizes are lifted from docs/design/2026-09-15-screens/Register.html for the
+ * page inset (40/48/32) and the table's cells. The band over the table is
+ * the 2026-09-17 compaction: two compact stat cards in one row (73px) and a
+ * compact 26-week grid beside them (144px: 12px padding, the 18px title and
+ * legend row, 4px, and the grid's 98px), so the table under them takes the
+ * rest of the sheet — nine rows of it at 1440x900. Every colour is a token; nothing here
+ * casts a shadow.
  */
 
 .register {
@@ -15,80 +18,82 @@
   min-block-size: 0;
   padding-block: var(--sd-page-pad-block) var(--sd-space-6);
   padding-inline: var(--sd-page-pad-inline);
+  /* The table scrolls inside itself; this is the fallback for a window too
+     short to hold the band and the table's minimum, so nothing is clipped. */
   overflow-y: auto;
 }
 
 .register-head {
-  margin-block-end: var(--sd-space-6);
-}
-
-/* ---------- the band: three figures beside the grid ---------- */
-
-.register-band {
-  display: flex;
-  gap: var(--sd-space-5);
+  flex: 0 0 auto;
   margin-block-end: var(--sd-space-5);
 }
 
-.register-figs {
+/* ---------- the band: the stat strip beside the grid ---------- */
+
+.register-band {
   display: flex;
-  flex: 0 0 360px;
-  flex-direction: column;
-  gap: var(--sd-space-3);
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: var(--sd-space-4);
+  margin-block-end: var(--sd-space-4);
 }
 
-.register-heatcard {
-  flex: 1;
+/* Two compact stats in one row, each taking half of what the grid leaves. */
+.register-strip {
+  display: flex;
+  flex: 1 1 0;
+  gap: var(--sd-space-3);
   min-inline-size: 0;
-  padding: var(--sd-space-5);
+}
+
+.register-strip > * {
+  flex: 1 1 0;
+  min-inline-size: 0;
+}
+
+/* The grid at its own width: 26 columns of 10 at 2, the weekday letters, and
+   the card's 16px sides. The legend sits on the title row. */
+.register-heatcard {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
   border-radius: var(--sd-radius-md);
   background: var(--sd-card-row);
 }
 
 .register-heatcard__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--sd-space-4);
-  margin-block-end: var(--sd-space-4);
+  margin-block-end: var(--sd-space-1);
 }
 
+/* The title sits on the strip's label scale: the band reads as one row, not
+   as a card with a heading beside two figures. */
 .register-heatcard__title {
   margin: 0;
-  font-size: var(--sd-text-title);
+  font-size: var(--sd-text-meta);
   font-weight: 500;
   line-height: 1.25;
 }
 
-.register-heatcard__side {
-  color: var(--sd-ink-3);
-  font-size: var(--sd-text-ledger);
-}
-
 /*
- * Under 1300 the figures go above the grid rather than beside it, as a row
- * of three; the heat card keeps its own horizontal scroll (the library's
- * Heatmap scrolls inside it) so the page never scrolls sideways.
+ * Under 1300 the grid goes under the strip rather than beside it; the strip
+ * stays one row of two. The heat card keeps its own horizontal scroll (the
+ * library's Heatmap scrolls inside it) so the page never scrolls sideways.
  */
 @media (max-width: 1299px) {
   .register-band {
     flex-direction: column;
-  }
-
-  .register-figs {
-    flex-basis: auto;
-    flex-direction: row;
-  }
-
-  .register-figs > * {
-    flex: 1 1 0;
-    min-inline-size: 0;
+    align-items: stretch;
   }
 }
 
-/* Under 720 the three figures stack again. */
+/* Under 720 the two stats stack. */
 @media (max-width: 720px) {
-  .register-figs {
+  .register-strip {
     flex-direction: column;
   }
 }
@@ -97,9 +102,10 @@
 
 .register-toolbar {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--sd-space-3);
-  margin-block-end: var(--sd-space-4);
+  margin-block-end: var(--sd-space-3);
 }
 
 .register-day {
@@ -143,6 +149,27 @@
   color: var(--sd-ink);
   font: inherit;
   font-size: var(--sd-text-body);
+}
+
+/* ---------- the table: everything under the band ---------- */
+
+/*
+ * The table's scroll container fills what the band and the toolbar leave,
+ * and scrolls on its own axis inside it, so the sticky header holds and the
+ * window never scrolls. It shrinks to its rows when there are few, and never
+ * under 200px: a window shorter than that scrolls the page instead.
+ */
+.register-table {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 200px;
+}
+
+.register-table .sd-table__scroll {
+  flex: 0 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
 }
 
 /* ---------- cells ---------- */
