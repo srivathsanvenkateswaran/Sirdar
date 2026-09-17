@@ -13,6 +13,7 @@ type (
 	Budget               = app.Budget
 	RunSummary           = app.RunSummary
 	RunDetail            = app.RunDetail
+	Attachment           = app.Attachment
 	SearchHit            = app.SearchHit
 	RunDiff              = app.RunDiff
 	DiffFile             = app.DiffFile

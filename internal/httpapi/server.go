@@ -13,7 +13,9 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +87,8 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/events", s.runEvents)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/note", s.note)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/prompt", s.prompt)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/bundle/attachments", s.attachments)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/bundle/attachments/{name...}", s.attachmentFile)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/diff", s.runDiff)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/diff/drop", s.dropHunk)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/triage", s.startTriage)
@@ -301,6 +305,53 @@ func (s *server) prompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeMarkdown(w, md)
+}
+
+// attachments lists the run bundle's attachments: name, bundle-relative
+// path, type, size and modification time. It is a list of what the bundle
+// itself recorded, not a reading of the directory, so a file nobody
+// downloaded is not offered and the directory is never enumerated.
+func (s *server) attachments(w http.ResponseWriter, r *http.Request) {
+	list, err := s.svc.Attachments(r.PathValue("id"), r.PathValue("runId"))
+	if err != nil {
+		s.failDocument(w, err)
+		return
+	}
+	if list == nil {
+		list = []Attachment{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// attachmentFile serves one attachment out of the run's own bundle
+// directory. The Service resolves the path and refuses anything that does
+// not end up inside that directory; everything refused is a 404, so a
+// prober learns nothing from the difference between a file that is not
+// there and a path that was not allowed.
+func (s *server) attachmentFile(w http.ResponseWriter, r *http.Request) {
+	full, ctype, err := s.svc.AttachmentFile(r.PathValue("id"), r.PathValue("runId"), path.Join("attachments", r.PathValue("name")))
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "no such attachment")
+		return
+	}
+	f, err := os.Open(full)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "not_found", "no such attachment")
+		return
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil || info.IsDir() {
+		writeError(w, http.StatusNotFound, "not_found", "no such attachment")
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	// A helpdesk attachment is somebody else's file. Nothing in it is
+	// allowed to be sniffed into a document, and nothing in it is allowed
+	// to run in the app's origin.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	http.ServeContent(w, r, filepath.Base(full), info.ModTime(), f)
 }
 
 // --- jobs ---

@@ -34,17 +34,21 @@ type dropCall struct {
 type fake struct {
 	mu sync.Mutex
 
-	workspaces []Workspace
-	tickets    []Ticket
-	runs       []RunSummary
-	detail     RunDetail
-	events     []RunEvent
-	next       int
-	note       string
-	prompt     string
-	register   []RegisterRow
-	checks     []Check
-	quotas     []Quota
+	workspaces  []Workspace
+	tickets     []Ticket
+	runs        []RunSummary
+	detail      RunDetail
+	events      []RunEvent
+	next        int
+	note        string
+	prompt      string
+	attachments []Attachment
+	// attachmentFiles maps a bundle-relative path to the file on disk the
+	// fake would serve for it; anything else is refused.
+	attachmentFiles map[string]string
+	register        []RegisterRow
+	checks          []Check
+	quotas          []Quota
 
 	golden  []GoldenEntry
 	reports []EvalReport
@@ -308,6 +312,24 @@ func (f *fake) Prompt(wsID, runID string) (string, error) {
 		return "", err
 	}
 	return f.prompt, nil
+}
+
+func (f *fake) Attachments(wsID, runID string) ([]Attachment, error) {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return nil, err
+	}
+	return f.attachments, nil
+}
+
+func (f *fake) AttachmentFile(wsID, runID, name string) (string, string, error) {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return "", "", err
+	}
+	full, ok := f.attachmentFiles[name]
+	if !ok {
+		return "", "", fmt.Errorf("no such attachment %q", name)
+	}
+	return full, "text/plain; charset=utf-8", nil
 }
 
 func (f *fake) RunDiff(wsID, runID string) (RunDiff, error) {
