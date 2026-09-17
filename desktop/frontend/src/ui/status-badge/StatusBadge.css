@@ -2,18 +2,21 @@
  * Status badge. Seven hues, each with its word. The fill is a tint of the hue so
  * the badge reads at a glance; the text is the hue at full strength, which is
  * what clears 4.5:1.
+ *
+ * 20 tall at the 2026-09-17 density: the micro face on the body's leading
+ * between 2px above and below.
  */
 
 .sd-badge {
   display: inline-flex;
   align-items: center;
-  padding-block: 1px;
+  padding-block: 2px;
   padding-inline: var(--sd-space-2);
   border-radius: var(--sd-radius-pill);
   background: color-mix(in srgb, var(--sd-badge-hue, var(--sd-st-queue)) 13%, transparent);
   color: var(--sd-badge-hue, var(--sd-st-queue));
   font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-meta);
+  font-size: var(--sd-text-micro);
   line-height: 1.5;
   white-space: nowrap;
 }
