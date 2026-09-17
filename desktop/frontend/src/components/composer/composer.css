@@ -196,8 +196,8 @@
 }
 
 .composer-send[data-stop='true'] > .sd-button > svg {
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: 20px;
+  block-size: 20px;
 }
 
 /* Wide: the word beside the arrow, still round-ended, still 36 tall. */

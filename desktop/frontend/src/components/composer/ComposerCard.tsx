@@ -103,7 +103,7 @@ function ArrowUpIcon(): JSX.Element {
 function StopIcon(): JSX.Element {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
-      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <rect x="6" y="6" width="12" height="12" rx="2.5" />
     </svg>
   )
 }

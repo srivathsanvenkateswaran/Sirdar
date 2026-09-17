@@ -1656,8 +1656,8 @@ button.wb-ttab:hover,
   color: var(--sd-st-failed);
 }
 .wb-cmd__stop .sd-button > svg {
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: 20px;
+  block-size: 20px;
 }
 
 /* ----------------------------------------------------------------- motion */
