@@ -54,25 +54,49 @@ afterEach(() => {
 })
 
 describe('what a streamed line costs', () => {
-  it('draws nothing again for 120 lines the transcript does not show', async () => {
+  it('costs one render for 120 lines the transcript does not show', async () => {
     const backfill = triageEvents()
     const transport = mount(backfill)
     const stream$ = await screen.findByTestId('conversation')
     const before = stream$.innerHTML
 
     resetRenderCounts()
-    for (let i = 0; i < 120; i += 1) {
-      line(transport, backfill.length + i + 1, stream(`2026-09-15T12:14:${String(i % 60).padStart(2, '0')}Z`))
+    // The report's scenario: a line every 50ms for six seconds, on the clock.
+    vi.useFakeTimers()
+    try {
+      for (let i = 0; i < 120; i += 1) {
+        line(transport, backfill.length + i + 1, stream(`2026-09-15T12:14:${String(i % 60).padStart(2, '0')}Z`))
+        act(() => {
+          vi.advanceTimersByTime(50)
+        })
+      }
+      // And the stream going quiet, which is when the held lines land.
+      act(() => {
+        vi.advanceTimersByTime(500)
+      })
+    } finally {
+      vi.useRealTimers()
     }
 
-    // Not a character moved, and no card below the screen was drawn again.
+    // Not a character moved, no card below the screen was drawn again, and
+    // the whole six seconds cost the screen the one render that put the
+    // held lines in the list. The report measured 35 commits for this.
     expect(stream$.innerHTML).toBe(before)
     expect(renderCount('ToolStep')).toBe(0)
     expect(renderCount('AnswerCard')).toBe(0)
-    // The screen itself still renders for the state each line sets, once
-    // per line, and nothing below it renders at all: the budget the report
-    // asks for is two component renders a line.
-    expect(renderCount('SessionConversation')).toBeLessThanOrEqual(120)
+    expect(renderCount('SessionConversation')).toBeLessThanOrEqual(5)
+
+    // And nothing was dropped on the way: the line after them draws, in its
+    // place, off a list that still carries all 120.
+    line(transport, backfill.length + 121, {
+      t: '2026-09-15T12:14:30Z',
+      kind: 'tool_started',
+      payload: {
+        tool: 'Bash',
+        raw: { type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu-after', name: 'Bash', input: { command: 'go vet ./...', description: 'Vet the module' } }] } },
+      },
+    })
+    await screen.findByRole('button', { name: /Vet the module/ })
   })
 
   it('draws only the rows a line that does show touches', async () => {

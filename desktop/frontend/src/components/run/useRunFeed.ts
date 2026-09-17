@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { RunDetail, RunEvent, RunSummary, Transport } from '../../api/types'
-import type { IndexedEvent } from '../../lib/events'
+import { drawsNothing, type IndexedEvent } from '../../lib/events'
 import { parseTime, reasonOf } from '../../lib/format'
 
 /** The states in which the agent is working. */
@@ -12,6 +12,22 @@ export const LIVE: ReadonlySet<string> = new Set(['preparing', 'running'])
  * offer there and the artefacts are not asked for again.
  */
 export const TERMINAL: ReadonlySet<string> = new Set(['completed', 'failed', 'over_budget'])
+
+/**
+ * How long a line no layout draws is held before the list is updated for it
+ * anyway, and how many may pile up before it is updated regardless.
+ *
+ * Most of a live run's log is chatter the transcript throws away, and each
+ * line of it used to set state and render the screen for a frame that looked
+ * exactly like the one before: 120 of them cost 35 React commits
+ * (`docs/research/14-session-perf.md`, finding #5). Held here, they cost one
+ * — they go into the list with the next line that does draw, or once the
+ * stream has been quiet for `HOLD_MS`, or when `HOLD_MAX` of them have piled
+ * up, whichever comes first. Nothing is dropped and the order is the log's,
+ * so what the model is handed is still a prefix of the log.
+ */
+const HOLD_MS = 200
+const HOLD_MAX = 200
 
 /**
  * Puts an event where its index belongs. The live stream arrives in order,
@@ -116,16 +132,45 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
     setLoadError('')
     setFinished(0)
 
+    /** Lines no layout draws, waiting for one that does. */
+    let held: IndexedEvent[] = []
+    let holding: ReturnType<typeof setTimeout> | null = null
+
+    const flush = (extra: IndexedEvent[] = []) => {
+      if (holding !== null) {
+        clearTimeout(holding)
+        holding = null
+      }
+      const batch = held.length === 0 ? extra : held.concat(extra)
+      held = []
+      if (batch.length === 0) return
+      setEvents((prev) => insertManyByIndex(prev, batch))
+    }
+
     const append = (index: number, event: RunEvent) => {
       if (seen.current.has(index)) return
       seen.current.add(index)
-      setEvents((prev) => insertByIndex(prev, { index, event }))
+      const item = { index, event }
+      if (!drawsNothing(event)) {
+        flush([item])
+        return
+      }
+      held.push(item)
+      if (held.length >= HOLD_MAX) {
+        flush()
+        return
+      }
+      if (holding !== null) clearTimeout(holding)
+      holding = setTimeout(() => flush(), HOLD_MS)
     }
     const appendMany = (items: IndexedEvent[]) => {
       const fresh = items.filter((item) => !seen.current.has(item.index))
-      if (fresh.length === 0) return
+      if (fresh.length === 0) {
+        flush()
+        return
+      }
       for (const item of fresh) seen.current.add(item.index)
-      setEvents((prev) => insertManyByIndex(prev, fresh))
+      flush(fresh)
     }
 
     /**
@@ -201,6 +246,7 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
 
     return () => {
       cancelled = true
+      if (holding !== null) clearTimeout(holding)
       unsubscribe()
     }
   }, [transport, workspaceId, runId])

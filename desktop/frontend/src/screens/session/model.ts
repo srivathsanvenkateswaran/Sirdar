@@ -3,6 +3,7 @@ import type { RunDetail, RunEvent } from '../../api/types'
 import {
   callId,
   classify,
+  drawsNothing,
   inputSummary,
   isReplace,
   joinText,
@@ -245,18 +246,6 @@ function stepOf(n: number, call: ToolCall, startedAt: string | undefined, root: 
     pending: !call.finished,
     edit,
   }
-}
-
-/** True for the provider's own bookkeeping lines: token deltas, hooks, status. */
-function isNoise(event: RunEvent): boolean {
-  const raw = asRecord(event.payload?.raw)
-  const type = str(raw?.type)
-  if (type === 'stream_event') return true
-  if (type === 'system') {
-    const subtype = str(raw?.subtype)
-    return subtype !== 'init' && subtype !== 'thinking_tokens'
-  }
-  return false
 }
 
 /** `claude-opus-5[1m]` → `claude-opus-5`. */
@@ -590,7 +579,7 @@ class SessionBuilder {
           this.add({ kind: 'sys', index: row.index, parts: words })
           return
         }
-        if (isNoise(event)) return
+        if (drawsNothing(event)) return
         // Anything else the provider said in its own words: a rate-limit
         // warning, a stall notice. Small and grey.
         const text = str(event.payload?.text) || event.kind
