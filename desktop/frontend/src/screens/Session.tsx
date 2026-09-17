@@ -209,7 +209,7 @@ function SessionShared(props: SessionProps & { layout: 'document' }): JSX.Elemen
           onRun: () => {},
           disabled: composer.kind === 'disabled',
           busy: sendBusy,
-          shortcut: '⌘↵',
+          shortcut: '↵',
           title: composer.kind === 'disabled' ? composer.reason : undefined,
           placement: 'screen',
         }
