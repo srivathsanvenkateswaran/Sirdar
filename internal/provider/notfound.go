@@ -59,13 +59,20 @@ func pathFixFor(goos, binary, setting string) string {
 	if setting != "" {
 		fix += "set " + setting + " in .sirdar/config.yaml or "
 	}
+	if goos == "windows" {
+		// The app inherits the user PATH on Windows and adds nothing to it
+		// (internal/loginpath is a no-op there), so the directory has to be
+		// on the PATH already; say so rather than promise it is found.
+		return fix + "install it under " + installDir(goos) + " and make sure that directory is on your PATH"
+	}
 	return fix + "install it under " + installDir(goos)
 }
 
 // installDir is the directory this platform's package managers put a
-// user-installed CLI in, and one Sirdar puts on the PATH itself at desktop
-// startup (internal/loginpath). Naming it makes the advice actionable:
-// a binary moved there is found without any configuration at all.
+// user-installed CLI in. On macOS and Linux it is also one Sirdar puts on
+// the PATH itself at desktop startup (internal/loginpath), so a binary
+// moved there is found without any configuration; on Windows the user
+// PATH is inherited as it is, and pathFixFor says so.
 func installDir(goos string) string {
 	switch goos {
 	case "darwin":

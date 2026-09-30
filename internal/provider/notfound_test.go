@@ -100,3 +100,11 @@ func TestNotFoundFixIgnoresOtherFailures(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowsFixSaysThePathIsNotAddedForYou(t *testing.T) {
+	got := pathFixFor("windows", "claude", "providers.claude.path")
+	want := `claude is not on the app's PATH — set providers.claude.path in .sirdar/config.yaml or install it under %USERPROFILE%\bin and make sure that directory is on your PATH`
+	if got != want {
+		t.Fatalf("windows fix:\n got %q\nwant %q", got, want)
+	}
+}
