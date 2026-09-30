@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,20 @@ func indexOf(path, dir string) int {
 	return -1
 }
 
+// unixShapedPATH skips a test whose PATHs are written with ':' and '/'.
+// resolve and merge split and join on the host's list separator and clean
+// entries with the host's filepath, which is right for every platform they
+// run on: resolve returns before merging on Windows, where there is no
+// login shell to ask. On a Windows host the separator is ';', so these
+// fixtures would read as one entry and prove nothing about the product.
+// TestResolveIsANoOpOnWindows is the Windows case.
+func unixShapedPATH(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix-shaped PATH fixtures; resolve and merge never see one on Windows")
+	}
+}
+
 func shellReporting(value string) runner {
 	return func(context.Context, string, string) (string, error) { return value, nil }
 }
@@ -42,6 +57,7 @@ func shellReporting(value string) runner {
 // The bug this package exists for: the Dock's PATH has no /opt/homebrew/bin,
 // the terminal's does, and after resolve the process has the terminal's.
 func TestResolveTakesTheLoginShellPATH(t *testing.T) {
+	unixShapedPATH(t)
 	shell := "/opt/homebrew/bin:/usr/bin:/bin"
 	res := resolve(context.Background(), "darwin", "/bin/zsh", launchdPATH, "/Users/sri", shellReporting(shell))
 
@@ -63,6 +79,7 @@ func TestResolveTakesTheLoginShellPATH(t *testing.T) {
 // two: a profile that errors under an interactive shell still yields a
 // PATH.
 func TestResolveFallsBackToTheNonInteractiveLoginShell(t *testing.T) {
+	unixShapedPATH(t)
 	var tried []string
 	run := func(_ context.Context, _, flags string) (string, error) {
 		tried = append(tried, flags)
@@ -91,6 +108,7 @@ func TestResolveFallsBackToTheNonInteractiveLoginShell(t *testing.T) {
 // says why. The extra directories are still appended: they are the half of
 // the fix that does not depend on a shell answering.
 func TestResolveKeepsTheProcessPATHWhenNoShellAnswers(t *testing.T) {
+	unixShapedPATH(t)
 	boom := errors.New("fork/exec /bin/zsh: no such file or directory")
 	run := func(context.Context, string, string) (string, error) { return "", boom }
 	res := resolve(context.Background(), "darwin", "/bin/zsh", launchdPATH, "/Users/sri", run)
@@ -112,6 +130,7 @@ func TestResolveKeepsTheProcessPATHWhenNoShellAnswers(t *testing.T) {
 // An interactive profile that greets the operator writes to stdout before
 // printf does. The PATH is the last line, not the whole capture.
 func TestResolveIgnoresAProfilesChatter(t *testing.T) {
+	unixShapedPATH(t)
 	out := "Welcome back!\nnvm: using node v22\n/opt/homebrew/bin:/usr/bin"
 	res := resolve(context.Background(), "darwin", "/bin/zsh", launchdPATH, "/Users/sri", shellReporting(out))
 
@@ -175,6 +194,7 @@ func TestShellFor(t *testing.T) {
 // directory is appended once, in the documented order, behind everything
 // the shell already had.
 func TestMergeAppendsWhatIsMissing(t *testing.T) {
+	unixShapedPATH(t)
 	base := "/opt/homebrew/bin:/usr/bin"
 	path, added := merge(base, extraDirs, "/Users/sri")
 
@@ -201,6 +221,7 @@ func TestMergeAppendsWhatIsMissing(t *testing.T) {
 // Nothing appears twice, whether the duplicate came from the shell, from
 // the extras, or from a trailing slash making one entry look like another.
 func TestMergeDedupes(t *testing.T) {
+	unixShapedPATH(t)
 	base := "/usr/bin:/opt/homebrew/bin:/usr/bin:/opt/homebrew/bin/:/Users/sri/bin"
 	path, added := merge(base, extraDirs, "/Users/sri")
 
@@ -225,6 +246,7 @@ func TestMergeDedupes(t *testing.T) {
 // dropped rather than joined literally: a directory named "~" on the PATH
 // is worse than a missing one.
 func TestMergeDropsTildeEntriesWithoutAHome(t *testing.T) {
+	unixShapedPATH(t)
 	path, added := merge("/usr/bin", extraDirs, "")
 	if strings.Contains(path, "~") {
 		t.Errorf("PATH = %q, want no literal ~ entry", path)
@@ -237,6 +259,7 @@ func TestMergeDropsTildeEntriesWithoutAHome(t *testing.T) {
 }
 
 func TestMergeOnAnEmptyBase(t *testing.T) {
+	unixShapedPATH(t)
 	path, _ := merge("", extraDirs, "/Users/sri")
 	if got := split(path)[0]; got != "/Users/sri/.local/bin" {
 		t.Errorf("first entry = %q, want the extras to stand alone", got)
