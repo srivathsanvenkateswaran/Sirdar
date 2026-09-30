@@ -128,3 +128,18 @@ func TestMIMEIsNeverSomethingTheWebviewWouldRun(t *testing.T) {
 		}
 	}
 }
+
+// The types a registry can hand back for a script, which on Windows is
+// where mime.TypeByExtension gets its answer, are downgraded like the
+// standard ones.
+func TestSafeMIMEDowngradesEveryScriptType(t *testing.T) {
+	for _, in := range []string{
+		"application/javascript", "text/javascript; charset=utf-8",
+		"application/x-javascript", "text/x-javascript",
+		"application/ecmascript", "text/ecmascript",
+	} {
+		if got := safeMIME(in); !strings.HasPrefix(got, "text/plain") {
+			t.Errorf("safeMIME(%q) = %q, want text/plain", in, got)
+		}
+	}
+}
