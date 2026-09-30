@@ -189,7 +189,11 @@ func safeMIME(t string) string {
 	switch base {
 	case "text/html", "application/xhtml+xml", "image/svg+xml", "application/xml", "text/xml":
 		return "text/plain; charset=utf-8"
-	case "application/javascript", "text/javascript":
+	// The legacy script types too: on Windows, mime.TypeByExtension reads
+	// the registry, and a machine can map .js to any of these.
+	case "application/javascript", "text/javascript",
+		"application/x-javascript", "text/x-javascript",
+		"application/ecmascript", "text/ecmascript":
 		return "text/plain; charset=utf-8"
 	}
 	return t

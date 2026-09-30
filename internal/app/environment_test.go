@@ -3,6 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -20,7 +23,24 @@ func missing() func(string) string {
 	return func(string) string { return "" }
 }
 
-const dockPATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+// pathList joins entries with the host's list separator, which is what
+// pathSourcePhrase counts on: ':' here, ';' on Windows.
+func pathList(entries ...string) string {
+	return strings.Join(entries, string(os.PathListSeparator))
+}
+
+var dockPATH = pathList("/usr/bin", "/bin", "/usr/sbin", "/sbin")
+
+// hostAbs is an absolute path on the host: the slash path as given, and on
+// Windows the same path under C:, since "/opt/..." has no drive and
+// filepath.IsAbs does not accept it there.
+func hostAbs(slashPath string) string {
+	p := filepath.FromSlash(slashPath)
+	if runtime.GOOS == "windows" {
+		return `C:` + p
+	}
+	return p
+}
 
 func loginShell(path string) loginpath.Result {
 	return loginpath.Result{Source: "login shell /bin/zsh", Shell: "/bin/zsh", Flags: "-il", Path: path}
@@ -29,7 +49,7 @@ func loginShell(path string) loginpath.Result {
 // The healthy case: the row names the shell the PATH came from and where
 // the binary actually is.
 func TestEnvironmentRowNamesThePATHSourceAndTheBinary(t *testing.T) {
-	res := loginShell("/opt/homebrew/bin:" + dockPATH)
+	res := loginShell(pathList("/opt/homebrew/bin", dockPATH))
 	res.Added = []string{"/Users/sri/.local/bin", "/Users/sri/go/bin"}
 	c := environmentCheckFor(res, []binaryRef{{name: "claude", setting: "providers.claude.path"}}, found("/opt/homebrew/bin/claude"))
 
@@ -185,7 +205,7 @@ func TestProviderBinariesExpandsOnlyPathShapedValues(t *testing.T) {
 	}
 
 	cfg.Providers.Claude.Path = "bin/claude"
-	if got := providerBinaries(cfg)[0].name; got != "/ws/bin/claude" {
+	if got, want := providerBinaries(cfg)[0].name, filepath.Join("/ws", "bin", "claude"); got != want {
 		t.Errorf("name = %q, want it resolved against the workspace", got)
 	}
 }
@@ -195,13 +215,14 @@ func TestProviderBinariesExpandsOnlyPathShapedValues(t *testing.T) {
 // one, and the failure is worth knowing about now.
 func TestProviderBinariesIncludesAnotherProvidersConfiguredPath(t *testing.T) {
 	cfg := &config.Config{Root: "/ws", Provider: "claude"}
-	cfg.Providers.Codex.Path = "/opt/homebrew/bin/codex"
+	codex := hostAbs("/opt/homebrew/bin/codex")
+	cfg.Providers.Codex.Path = codex
 
 	refs := providerBinaries(cfg)
 	if len(refs) != 2 {
 		t.Fatalf("refs = %+v, want claude and the configured codex", refs)
 	}
-	if refs[1].name != "/opt/homebrew/bin/codex" || refs[1].setting != "providers.codex.path" {
+	if refs[1].name != codex || refs[1].setting != "providers.codex.path" {
 		t.Errorf("second ref = %+v, want the configured codex path", refs[1])
 	}
 }
