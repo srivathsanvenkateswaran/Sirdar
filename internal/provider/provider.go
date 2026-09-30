@@ -106,9 +106,9 @@ const (
 	// the account's window rather than one model, and ACP carries no
 	// equivalent at all, so both stay as they were.
 	EvModelLimit EventKind = "model_limit"
-	EvFinal         EventKind = "final"
-	EvSystem        EventKind = "system" // init, status, anything informational
-	EvError         EventKind = "error"
+	EvFinal      EventKind = "final"
+	EvSystem     EventKind = "system" // init, status, anything informational
+	EvError      EventKind = "error"
 
 	// EvBreach says a read-only session did something a read-only session
 	// cannot do: it finished a write or ran a command. It is separate from
