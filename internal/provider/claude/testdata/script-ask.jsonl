@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","cwd":"/w","session_id":"sess-ask","tools":["Bash"],"model":"m","permissionMode":"default"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"rg -n refund src"}}]}}
+{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"rg -n refund src"},"tool_use_id":"t1"}}
+{"$wait":"control_response"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"sess-ask","result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}

@@ -1134,6 +1134,14 @@ func (s *session) decideCommand(id, params, raw json.RawMessage) {
 		})
 		return
 	}
+	if d.Ask != nil {
+		// The operator is being asked, so the turn stops here: "cancel"
+		// declines and interrupts it, where "decline" would let the
+		// agent work around a refusal that may yet become an allow.
+		_ = s.conn.reply(id, map[string]string{"decision": "cancel"})
+		s.asked("commandExecution", params, raw, d)
+		return
+	}
 	// "decline" rather than "cancel": the agent is told no and carries on
 	// with the turn, which is how it learns to reach for something the
 	// allow-list covers instead of dying on the first refusal.
@@ -1319,6 +1327,11 @@ func (s *session) decideElicitation(id, params, raw json.RawMessage) {
 		})
 		return
 	}
+	if d.Ask != nil {
+		_ = s.conn.reply(id, map[string]string{"action": "cancel"})
+		s.asked(tool, params, raw, d)
+		return
+	}
 	_ = s.conn.reply(id, map[string]string{"action": "decline"})
 	s.denied(tool, params, raw, d.Message)
 }
@@ -1394,6 +1407,20 @@ func (s *session) denied(tool string, params, raw json.RawMessage, reason string
 		Tool:     tool,
 		Input:    params,
 		Text:     reason,
+		Raw:      raw,
+	})
+}
+
+// asked reports a call that is now waiting on the operator: the run blocks
+// on the question the decision carries.
+func (s *session) asked(tool string, params, raw json.RawMessage, d provider.Decision) {
+	s.emit(provider.Event{
+		Kind:     provider.EvPermission,
+		Decision: "ask",
+		Ask:      d.Ask,
+		Tool:     tool,
+		Input:    params,
+		Text:     d.Message,
 		Raw:      raw,
 	})
 }

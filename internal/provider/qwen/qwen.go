@@ -1616,13 +1616,21 @@ func (s *session) decide(w http.ResponseWriter, r *http.Request) {
 	// blocks while the caller is slow to drain the channel, and a
 	// decision that misses the CLI's hook timeout is a non-blocking hook
 	// failure — which is to say a deny that arrives late is an allow.
-	writeDecision(w, decision.Allow, decisionReason(decision))
+	if decision.Ask != nil {
+		writeAsk(w)
+	} else {
+		writeDecision(w, decision.Allow, decisionReason(decision))
+	}
 
 	ev := newEvent(provider.EvPermission, body)
 	ev.Tool = req.ToolName
 	ev.Input = req.ToolInput
 	ev.Decision = "deny"
-	if decision.Allow {
+	switch {
+	case decision.Ask != nil:
+		ev.Decision = "ask"
+		ev.Ask = decision.Ask
+	case decision.Allow:
 		ev.Decision = "allow"
 	}
 	ev.Text = decision.Message
@@ -1731,13 +1739,33 @@ func writeDecision(w http.ResponseWriter, allow bool, reason string) {
 	if allow {
 		verdict = "allow"
 	}
-	payload := map[string]any{
+	writeHook(w, map[string]any{
 		"hookSpecificOutput": map[string]any{
 			"hookEventName":            "PreToolUse",
 			"permissionDecision":       verdict,
 			"permissionDecisionReason": reason,
 		},
-	}
+	})
+}
+
+// writeAsk answers a call that is now waiting on the operator: denied, with
+// the reason saying so, and continue false so the agent stops the turn
+// rather than working around a refusal that may yet become an allow. The
+// run layer ends the session either way; this is the hook's own way of
+// saying it first.
+func writeAsk(w http.ResponseWriter) {
+	writeHook(w, map[string]any{
+		"continue":   false,
+		"stopReason": provider.AskPending,
+		"hookSpecificOutput": map[string]any{
+			"hookEventName":            "PreToolUse",
+			"permissionDecision":       "deny",
+			"permissionDecisionReason": provider.AskPending,
+		},
+	})
+}
+
+func writeHook(w http.ResponseWriter, payload map[string]any) {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		http.Error(w, "encode decision", http.StatusInternalServerError)

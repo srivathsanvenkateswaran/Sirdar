@@ -2155,6 +2155,24 @@ func (s *session) onPermission(id json.RawMessage, params, raw json.RawMessage) 
 	tool := policyTool(req.ToolCall.Kind, req.ToolCall.Title)
 	decision := s.decide(tool, req)
 
+	if decision.Ask != nil {
+		// The operator is being asked. "cancelled" is the protocol's own
+		// way of answering a request without choosing an option, and the
+		// agent ends the turn on it rather than working around a refusal
+		// that may yet become an allow; the run blocks on the question.
+		_ = s.conn.reply(id, map[string]any{"outcome": map[string]any{"outcome": "cancelled"}})
+		s.emit(provider.Event{
+			Kind:     provider.EvPermission,
+			Decision: "ask",
+			Ask:      decision.Ask,
+			Tool:     tool,
+			Input:    req.ToolCall.RawInput,
+			Text:     decision.Message,
+			Raw:      raw,
+		})
+		return
+	}
+
 	want := []string{"reject_once", "reject_always"}
 	verdict := "deny"
 	if decision.Allow {
