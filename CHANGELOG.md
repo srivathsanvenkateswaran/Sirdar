@@ -7,6 +7,8 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
 
 ## Unreleased
 
+- `sirdar` with no command serves the web UI on loopback and opens it, the same as `sirdar serve --open`.
+
 Sirdar as it stands today, before the first tagged release:
 
 A command-line harness (`sirdar init`, `doctor`, `triage`, `rca`, `resume`, `runs`,

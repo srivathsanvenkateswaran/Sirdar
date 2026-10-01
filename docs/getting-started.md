@@ -143,12 +143,15 @@ investigation, not a verdict — review it before acting on anything in it.
 
 ## Start the board
 
-`sirdar serve` starts the local web UI and API on loopback, for watching runs and reviewing
-notes from a browser instead of the terminal:
+`sirdar` on its own starts the local web UI and API on loopback and opens it in your browser,
+for watching runs and reviewing notes instead of using the terminal. It is the same as:
 
 ```sh
 sirdar serve --open
 ```
+
+Leave that terminal open; Ctrl-C stops the server. It serves the workspace you ran it in plus
+every workspace registered before, on http://127.0.0.1:7777.
 
 It binds to `127.0.0.1` and refuses a non-loopback address unless you pass `--allow-remote`,
 since there is no authentication in front of it. The same frontend also ships as a desktop app

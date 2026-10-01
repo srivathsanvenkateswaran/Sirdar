@@ -82,7 +82,7 @@ fix departs from the note, the commit is made and nothing is pushed until you ac
 
 ## What you get
 
-The desktop app is a native window (Wails) over the same core the CLI uses. `sirdar serve --open`
+The desktop app is a native window (Wails) over the same core the CLI uses. A bare `sirdar`
 runs the identical frontend in your browser over a loopback HTTP API instead. Both give you:
 
 - **Session** — the run's transcript as it happens: tool calls with their results, the agent's
@@ -197,7 +197,7 @@ what a run may run and fetch, how much budget it gets (`docs/config.md` document
 ```
 sirdar doctor        # provider CLI, each source, the notes directory, the templates
 sirdar triage SBX-1  # one run; --dry-run writes the bundle and prompt without spending a session
-sirdar serve --open  # the same screens as the app, in your browser on loopback
+sirdar               # the same screens as the app, in your browser on loopback (serve --open)
 ```
 
 `docs/getting-started.md` walks the same path with a worked config.
