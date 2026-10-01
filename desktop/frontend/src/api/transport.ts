@@ -5,6 +5,7 @@ import type {
   Check,
   ComposedIntent,
   ConfigSummary,
+  ModelList,
   EvalReport,
   GoldenEntry,
   HelpdeskLink,
@@ -326,6 +327,12 @@ export function createHTTPTransport(): Transport {
       postJSON<GoldenEntry>(`/workspaces/${encodeURIComponent(ws)}/golden`, o),
     configSummary: (ws) =>
       getJSON<ConfigSummary>(`/workspaces/${encodeURIComponent(ws)}/config/summary`),
+    models: (ws, provider) =>
+      getJSON<ModelList>(
+        `/workspaces/${encodeURIComponent(ws)}/models?provider=${encodeURIComponent(provider)}`,
+      ),
+    refreshModels: (ws, provider) =>
+      postJSON<ModelList>(`/workspaces/${encodeURIComponent(ws)}/models/refresh`, { provider }),
     playbooks: (ws) =>
       getJSON<PlaybookSummary[]>(`/workspaces/${encodeURIComponent(ws)}/playbooks`),
     playbook: (ws, name) =>
@@ -468,6 +475,8 @@ interface BridgeBindings {
   Golden(ws: string): Promise<GoldenEntry[] | null>
   AddGolden(ws: string, key: string, runId: string): Promise<GoldenEntry>
   ConfigSummary(ws: string): Promise<ConfigSummary>
+  Models(ws: string, provider: string): Promise<ModelList>
+  RefreshModels(ws: string, provider: string): Promise<ModelList>
   Playbooks(ws: string): Promise<PlaybookSummary[] | null>
   Playbook(ws: string, name: string): Promise<string>
   SavePlaybook(ws: string, name: string, body: string): Promise<PlaybookSummary>
@@ -506,6 +515,11 @@ function bridge(): BridgeBindings {
 /** A nil Go slice arrives as null; the UI always wants a list. */
 function list<T>(rows: T[] | null): T[] {
   return rows ?? []
+}
+
+/** The same for the model list's one slice. */
+function modelList(l: ModelList): ModelList {
+  return { ...l, models: list(l.models as ModelList['models'] | null) }
 }
 
 /** Wails transport: bound Go methods plus runtime events, used in the app shell. */
@@ -603,6 +617,8 @@ export function createWailsTransport(): Transport {
     golden: async (ws) => list(await bridge().Golden(ws)),
     addGolden: (ws, o) => bridge().AddGolden(ws, o.key ?? '', o.runId ?? ''),
     configSummary: (ws) => bridge().ConfigSummary(ws),
+    models: async (ws, provider) => modelList(await bridge().Models(ws, provider)),
+    refreshModels: async (ws, provider) => modelList(await bridge().RefreshModels(ws, provider)),
     playbooks: async (ws) => list(await bridge().Playbooks(ws)),
     playbook: (ws, name) => bridge().Playbook(ws, name),
     savePlaybook: (ws, name, body) => bridge().SavePlaybook(ws, name, body),

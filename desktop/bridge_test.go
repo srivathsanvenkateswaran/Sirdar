@@ -40,6 +40,8 @@ var bridgeMethods = []string{
 	"Golden",
 	"AddGolden",
 	"ConfigSummary",
+	"Models",
+	"RefreshModels",
 	"Resume",
 	"Steer",
 	"Cancel",

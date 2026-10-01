@@ -3,6 +3,7 @@ import type {
   Check,
   ComposedIntent,
   ConfigSummary,
+  ModelList,
   DropHunkRequest,
   EvalReport,
   RetroReport,
@@ -51,6 +52,8 @@ export interface TransportCalls {
   scaffoldPlaybooks: string[]
   resolveHelpdesk: { ws: string; number: string }[]
   composeIntent: { ws: string; text: string }[]
+  models: { ws: string; provider: string }[]
+  refreshModels: { ws: string; provider: string }[]
 }
 
 export interface FakeTransport extends Transport {
@@ -70,6 +73,8 @@ export interface FakeTransport extends Transport {
   failSearch(err: Error | null): void
   /** Makes every playbook call reject, e.g. with the 501 a workspace that keeps them outside .sirdar gives. */
   failPlaybooks(err: Error | null): void
+  /** Makes `models()` and `refreshModels()` reject. */
+  failModels(err: Error | null): void
   /** The playbooks the fake holds right now, as filename to markdown. */
   playbookBodies(): Record<string, string>
   subscriberCount(): number
@@ -414,6 +419,14 @@ export function createFakeTransport(seed: {
    * `store/fakeSession.ts` builds them.
    */
   sessions?: Record<string, SessionFixture>
+  /**
+   * What `models()` answers per provider. A provider not named gets an empty
+   * list that is not due a probe, so a screen that never opens a picker
+   * starts nothing.
+   */
+  models?: Record<string, ModelList>
+  /** What `refreshModels()` answers per provider; absent repeats the list with the probe taken. */
+  refreshed?: Record<string, ModelList>
 } = {}): FakeTransport {
   let runList = seed.runs ?? []
   let ticketList = seed.tickets ?? []
@@ -421,6 +434,15 @@ export function createFakeTransport(seed: {
   let deleteError: Error | null = null
   let searchError: Error | null = null
   let playbookError: Error | null = null
+  let modelsError: Error | null = null
+  const modelLists: Record<string, ModelList> = { ...(seed.models ?? {}) }
+  const modelListFor = (provider: string): ModelList =>
+    modelLists[provider || 'claude'] ?? {
+      provider: provider || 'claude',
+      models: [],
+      canProbe: (provider || 'claude') === 'claude',
+      probeDue: false,
+    }
   const playbookBodies: Record<string, string> = { ...(seed.playbooks ?? SAMPLE_PLAYBOOKS) }
   let currentDiff: RunDiff | null = seed.diff === undefined ? diff() : seed.diff
   /** A fixture run's change, edited in place by `dropHunk` like the shared one. */
@@ -459,6 +481,8 @@ export function createFakeTransport(seed: {
     scaffoldPlaybooks: [],
     resolveHelpdesk: [],
     composeIntent: [],
+    models: [],
+    refreshModels: [],
   }
 
   const fake: FakeTransport = {
@@ -486,6 +510,9 @@ export function createFakeTransport(seed: {
     },
     failPlaybooks(err) {
       playbookError = err
+    },
+    failModels(err) {
+      modelsError = err
     },
     playbookBodies: () => ({ ...playbookBodies }),
     subscriberCount: () => handlers.size,
@@ -654,6 +681,22 @@ export function createFakeTransport(seed: {
       if (playbookBodies[name] === undefined) throw new Error(`not_found: no playbook named ${name}`)
     },
     configSummary: async () => seed.configSummary ?? emptyConfigSummary(),
+    models: async (ws, provider) => {
+      calls.models.push({ ws, provider })
+      if (modelsError) throw modelsError
+      return modelListFor(provider)
+    },
+    refreshModels: async (ws, provider) => {
+      calls.refreshModels.push({ ws, provider })
+      if (modelsError) throw modelsError
+      const next = seed.refreshed?.[provider || 'claude'] ?? {
+        ...modelListFor(provider),
+        probeDue: false,
+        probedAt: new Date().toISOString(),
+      }
+      modelLists[provider || 'claude'] = next
+      return next
+    },
     resume: async () => ({ jobId: 'job-resume' }),
     steer: async (ws, runId, text, model) => {
       calls.steer.push({ ws, runId, text, model: model ?? '' })

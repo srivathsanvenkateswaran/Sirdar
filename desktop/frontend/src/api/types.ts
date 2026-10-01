@@ -207,6 +207,27 @@ export interface RetroReport {
   withRca: boolean; rubric: boolean; results: RetroResult[]
 }
 
+// --- the model picker's list ---
+/** Where a model in the picker was found. */
+export type ModelSource = 'probe' | 'run' | 'config'
+/**
+ * One model the picker offers. `label` is the operator's own words for a
+ * pin, otherwise derived from the id ("claude-opus-4-5-20251101" is
+ * "Opus 4.5"). `seenAt` is the probe's time or the newest run that
+ * reported it, empty for a pin. `alias` is the name a probe asked about.
+ */
+export interface ModelInfo { id: string; label: string; source: ModelSource; seenAt?: string; alias?: string }
+/**
+ * What the picker draws for one provider: each id once, under the first of
+ * probe, run, config that has it. `probeDue` says the cache is empty or a
+ * day old, so a picker that opens asks for `refreshModels`; `models` itself
+ * never starts a CLI. Only claude can be probed (`canProbe`).
+ */
+export interface ModelList {
+  provider: string; models: ModelInfo[]; canProbe: boolean; probedAt?: string; probeDue: boolean;
+  probeErrors?: string[]
+}
+
 // --- the read-only configuration summary ---
 /**
  * What Settings shows of the workspace's notify and webhooks blocks. Every
@@ -412,6 +433,10 @@ export interface Transport {
   golden(ws: string): Promise<GoldenEntry[]>;
   addGolden(ws: string, o: { key?: string; runId?: string }): Promise<GoldenEntry>;
   configSummary(ws: string): Promise<ConfigSummary>;
+  /** What the model picker offers for a provider ('' is the workspace's own). Starts nothing. */
+  models(ws: string, provider: string): Promise<ModelList>;
+  /** Probes the provider's CLI again (claude only) and answers with the new list. */
+  refreshModels(ws: string, provider: string): Promise<ModelList>;
   /** The playbooks under the workspace's playbooks directory, in the order the prompt loads them. */
   playbooks(ws: string): Promise<PlaybookSummary[]>;
   /** One playbook's markdown, exactly as the prompt reads it. */
@@ -502,7 +527,7 @@ export const TRANSPORT_METHODS = [
   'attachments', 'attachmentURL',
   'startTriage', 'startRCA', 'startFix', 'startEval',
   'evalReports', 'latestRetro', 'golden', 'addGolden',
-  'configSummary',
+  'configSummary', 'models', 'refreshModels',
   'playbooks', 'playbook', 'savePlaybook', 'addPlaybook', 'deletePlaybook',
   'scaffoldPlaybooks', 'openPlaybook',
   'resume', 'cancel', 'steer',

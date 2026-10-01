@@ -334,6 +334,41 @@ func (s *server) configSummary(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, summary)
 }
 
+// models is GET /api/workspaces/{id}/models?provider=: what the model
+// picker offers for a provider — the cached probe, the models the
+// workspace's runs reported, and the operator's pins. It starts nothing;
+// a probe is the POST below, behind the same-origin guard.
+func (s *server) models(w http.ResponseWriter, r *http.Request) {
+	provider := r.URL.Query().Get("provider")
+	if !validProvider(w, provider) {
+		return
+	}
+	list, err := s.svc.Models(r.PathValue("id"), provider)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// refreshModels is POST /api/workspaces/{id}/models/refresh: asks the
+// provider's CLI again what each alias resolves to, then answers with the
+// list. Body: {"provider": ""} — empty is the workspace's own.
+func (s *server) refreshModels(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Provider string `json:"provider"`
+	}
+	if !decode(w, r, &body, true) || !validProvider(w, body.Provider) {
+		return
+	}
+	list, err := s.svc.RefreshModels(r.Context(), r.PathValue("id"), body.Provider)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
 // resolveHelpdesk is GET /api/workspaces/{id}/helpdesk/{number}: which
 // tracker issue a helpdesk number belongs to.
 //

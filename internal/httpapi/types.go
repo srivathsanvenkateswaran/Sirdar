@@ -38,6 +38,8 @@ type (
 	RetroReport          = app.RetroReport
 	GoldenEntry          = app.GoldenEntry
 	ConfigSummary        = app.ConfigSummary
+	ModelList            = app.ModelList
+	ModelInfo            = app.ModelInfo
 	PlaybookSummary      = app.PlaybookSummary
 	NotifySummary        = app.NotifySummary
 	NotifyDestination    = app.NotifyDestination
