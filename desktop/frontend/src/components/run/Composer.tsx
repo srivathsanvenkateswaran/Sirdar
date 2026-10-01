@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import type { RunKind } from '../../api/types'
+import type { QueuedSteer, RunKind } from '../../api/types'
 import ChipMenu from '../composer/ChipMenu'
 import ComposerCard from '../composer/ComposerCard'
-import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder } from '../composer/modes'
+import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder, steerable } from '../composer/modes'
 import ModelPicker from '../../ui/model-picker'
+import QueuedSteers, { visibleQueuedSteers } from './QueuedSteers'
 
 /** What the composer's one button does right now. */
 export type ComposerMode =
@@ -14,7 +15,9 @@ export type ComposerMode =
   /**
    * The run is working. The button is a Stop, not a send that is off, and
    * the box says what typing here does — once, in the placeholder, with
-   * nothing repeating it beside the button.
+   * nothing repeating it beside the button. On a provider that can be
+   * steered the box stays live: Enter queues the text, and the run reads it
+   * at its next turn, or once it has finished.
    */
   | { kind: 'running' }
   /** Nothing can be sent, and `reason` says why. */
@@ -57,6 +60,11 @@ export interface ComposerProps {
    * be chosen; a live run's session already has one.
    */
   onPickModel?: (model: string) => void
+  /**
+   * The steers typed while the run worked, and what became of each: drawn
+   * as chips above the box, the newest few.
+   */
+  queued?: QueuedSteer[]
 }
 
 /**
@@ -95,6 +103,7 @@ export default function Composer({
   cancelBusy = false,
   pickedModel = '',
   onPickModel,
+  queued,
 }: ComposerProps) {
   const [text, setText] = useState('')
 
@@ -105,10 +114,13 @@ export default function Composer({
   }, [sentCount])
 
   const running = mode.kind === 'running'
+  // A working run on a provider that can be steered takes what is typed
+  // into its queue; one that cannot be steered at all has nothing to take.
+  const canQueue = running && steerable(provider)
   const trimmed = text.trim()
   const label = mode.kind === 'answer' ? 'Answer' : 'Steer'
-  const needsText = mode.kind === 'steer' || (mode.kind === 'answer' && mode.question !== '')
-  const disabled = mode.kind === 'disabled' || running || (needsText && trimmed === '')
+  const needsText = mode.kind === 'steer' || canQueue || (mode.kind === 'answer' && mode.question !== '')
+  const disabled = mode.kind === 'disabled' || (running && !canQueue) || (needsText && trimmed === '')
   const title =
     mode.kind === 'disabled'
       ? mode.reason
@@ -116,7 +128,9 @@ export default function Composer({
         ? mode.kind === 'answer'
           ? 'Type the answer first'
           : 'Type the instruction first'
-        : `${label} (↵)`
+        : canQueue
+          ? 'Queue the steer (↵)'
+          : `${label} (↵)`
   // Said once: while the run works the box carries the whole of it, and the
   // button beside it is the Stop.
   const placeholder = running
@@ -130,15 +144,18 @@ export default function Composer({
             : 'Anything the agent should know before it goes on (optional)'
           : 'What should the agent do next?')
 
+  const chips = visibleQueuedSteers(queued, running)
+
   return (
     <div className="session-composer" data-mode={mode.kind}>
+      <QueuedSteers items={chips} />
       <ComposerCard
         name={label}
         label={label}
         value={text}
         onChange={setText}
         placeholder={placeholder}
-        disabled={mode.kind === 'disabled' || running}
+        disabled={mode.kind === 'disabled' || (running && !canQueue)}
         autoFocus={autoFocus && mode.kind !== 'disabled' && !running}
         error={error}
         chips={
@@ -180,7 +197,7 @@ export default function Composer({
         aside={mode.kind === 'disabled' ? mode.reason : undefined}
         send={{
           label,
-          busyLabel: mode.kind === 'answer' ? 'Answering…' : 'Steering…',
+          busyLabel: mode.kind === 'answer' ? 'Answering…' : running ? 'Queuing…' : 'Steering…',
           busy,
           disabled,
           title,
@@ -194,6 +211,7 @@ export default function Composer({
                 disabled: !canCancel,
                 busy: cancelBusy,
                 title: canCancel ? 'Stop the run' : 'Only a run started from this window can be stopped',
+                sendOnEnter: canQueue,
               }
             : undefined
         }
