@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/fix"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
@@ -45,8 +46,9 @@ func Steer(ctx context.Context, deps runner.Deps, runID, text, model string) (ru
 	return out, nil
 }
 
-// Steer is the service half: it refuses what can be refused from the run's
-// state alone, synchronously, and starts a job for the rest. The provider's
+// Steer is the service half: it queues an instruction on a run that is still
+// working and answers with no job, refuses what can be refused from a
+// settled run's state alone, synchronously, and starts a job for the rest. The provider's
 // own refusal — cursor, agy — is only known once the job has built its
 // dependencies, and ends the job failed with the reason on the activity
 // pane, the way a refused fix does.
@@ -65,6 +67,34 @@ func (s *Service) Steer(ctx context.Context, wsID, runID, text, model string) (J
 	_, state, err := store.Open(cfg.Root, runID)
 	if err != nil {
 		return "", fmt.Errorf("%w: %s", ErrNoSuchRun, runID)
+	}
+	// A working run takes the instruction into its queue: no job, since
+	// the executor that already owns the run delivers it. An empty job id
+	// is how the caller learns that.
+	if live(state) {
+		if _, queued, err := QueueLiveSteer(cfg.Root, runID, text, model, time.Now()); err != nil {
+			return "", err
+		} else if queued {
+			// The run may have settled between the check and the append,
+			// past its executor's last look at the inbox. Then the steer
+			// is held, and applied here rather than left waiting.
+			if _, now, err := store.Open(cfg.Root, runID); err == nil && !live(now) {
+				return s.start(ctx, wsID, "", "", func(jctx context.Context, deps runner.Deps) []JobOutcome {
+					out, ok := ApplyHeldSteers(jctx, deps, runID)
+					if !ok {
+						return []JobOutcome{{Key: now.Key, Status: string(now.Status), RunID: runID}}
+					}
+					return outcomesOf([]runner.Outcome{out})
+				}, func(err error) []JobOutcome {
+					s.log(err)
+					return []JobOutcome{{Key: now.Key, Status: string(now.Status), RunID: runID}}
+				})
+			}
+			return "", nil
+		}
+		if _, now, err := store.Open(cfg.Root, runID); err == nil {
+			state = now
+		}
 	}
 	if err := runner.RefuseSteer(cfg.Budget.MaxTurns, cfg.Budget.MaxMinutes, cfg.Budget.MaxUSD, state); err != nil {
 		return "", fmt.Errorf("%w: %w", ErrSteerRefused, err)

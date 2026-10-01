@@ -87,6 +87,27 @@ type RunSummary struct {
 	Mine        bool     `json:"mine"`
 	Usage       Usage    `json:"usage"`
 	Notes       []string `json:"notes"`
+
+	// QueuedSteers is every instruction typed while the run worked, and
+	// what became of each. It rides on the summary rather than the detail
+	// because run.updated carries the summary, and the composer's chips
+	// have to move as the executor resolves them. Omitted on a run nobody
+	// steered while it worked.
+	QueuedSteers []QueuedSteerInfo `json:"queuedSteers,omitempty"`
+}
+
+// QueuedSteerInfo is one steer typed on a working run. Status is queued
+// (waiting for the next turn boundary), delivered (the live session read it
+// after turn Turn), held (the session takes no message mid-run, so it waits
+// for the run to finish), applied (a steer segment carried it after the run
+// settled) or dropped (the settled run could not take it; Reason says why).
+type QueuedSteerInfo struct {
+	ID     string `json:"id"`
+	At     string `json:"at"`
+	Text   string `json:"text"`
+	Status string `json:"status"`
+	Turn   int    `json:"turn,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // RunDetail is a run's full view: the summary plus the paths and limits the
@@ -466,8 +487,20 @@ func SummaryOf(s store.State) RunSummary {
 			OutputTokens: s.Usage.OutputTokens,
 			CostUSD:      s.Usage.CostUSD,
 		},
-		Notes: notes,
+		Notes:        notes,
+		QueuedSteers: queuedSteersOf(s.QueuedSteers),
 	}
+}
+
+func queuedSteersOf(qs []store.QueuedSteer) []QueuedSteerInfo {
+	if len(qs) == 0 {
+		return nil
+	}
+	out := make([]QueuedSteerInfo, 0, len(qs))
+	for _, q := range qs {
+		out = append(out, QueuedSteerInfo{ID: q.ID, At: wireTime(q.At), Text: q.Text, Status: q.Status, Turn: q.Turn, Reason: q.Reason})
+	}
+	return out
 }
 
 // SummaryAt is SummaryOf with what the run directory holds: the ticket's
