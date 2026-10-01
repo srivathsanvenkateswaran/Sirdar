@@ -35,6 +35,7 @@ import Button from '../ui/button'
 import GroupLabel from '../ui/group-label'
 import ItemRow, { type ItemTone } from '../ui/item-row'
 import ModelPicker from '../ui/model-picker'
+import { useModelCatalog } from '../lib/modelCatalog'
 import SegmentedControl from '../ui/segmented-control'
 import './new-session.css'
 
@@ -302,6 +303,13 @@ export default function NewSession(props: {
   const [pinnedMode, setPinnedMode] = useState<SessionMode | null>(null)
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
+  // A pick is an override of this workspace's provider and model. Switching
+  // workspace drops it: carried over, the chip went on naming a model the
+  // new workspace never chose, and a start there quietly used it.
+  useEffect(() => {
+    setProvider('')
+    setModel('')
+  }, [workspaceId])
   const [dryRun, setDryRun] = useState(false)
   /** RCA's own two inputs. */
   const [prUrl, setPrUrl] = useState('')
@@ -322,6 +330,8 @@ export default function NewSession(props: {
   const [noTracker, setNoTracker] = useState(false)
 
   const prefs = useSyncExternalStore(subscribeComposerPrefs, () => composerPrefs(workspaceId))
+  /** The Model chip's list: what this login and this workspace have shown, loaded when it opens. */
+  const catalog = useModelCatalog(transport, workspaceId)
 
   const intent = useMemo(() => parseIntent(text), [text])
 
@@ -596,6 +606,7 @@ export default function NewSession(props: {
                   defaultModel={workspace?.model}
                   lastUsed={lastUsed}
                   disabled={busy}
+                  catalog={catalog}
                   onChange={(choice) => {
                     setProvider(choice.provider)
                     setModel(choice.model)
