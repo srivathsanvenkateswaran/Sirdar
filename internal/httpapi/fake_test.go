@@ -106,6 +106,8 @@ type fake struct {
 	retro        *RetroReport
 	gotGolden    struct{ Key, RunID string }
 	gotAnswer    string
+	gotDecision  *PermissionDecision
+	resumeErr    error // when set, Resume refuses with it
 	gotSteer     string
 	gotModel     string
 	steerErr     error // when set, Steer refuses with it
@@ -654,12 +656,15 @@ func (f *fake) StartRCA(_ context.Context, wsID, key string, o RCAOptions) (JobI
 	return knownJob, nil
 }
 
-func (f *fake) Resume(_ context.Context, wsID, runID, answer, model string) (JobID, error) {
+func (f *fake) Resume(_ context.Context, wsID, runID, answer, model string, decision *PermissionDecision) (JobID, error) {
 	if err := f.checkRun(wsID, runID); err != nil {
 		return "", err
 	}
+	if f.resumeErr != nil {
+		return "", f.resumeErr
+	}
 	f.mu.Lock()
-	f.gotAnswer, f.gotModel = answer, model
+	f.gotAnswer, f.gotModel, f.gotDecision = answer, model, decision
 	f.mu.Unlock()
 	return knownJob, nil
 }

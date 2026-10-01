@@ -45,6 +45,7 @@ type (
 	WebhookMatchSummary  = app.WebhookMatchSummary
 	WebhookSourceSummary = app.WebhookSourceSummary
 	JobID                = app.JobID
+	PermissionDecision   = app.PermissionDecision
 	MCPInventory         = app.MCPInventory
 	MCPServer            = app.MCPServer
 	MCPTool              = app.MCPTool

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -329,17 +330,35 @@ func TestBridgeWorkspacesOnEmptyRegistry(t *testing.T) {
 // ignored model in the app.
 func TestResumeAndSteerTakeAModel(t *testing.T) {
 	bridge := reflect.TypeOf(&Bridge{})
-	for _, name := range []string{"Resume", "Steer"} {
+	for name, arity := range map[string]int{"Resume": 6, "Steer": 5} {
 		m, ok := bridge.MethodByName(name)
 		if !ok {
 			t.Fatalf("Bridge.%s is missing", name)
 		}
-		// receiver, workspace, run, text/answer, model
-		if got := m.Type.NumIn(); got != 5 {
-			t.Errorf("Bridge.%s takes %d arguments, want the workspace, the run, the text and the model", name, got)
+		// receiver, workspace, run, text/answer, model (and a decision on Resume)
+		if got := m.Type.NumIn(); got != arity {
+			t.Errorf("Bridge.%s takes %d arguments, want %d", name, got, arity)
 		}
-		if last := m.Type.In(m.Type.NumIn() - 1); last.Kind() != reflect.String {
-			t.Errorf("Bridge.%s's last argument is %s, want the model as a string", name, last)
+		if model := m.Type.In(4); model.Kind() != reflect.String {
+			t.Errorf("Bridge.%s's model argument is %s, want a string", name, model)
 		}
+	}
+}
+
+// TestResumeTakesADecision: the decision bar's verdict reaches the service
+// as a structured value, decoded from the JSON the Wails runtime sends, and
+// null is every resume that is not answering a permission question.
+func TestResumeTakesADecision(t *testing.T) {
+	m, _ := reflect.TypeOf(&Bridge{}).MethodByName("Resume")
+	if got, want := m.Type.In(5), reflect.TypeOf(&app.PermissionDecision{}); got != want {
+		t.Fatalf("Bridge.Resume's decision is %s, want %s", got, want)
+	}
+	var d *app.PermissionDecision
+	if err := json.Unmarshal([]byte(`{"verdict":"deny","reason":"too broad"}`), &d); err != nil || d == nil || d.Verdict != "deny" || d.Reason != "too broad" {
+		t.Fatalf("decode: %+v %v", d, err)
+	}
+	d = nil
+	if err := json.Unmarshal([]byte(`null`), &d); err != nil || d != nil {
+		t.Fatalf("null: %+v %v", d, err)
 	}
 }

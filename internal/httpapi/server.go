@@ -453,12 +453,16 @@ func (s *server) resume(w http.ResponseWriter, r *http.Request) {
 		// per-model limit is carried on with. Absent leaves the run on
 		// the model it has, which is every other resume.
 		Model string `json:"model"`
+		// Decision answers a permission question: {verdict: allow |
+		// allow_run | deny, reason?}. Answer beside it is passed on as
+		// the operator's words.
+		Decision *PermissionDecision `json:"decision"`
 	}
 	// A resume that is not answering a question carries no body at all.
 	if !decode(w, r, &body, true) {
 		return
 	}
-	id, err := s.svc.Resume(r.Context(), r.PathValue("id"), r.PathValue("runId"), body.Answer, body.Model)
+	id, err := s.svc.Resume(r.Context(), r.PathValue("id"), r.PathValue("runId"), body.Answer, body.Model, body.Decision)
 	if err != nil {
 		s.fail(w, err)
 		return

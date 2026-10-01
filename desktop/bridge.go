@@ -281,9 +281,11 @@ func (b *Bridge) StartEval(ws string, keys []string, o app.EvalOptions) (string,
 // Resume continues a blocked run, answering the agent's question. model,
 // when given, is what the continued session and every session after it ask
 // for — the way out of a run blocked on a per-model limit; empty leaves the
-// run on the model it has.
-func (b *Bridge) Resume(ws, runId, answer, model string) (string, error) {
-	id, err := b.svc.Resume(context.Background(), ws, runId, answer, model)
+// run on the model it has. decision, when given, answers a permission
+// question — {verdict: allow | allow_run | deny, reason?} — and null is
+// every other resume.
+func (b *Bridge) Resume(ws, runId, answer, model string, decision *app.PermissionDecision) (string, error) {
+	id, err := b.svc.Resume(context.Background(), ws, runId, answer, model, decision)
 	return string(id), err
 }
 
