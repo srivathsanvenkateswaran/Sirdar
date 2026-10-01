@@ -159,7 +159,12 @@ type Event struct {
 	Text     string          // assistant text / question / error message
 	Tool     string          // tool name for tool_* and permission
 	Input    json.RawMessage // tool input
-	Decision string          // "allow" | "deny" for permission
+	Decision string          // "allow" | "deny" | "ask" for permission
+
+	// Ask is the question on a permission event whose Decision is "ask":
+	// the call the policy refused and the operator could allow. The run
+	// blocks on it. Nil on every other event.
+	Ask *PermissionAsk
 
 	Turns               int
 	InputTok, OutputTok int64
