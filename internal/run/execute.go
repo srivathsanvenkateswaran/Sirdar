@@ -114,7 +114,13 @@ type execution struct {
 
 	question    string
 	rateLimited bool
-	resetsAt    time.Time
+
+	// ask is the permission question the session stopped on: a call the
+	// policy refused and the operator could allow. The first one is kept;
+	// the session is cancelled on it, and the run blocks with it on its
+	// state.
+	ask      *provider.PermissionAsk
+	resetsAt time.Time
 
 	// modelLimit is the model the provider says this login has spent, set
 	// when it refuses one model while the rest of the account still
@@ -373,6 +379,17 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	// A steer's instruction goes into the transcript ahead of the session
 	// it started, with who is answering it: the session that wrote the
 	// note, or a fresh one primed with it.
+	// An answer to a permission question goes in ahead of the session
+	// that carries it, in the operator's voice, so the transcript says who
+	// let the call through.
+	if a := p.answered; a != nil {
+		if err := log.Append("grant", eventPayload{Text: a.text, Decision: a.verdict, Tool: a.tool}); err != nil {
+			fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
+		}
+		fmt.Fprintf(r.stderr(), "[%s] %s\n", p.state.Key, a.text)
+		p.answered = nil
+	}
+
 	if s := p.steer; s != nil {
 		if err := log.Append("steer", eventPayload{Text: s.Text, Continuation: s.Continuation}); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
@@ -500,6 +517,14 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		return r.finish(ctx, p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
 	case ex.interrupted:
 		return r.finish(ctx, p, store.StatusBlocked, "interrupted", note.DigestRow{})
+	case ex.ask != nil:
+		// Blocked on the operator, who is the only one who can lift the
+		// refusal. It sits above the failure branch because the session
+		// was cancelled on purpose, and whatever its exit said about that
+		// is not why the run stopped.
+		ask := store.PermissionAsk(*ex.ask)
+		p.state.Ask = &ask
+		return r.finish(ctx, p, store.StatusBlocked, askReason(ex.ask), note.DigestRow{})
 	case ex.modelLimit != "":
 		// Blocked, not failed: the session handle is intact, the run is
 		// one `sirdar resume --model NAME` from carrying on, and nothing
@@ -599,6 +624,13 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		spec.Policy.ReadRoots = []string{p.run.Dir, p.run.BundleDir()}
 		spec.Policy.ReadAlso = cfg.Permissions.ReadAlso
 	}
+
+	// A refusal the operator could lift is put to them, unless the
+	// workspace said not to or nobody is there to answer: an eval replays
+	// a bundle unattended, and a question would only stall the score. The
+	// run's own answers so far are what the policy consults first.
+	spec.Policy.Ask = cfg.AskOperator() && !p.state.Eval
+	spec.Policy.Grants = sessionGrants(p)
 
 	// Claude Code reads image files from the bundle directory itself.
 	// Codex has to be handed them on the command line, the openai loop
@@ -754,12 +786,15 @@ func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.
 // eventPayload is the shape of one events.jsonl payload: enough of the
 // event to reconstruct what happened, plus the provider's original line.
 type eventPayload struct {
-	Tool     string          `json:"tool,omitempty"`
-	Decision string          `json:"decision,omitempty"`
-	Text     string          `json:"text,omitempty"`
-	Turns    int             `json:"turns,omitempty"`
-	CostUSD  float64         `json:"costUsd,omitempty"`
-	Raw      json.RawMessage `json:"raw,omitempty"`
+	Tool     string `json:"tool,omitempty"`
+	Decision string `json:"decision,omitempty"`
+	Text     string `json:"text,omitempty"`
+
+	// Ask is the question on a permission line whose decision is "ask".
+	Ask     *provider.PermissionAsk `json:"ask,omitempty"`
+	Turns   int                     `json:"turns,omitempty"`
+	CostUSD float64                 `json:"costUsd,omitempty"`
+	Raw     json.RawMessage         `json:"raw,omitempty"`
 
 	// Delta and Replace are set on an `assistant_text` line alone, and
 	// say how its text joins the text around it: a delta is one fragment
@@ -784,6 +819,7 @@ func (r *Runner) record(p *prepared, log *eventLog, ev provider.Event) {
 	payload := eventPayload{
 		Tool:     ev.Tool,
 		Decision: ev.Decision,
+		Ask:      ev.Ask,
 		Text:     ev.Text,
 		Turns:    ev.Turns,
 		CostUSD:  ev.CostUSD,
@@ -819,6 +855,10 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 			fmt.Fprintf(w, "[%s] tool %s %s\n", key, ev.Tool, summary)
 		}
 	case provider.EvPermission:
+		if ev.Decision == "ask" && ev.Ask != nil {
+			fmt.Fprintf(w, "[%s] blocked %s\n", key, askReason(ev.Ask))
+			return
+		}
 		verb := "allow"
 		if ev.Decision == "deny" {
 			verb = "deny"
@@ -940,6 +980,18 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		// provider owns. The silence after this is the block, not a
 		// stall, and the run keeps the handle it can resume from.
 		ex.stall.hold()
+
+	case provider.EvPermission:
+		if ev.Decision != "ask" || ev.Ask == nil || ex.ask != nil {
+			break
+		}
+		// The provider has already told the agent the call is waiting;
+		// the session stops here and the run blocks on the question.
+		// Stopped beside the cancel, as the budget branches are, so the
+		// stall guard does not fire behind it and misname the reason.
+		ex.ask = ev.Ask
+		ex.stall.stop()
+		sess.Cancel()
 
 	case provider.EvQuestion:
 		ex.question = ev.Text
@@ -1090,6 +1142,14 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// instead is the next model, or a stop.
 	if ex.modelLimit != "" {
 		r.switchModel(ctx, p, sess, log, ex)
+		return
+	}
+
+	// A session stopped on a permission question has no answer to judge:
+	// the turn ended because the agent was told to wait, and a schema
+	// retry would ask it to carry on without the call the operator has
+	// not answered yet.
+	if ex.ask != nil {
 		return
 	}
 
