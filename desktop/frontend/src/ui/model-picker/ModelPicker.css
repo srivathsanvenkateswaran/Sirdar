@@ -269,6 +269,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* An operator's pin may label a model in Arabic. */
+  unicode-bidi: plaintext;
 }
 
 .sd-model-picker__meta {

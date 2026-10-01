@@ -2,6 +2,7 @@ import { PROVIDERS, type Check, type CheckLevel, type ConfigSummary, type Provid
 import Badge from '../../ui/badge'
 import ProviderMark, { providerName } from '../../ui/provider-mark'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
+import ModelsCard from './ModelsCard'
 import { levelOf, OpenConfig, type DoctorState, type Loaded } from './shared'
 
 /**
@@ -238,6 +239,8 @@ export default function ProvidersPage({
           Check re-runs the report.
         </p>
       </SettingCard>
+
+      <ModelsCard transport={transport} workspaceId={currentWorkspaceId} defaultProvider={provider} />
     </>
   )
 }

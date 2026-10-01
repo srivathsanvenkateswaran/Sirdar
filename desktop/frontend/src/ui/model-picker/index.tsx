@@ -540,7 +540,7 @@ export default function ModelPicker({
           <StarIcon filled={starred} />
         </button>
         <span className="sd-model-picker__text">
-          <span className="sd-model-picker__label">{row.label}</span>
+          <span className="sd-model-picker__label" dir="auto">{row.label}</span>
           <span className="sd-model-picker__meta" dir="ltr">
             <ProviderMark provider={row.provider} size="sm" />
             <span>{row.provider}</span>

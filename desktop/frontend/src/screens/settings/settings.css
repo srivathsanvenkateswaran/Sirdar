@@ -657,3 +657,65 @@
   font-size: var(--sd-text-ledger);
   unicode-bidi: isolate;
 }
+
+/* ---------- Providers › Models: the picker's list, one provider at a time ---------- */
+
+.settings-models {
+  display: grid;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-2);
+}
+
+.settings-models__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2) var(--sd-space-3);
+}
+
+.settings-models__status {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+.settings-models__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Three things a row: the label, the id it sends, and where it was seen. */
+.settings-models__row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, 2fr) auto;
+  align-items: baseline;
+  gap: var(--sd-space-3);
+  padding-block: var(--sd-space-2);
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+.settings-models__label {
+  color: var(--sd-ink);
+  font-weight: 500;
+  unicode-bidi: plaintext;
+}
+
+.settings-models__id {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  unicode-bidi: isolate;
+}
+
+.settings-models__note {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+  white-space: nowrap;
+}
