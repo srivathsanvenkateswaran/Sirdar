@@ -3,6 +3,7 @@ import type { RunDetail, RunEvent } from '../../api/types'
 import {
   callId,
   classify,
+  grantLine,
   drawsNothing,
   inputSummary,
   isReplace,
@@ -164,16 +165,6 @@ export function shortenPaths(command: string, root: string): string {
   const above = parent.slice(0, parent.lastIndexOf('/'))
   if (!above) return command
   return command.split(above).join('…')
-}
-
-/**
- * A `grant` event's text, as the operator's own line: the run writes "you
- * allowed rg for this run", and the bubble is already theirs, so it reads
- * "Allowed rg for this run".
- */
-export function grantLine(text: string): string {
-  const t = text.replace(/^you\s+/i, '')
-  return t ? t[0].toUpperCase() + t.slice(1) : t
 }
 
 function lineCount(text: string): number {

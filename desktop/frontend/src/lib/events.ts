@@ -467,6 +467,16 @@ export function askingFor(reason: string | undefined): string {
 }
 
 /**
+ * A `grant` event's text, as the operator's own line: the run writes "you
+ * allowed rg for this run", and the line is already theirs, so it reads
+ * "Allowed rg for this run".
+ */
+export function grantLine(text: string): string {
+  const t = text.replace(/^you\s+/i, '')
+  return t ? t[0].toUpperCase() + t.slice(1) : t
+}
+
+/**
  * The board card's few words for a permission question: "asking: rg …" —
  * the program or tool, and an ellipsis when there was more. The whole call
  * is the session's to show.
@@ -474,7 +484,9 @@ export function askingFor(reason: string | undefined): string {
 export function askingDetail(reason: string | undefined): string {
   const call = askingFor(reason)
   if (!call) return ''
-  const [head, ...rest] = call.split(/\s+/)
+  const [first, ...rest] = call.split(/\s+/)
+  // An MCP tool is named by its own name, not the mcp__server__ wire prefix.
+  const head = first.startsWith('mcp__') ? first.slice(first.lastIndexOf('__') + 2) : first
   const word = head.length > 24 ? `${head.slice(0, 23)}…` : head
   return rest.length > 0 ? `asking: ${word} …` : `asking: ${word}`
 }

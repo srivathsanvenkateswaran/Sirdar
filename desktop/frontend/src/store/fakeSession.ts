@@ -876,6 +876,29 @@ export function fixFixture(over: Partial<RunDetail> = {}): SessionFixture {
   return { detail: fixDetail(over), events: fixEvents('end'), note: '', prompt: TRIAGE_PROMPT, diff: fixDiff() }
 }
 
+/**
+ * The fix run at 00:11, blocked on a permission question: the policy
+ * refused `go test ./...` and the run carries the question as
+ * `question.decision`, the way `internal/run` writes it.
+ */
+export function askingFixture(over: Partial<RunDetail> = {}): SessionFixture {
+  return blockedFixture({
+    reason: 'asking: go test ./...',
+    question: {
+      text: 'go test ./...',
+      decision: {
+        kind: 'bash',
+        tool: 'Bash',
+        summary: 'go test ./...',
+        patterns: ['go test *'],
+        verdict: 'deny',
+        reason: 'Sirdar policy: not permitted by permissions.fixBash; allowed here: go build * (see .sirdar/config.yaml).',
+      },
+    },
+    ...over,
+  })
+}
+
 /** The fix run at 00:11, waiting for the reader to allow `go test ./...`. */
 export function blockedFixture(over: Partial<RunDetail> = {}): SessionFixture {
   return {

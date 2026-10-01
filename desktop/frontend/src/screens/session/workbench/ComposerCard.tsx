@@ -51,6 +51,8 @@ export interface ComposerStripProps {
   canStop?: boolean
   /** The stop is in flight. */
   stopBusy?: boolean
+  /** Draw the send bordered: the decision bar above holds the screen's filled button. */
+  quiet?: boolean
 }
 
 export default function ComposerCard({
@@ -68,6 +70,7 @@ export default function ComposerCard({
   onStop,
   canStop = false,
   stopBusy = false,
+  quiet = false,
 }: ComposerStripProps): JSX.Element {
   const [text, setText] = useState('')
   const field = useRef<HTMLTextAreaElement | null>(null)
@@ -191,7 +194,7 @@ export default function ComposerCard({
       ) : (
         <Button
           type="submit"
-          variant="primary"
+          variant={quiet ? 'secondary' : 'primary'}
           shortcut="↵"
           busy={busy}
           disabled={disabled && !busy}

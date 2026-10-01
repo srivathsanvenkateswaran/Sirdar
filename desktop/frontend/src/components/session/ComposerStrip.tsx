@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { RunDetail } from '../../api/types'
+import type { PermissionDecision, RunDetail } from '../../api/types'
 import ChipMenu from '../composer/ChipMenu'
 import ComposerCard from '../composer/ComposerCard'
 import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder } from '../composer/modes'
 import ProviderMark from '../../ui/provider-mark'
-import SegmentedControl from '../../ui/segmented-control'
+import DecisionBar from './DecisionBar'
 import { QuestionIcon } from './icons'
 import type { ComposerState } from './model'
-
-export type Decision = 'once' | 'session' | 'deny'
 
 export interface ComposerStripProps {
   state: ComposerState
@@ -16,8 +14,10 @@ export interface ComposerStripProps {
   busy: boolean
   /** What the last send came back with; the button stays live. */
   error: string
-  /** Sends the text; while blocked, with the decision the segment holds. */
-  onSend: (text: string, decision?: Decision) => void
+  /** Sends the text: the answer while blocked, the instruction once finished. */
+  onSend: (text: string) => void
+  /** Answers a permission question from the decision bar. */
+  onDecide?: (decision: PermissionDecision) => void
   /** Clears the text once a send succeeded. Bump it. */
   sentCount: number
   /** How many playbooks the prompt carried. */
@@ -33,25 +33,11 @@ export interface ComposerStripProps {
 }
 
 /**
- * The words a decision is sent as. The resume route takes an answer, not a
- * structured verdict, so the decision goes as the first words of the answer
- * and the reader's note follows it.
- */
-export function decisionText(decision: Decision, rule: string | undefined, note: string): string {
-  const head =
-    decision === 'deny'
-      ? 'No, do not run it.'
-      : decision === 'session' && rule
-        ? `Yes, and allow \`${rule}\` for the rest of this session.`
-        : 'Yes, run it once.'
-  return note ? `${head} ${note}` : head
-}
-
-/**
  * The strip under the document: Reply when the run is blocked — the
- * question, its reason and the suggested rule in the blocked hue, a
- * decision segment (Allow once / Allow the rule this run / Deny) and the
- * one filled button, Answer — and Steer when the run has finished, with
+ * question in the blocked hue and Answer, or, when the question is a
+ * permission one, the decision bar (Allow once / Allow for this run / Deny)
+ * above the box, whose Allow once is then the one filled button and Answer
+ * the bordered way to reply in words — and Steer when the run has finished, with
  * the resume handle, the playbook count, the provider and the mode with
  * its posture as one row of chips that never wraps.
  *
@@ -65,6 +51,7 @@ export default function ComposerStrip({
   busy,
   error,
   onSend,
+  onDecide,
   sentCount,
   playbooks,
   lastSteer,
@@ -73,19 +60,19 @@ export default function ComposerStrip({
   stopBusy = false,
 }: ComposerStripProps): JSX.Element {
   const [text, setText] = useState('')
-  const [decision, setDecision] = useState<Decision>('once')
   useEffect(() => {
     setText('')
   }, [sentCount])
 
   const reply = state.kind === 'reply'
+  const ask = reply && onDecide ? detail.question?.decision : undefined
   const running = state.kind === 'running'
   const mode = reply ? 'reply' : state.kind === 'steer' ? 'steer' : running ? 'running' : 'off'
   const trimmed = text.trim()
   const label = reply ? 'Answer' : 'Steer'
-  const needsText = state.kind === 'steer' || (reply && !state.pending)
+  const needsText = state.kind === 'steer' || reply
   const disabled = state.kind === 'disabled' || running || (needsText && trimmed === '')
-  const rule = reply ? state.suggestedRule : undefined
+  const rule = reply && !ask ? state.suggestedRule : undefined
   const title =
     state.kind === 'disabled'
       ? state.reason
@@ -99,8 +86,8 @@ export default function ComposerStrip({
     : state.kind === 'disabled'
       ? state.reason
       : reply
-        ? state.pending
-          ? 'Add a note for the agent (optional) — it reads it before the command runs.'
+        ? ask
+          ? 'Or answer in words — the call is not run'
           : 'Answer the question'
         : `Steer the agent — it resumes ${detail.kind === 'fix' ? 'in the worktree with the diff and the checks in context' : 'from where it stopped'}.${
             lastSteer ? ` Your last steer at ${lastSteer.at}.` : ''
@@ -122,7 +109,13 @@ export default function ComposerStrip({
           </span>
         </div>
       )}
-      {reply ? (
+      {ask && onDecide ? (
+        <DecisionBar
+          ask={ask}
+          busy={busy}
+          onDecide={(verdict, reason) => onDecide({ verdict, ...(reason ? { reason } : {}) })}
+        />
+      ) : reply ? (
         <div className="sn-q" role="group" aria-label="The agent's question">
           <span className="sn-q__ic">
             <QuestionIcon />
@@ -187,28 +180,14 @@ export default function ComposerStrip({
             ) : null}
           </>
         }
-        trailing={
-          reply && state.pending ? (
-            <SegmentedControl
-              label="Decision"
-              value={decision}
-              onChange={(id) => setDecision(id as Decision)}
-              options={[
-                { id: 'once', label: 'Allow once' },
-                ...(rule ? [{ id: 'session', label: `Allow ${rule} this run` }] : []),
-                { id: 'deny', label: 'Deny' },
-              ]}
-            />
-          ) : undefined
-        }
-        aside={state.kind === 'disabled' ? undefined : undefined}
         send={{
           label,
           busyLabel: reply ? 'Answering…' : 'Steering…',
           busy,
           disabled,
           title,
-          onClick: () => onSend(reply && state.pending ? decisionText(decision, rule, trimmed) : trimmed, reply && state.pending ? decision : undefined),
+          onClick: () => onSend(trimmed),
+          quiet: Boolean(ask),
         }}
         stop={
           running && onStop

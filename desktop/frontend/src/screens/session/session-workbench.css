@@ -1445,6 +1445,16 @@ button.wb-ttab:hover,
 
 /* ------------------------------------------------------------ command bar */
 
+/* The decision bar sits on the sheet directly above the command bar, at its
+   inline padding, so the question reads as part of the bar it answers. */
+.wb-decide {
+  flex: 0 0 auto;
+  padding-block: var(--sd-space-2) 0;
+  padding-inline: var(--sd-space-4) var(--sd-space-3);
+  border-block-start: 1px solid var(--sd-rule);
+  background: var(--sd-sheet);
+}
+
 .wb-cmd {
   display: flex;
   flex: 0 0 auto;

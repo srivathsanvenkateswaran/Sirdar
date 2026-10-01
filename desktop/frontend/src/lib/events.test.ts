@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { RunEvent } from '../api/types'
 import {
   askedQuestion,
+  askingDetail,
+  askingFor,
+  classify,
   callDuration,
   callId,
   conversation,
@@ -628,5 +631,24 @@ describe('notePathFor', () => {
     expect(notePathFor('resolution', ['/w/.sirdar/runs/K/r1/note.md'])).toBe('')
     expect(notePathFor('triage', [])).toBe('')
     expect(notePathFor('triage', undefined)).toBe('')
+  })
+})
+
+describe('permission questions', () => {
+  it('reads the call off an asking reason, and nothing off any other', () => {
+    expect(askingFor('asking: rg -n refund src')).toBe('rg -n refund src')
+    expect(askingFor('agent asked: which one?')).toBe('')
+    expect(askingFor(undefined)).toBe('')
+  })
+
+  it('cuts the board detail to the program', () => {
+    expect(askingDetail('asking: rg -n refund src')).toBe('asking: rg …')
+    expect(askingDetail('asking: mcp__grafana__query_loki_logs')).toBe('asking: query_loki_logs')
+    expect(askingDetail('asking: ls')).toBe('asking: ls')
+    expect(askingDetail('interrupted')).toBe('')
+  })
+
+  it('draws an answer the operator gave as their own line', () => {
+    expect(classify(ev('grant', { text: 'you allowed rg for this run' }))).toBe('you')
   })
 })

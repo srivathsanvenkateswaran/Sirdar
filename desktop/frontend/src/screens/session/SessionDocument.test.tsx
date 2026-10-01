@@ -6,7 +6,7 @@ import { resetRunJobs, setRunJob } from '../../lib/jobs'
 import { resetSessionLayout, setSessionLayout } from '../../lib/sessionLayout'
 import {
   at,
-  blockedFixture,
+  askingFixture,
   claudePermission,
   claudeToolResult,
   claudeToolUse,
@@ -122,8 +122,8 @@ describe('S1 · the completed triage', () => {
 })
 
 describe('S2 · the fix run blocked on go test', () => {
-  it('shows the amber badge, the waiting step expanded with the policy, and the Reply strip with the decision segment', async () => {
-    mount([blockedFixture()], FIX_RUN_ID)
+  it('shows the amber badge, the waiting step expanded with the policy, and the Reply strip with the decision bar', async () => {
+    mount([askingFixture()], FIX_RUN_ID)
     const doc = await opened()
     expect(within(head()).getByText('blocked')).toBeInTheDocument()
     expect(within(head()).getByTitle('blocked · waiting on you')).toBeInTheDocument()
@@ -138,28 +138,46 @@ describe('S2 · the fix run blocked on go test', () => {
     expect(within(path).getByRole('button', { name: 'Marker C1' })).toBeInTheDocument()
     const strip = within(doc).getByTestId('composer-strip')
     expect(strip).toHaveAttribute('data-mode', 'reply')
-    expect(within(strip).getByRole('group', { name: "The agent's question" })).toHaveTextContent('Run go test ./... in the worktree?')
-    expect(within(strip).getByRole('radiogroup', { name: 'Decision' })).toBeInTheDocument()
-    expect(screen.getByTestId('published')).toHaveTextContent('Answer')
+    expect(within(strip).getByTestId('decision-bar')).toHaveTextContent('go test ./...')
+    expect(screen.getByTestId('published')).toHaveTextContent('Allow once')
     const change = await within(doc).findByTestId('changes-view')
     expect(within(change).getByText('1 · +14 −0')).toBeInTheDocument()
     expect(within(change).getByText(/which needs your answer below/)).toBeInTheDocument()
     expect(within(doc).queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
-  it('answers: the decision goes to resume as words and the answer joins the path', async () => {
-    const { transport } = mount([blockedFixture()], FIX_RUN_ID, {
+  it('answers: Deny with a reason goes to resume as a structured decision', async () => {
+    const { transport } = mount([askingFixture()], FIX_RUN_ID, {
       transport: (t) => {
         t.resume = vi.fn(async () => ({ jobId: 'job-2' }))
       },
     })
     const doc = await opened()
     const strip = within(doc).getByTestId('composer-strip')
-    fireEvent.click(within(strip).getByRole('radio', { name: 'Deny' }))
+    const bar = within(strip).getByTestId('decision-bar')
+    fireEvent.click(within(bar).getByRole('button', { name: /^Deny/ }))
+    fireEvent.change(within(bar).getByRole('textbox', { name: 'Why not' }), { target: { value: 'Run only the ledger package.' } })
+    fireEvent.click(within(bar).getByRole('button', { name: /^Deny/ }))
+    await waitFor(() =>
+      expect(transport.resume).toHaveBeenCalledWith('ws1', FIX_RUN_ID, '', undefined, {
+        verdict: 'deny',
+        reason: 'Run only the ledger package.',
+      }),
+    )
+  })
+
+  it('answers in words: the free answer goes to resume as text, with no decision', async () => {
+    const { transport } = mount([askingFixture()], FIX_RUN_ID, {
+      transport: (t) => {
+        t.resume = vi.fn(async () => ({ jobId: 'job-3' }))
+      },
+    })
+    const doc = await opened()
+    const strip = within(doc).getByTestId('composer-strip')
     fireEvent.change(within(strip).getByRole('textbox', { name: 'Answer' }), { target: { value: 'Run only the ledger package.' } })
-    fireEvent.click(within(strip).getByRole('button', { name: /Answer/ }))
-    await waitFor(() => expect(transport.resume).toHaveBeenCalledWith('ws1', FIX_RUN_ID, 'No, do not run it. Run only the ledger package.'))
-    expect(await within(doc).findByText('No, do not run it. Run only the ledger package.')).toBeInTheDocument()
+    fireEvent.click(within(strip).getByRole('button', { name: /^Answer/ }))
+    await waitFor(() => expect(transport.resume).toHaveBeenCalledWith('ws1', FIX_RUN_ID, 'Run only the ledger package.'))
+    expect(await within(doc).findByText('Run only the ledger package.')).toBeInTheDocument()
   })
 
   it("the composer's Stop cancels once the shell knows the job", async () => {

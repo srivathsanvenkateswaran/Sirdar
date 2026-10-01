@@ -6,10 +6,10 @@ import { runDirOf } from '../../lib/pathAction'
 import { setSessionsShow } from '../../lib/sessionsShow'
 import { createFakeTransport } from '../../store/fakeTransport'
 import { parseNote } from '../../lib/note'
-import { blockedFixture, fixDiff, fixFixture, triageFixture, type SessionFixture } from '../../store/fakeSession'
+import { askingFixture, blockedFixture, fixDiff, fixFixture, triageFixture, type SessionFixture } from '../../store/fakeSession'
 import AnswerCard from './AnswerCard'
 import ChangesView from './ChangesView'
-import ComposerStrip, { decisionText } from './ComposerStrip'
+import ComposerStrip from './ComposerStrip'
 import { buildSessionModel, type SessionStep } from './model'
 import NoteDocument from './NoteDocument'
 import RunHeader, { badgeDetail, LayoutSwitcher } from './RunHeader'
@@ -418,10 +418,10 @@ describe('ComposerStrip', () => {
     expect(send).toBeDisabled()
     fireEvent.change(box, { target: { value: 'Say it in one sentence.' } })
     fireEvent.click(send)
-    expect(onSend).toHaveBeenCalledWith('Say it in one sentence.', undefined)
+    expect(onSend).toHaveBeenCalledWith('Say it in one sentence.')
   })
 
-  it('reads Reply while blocked, with the question, the rule and the decision segment, and sends the decision as words', () => {
+  it('reads Reply while blocked on a question in words, and sends the answer as typed', () => {
     const onSend = vi.fn()
     render(<ComposerStrip state={blockedModel.composer} detail={blocked.detail} busy={false} error="" onSend={onSend} sentCount={0} />)
     const strip = screen.getByTestId('composer-strip')
@@ -429,17 +429,33 @@ describe('ComposerStrip', () => {
     expect(within(strip).getByText(/Waiting since 00:11/)).toBeInTheDocument()
     const q = within(strip).getByRole('group', { name: "The agent's question" })
     expect(q).toHaveTextContent('Run go test ./... in the worktree?')
-    expect(q).toHaveTextContent('Run tests before the fix · this command requires approval · suggested rule go test * for this session')
-    const seg = within(strip).getByRole('radiogroup', { name: 'Decision' })
-    expect(within(seg).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Allow once', 'Allow go test * this run', 'Deny'])
+    expect(within(strip).queryByTestId('decision-bar')).toBeNull()
     const answer = within(strip).getByRole('button', { name: /Answer/ })
-    expect(answer).toBeEnabled()
-    fireEvent.click(within(seg).getByRole('radio', { name: 'Allow go test * this run' }))
+    expect(answer).toBeDisabled()
     fireEvent.change(within(strip).getByRole('textbox', { name: 'Answer' }), { target: { value: 'Go ahead.' } })
     fireEvent.click(answer)
-    expect(onSend).toHaveBeenCalledWith('Yes, and allow `go test *` for the rest of this session. Go ahead.', 'session')
-    expect(decisionText('deny', 'go test *', '')).toBe('No, do not run it.')
-    expect(decisionText('once', undefined, 'note')).toBe('Yes, run it once. note')
+    expect(onSend).toHaveBeenCalledWith('Go ahead.')
+  })
+
+  it('carries the decision bar on a permission question, and sends the verdict, not words', () => {
+    const asking = askingFixture()
+    const model = buildSessionModel(asking.detail, indexed(asking), { diff: asking.diff })
+    const onSend = vi.fn()
+    const onDecide = vi.fn()
+    render(
+      <ComposerStrip state={model.composer} detail={asking.detail} busy={false} error="" onSend={onSend} onDecide={onDecide} sentCount={0} />,
+    )
+    const strip = screen.getByTestId('composer-strip')
+    const bar = within(strip).getByTestId('decision-bar')
+    expect(bar).toHaveTextContent('Bash')
+    expect(bar).toHaveTextContent('go test ./...')
+    expect(within(strip).queryByRole('radiogroup', { name: 'Decision' })).toBeNull()
+    // Allow once is the filled button; Answer steps down beside it.
+    expect(within(bar).getByRole('button', { name: /Allow once/ })).toHaveAttribute('data-variant', 'primary')
+    expect(within(strip).getByRole('button', { name: /^Answer/ })).toHaveAttribute('data-variant', 'secondary')
+    fireEvent.click(within(bar).getByRole('button', { name: 'Allow for this run' }))
+    expect(onDecide).toHaveBeenCalledWith({ verdict: 'allow_run' })
+    expect(onSend).not.toHaveBeenCalled()
   })
 
   // Said once: the box carries it, the button stops the run, and no

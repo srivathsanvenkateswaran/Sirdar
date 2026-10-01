@@ -1,5 +1,4 @@
-import type { FixInfo, RunDetail, SourcesSummary, Transport } from '../../api/types'
-import type { Decision } from '../../components/session/ComposerStrip'
+import type { FixInfo, PermissionDecision, RunDetail, SourcesSummary, Transport } from '../../api/types'
 import type { SessionData } from '../../components/session/useSessionModel'
 import type { SessionLayout } from '../../lib/sessionLayout'
 
@@ -24,8 +23,11 @@ export interface SessionLayoutProps {
   sources?: SourcesSummary
   live: boolean
   actions: {
-    /** Answers a blocked run; `decision` is what the strip's segment held. */
-    answer: (text: string, decision?: Decision) => void
+    /**
+     * Answers a blocked run: in words, or with `decision` when the run is
+     * waiting on a permission question.
+     */
+    answer: (text: string, decision?: PermissionDecision) => void
     steer: (text: string) => void
     cancel: () => void
     acceptDeviation?: () => void

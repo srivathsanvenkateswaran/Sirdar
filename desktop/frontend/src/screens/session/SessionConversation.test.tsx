@@ -324,6 +324,63 @@ describe('SessionConversation', () => {
     })
   })
 
+  describe('S2b — blocked on a permission question', () => {
+    const ASKING: RunDetail = {
+      ...FIX_DETAIL,
+      status: 'blocked',
+      reason: 'asking: go test ./...',
+      updatedAt: '2026-09-15T12:15:02Z',
+      usage: { turns: 3, inputTokens: 90000, outputTokens: 800, costUsd: 0 },
+      question: {
+        text: 'go test ./...',
+        decision: {
+          kind: 'bash',
+          tool: 'Bash',
+          summary: 'go test ./...',
+          patterns: ['go test *'],
+          verdict: 'deny',
+          reason: 'Sirdar policy: not permitted by permissions.fixBash',
+        },
+      },
+    }
+
+    it('draws the decision bar above the composer, Allow once the screen’s filled button and Answer bordered', async () => {
+      const f = fake({ detail: ASKING, events: fixEvents('blocked'), diff: FIX_DIFF })
+      renderScene(f, { runId: FIX_DETAIL.runId })
+      const bar = await screen.findByTestId('decision-bar')
+      expect(bar).toHaveTextContent('go test ./...')
+      expect(within(bar).getByRole('button', { name: /Allow once/ })).toHaveAttribute('data-variant', 'primary')
+      expect(send(/^Answer/)).toHaveAttribute('data-variant', 'secondary')
+      await waitFor(() => expect(screen.getByTestId('published')).toHaveTextContent('Allow once inline'))
+      // The card in the flow says why, and leaves the command to the bar.
+      const ask = screen.getByTestId('ask-card')
+      expect(ask).toHaveTextContent('Asks for permission')
+      expect(ask).toHaveTextContent('Not on permissions.bash')
+    })
+
+    it('sends each verdict to resume as a decision, and ⌘⏎ is Allow once', async () => {
+      const f = fake({ detail: ASKING, events: fixEvents('blocked'), diff: FIX_DIFF })
+      renderScene(f, { runId: FIX_DETAIL.runId })
+      const bar = await screen.findByTestId('decision-bar')
+      fireEvent.click(within(bar).getByRole('button', { name: 'Allow for this run' }))
+      await waitFor(() =>
+        expect(f.transport.resume).toHaveBeenLastCalledWith('ws1', FIX_DETAIL.runId, '', '', { verdict: 'allow_run' }),
+      )
+      fireEvent.keyDown(screen.getByRole('textbox', { name: 'Answer' }), { key: 'Enter', metaKey: true })
+      await waitFor(() => expect(f.transport.resume).toHaveBeenLastCalledWith('ws1', FIX_DETAIL.runId, '', '', { verdict: 'allow' }))
+    })
+
+    it('keeps the box for an answer in words, which goes without a decision', async () => {
+      const f = fake({ detail: ASKING, events: fixEvents('blocked'), diff: FIX_DIFF })
+      renderScene(f, { runId: FIX_DETAIL.runId })
+      const box = await screen.findByRole('textbox', { name: 'Answer' })
+      expect(box).toHaveAttribute('placeholder', 'Or answer in words — the call is not run')
+      fireEvent.change(box, { target: { value: 'Run only the ledger package.' } })
+      fireEvent.click(send(/^Answer/))
+      await waitFor(() => expect(f.transport.resume).toHaveBeenCalledWith('ws1', FIX_DETAIL.runId, 'Run only the ledger package.', ''))
+    })
+  })
+
   describe('S7 — blocked on a per-model limit', () => {
     const LIMITED: RunDetail = {
       ...TRIAGE_DETAIL,
