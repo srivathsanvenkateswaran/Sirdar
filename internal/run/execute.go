@@ -382,6 +382,8 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 			r.record(p, log, provider.Event{Kind: provider.EvSystem, At: started, Text: continuedInNewSession})
 		}
 	}
+	// Anything typed while the run was preparing is in the inbox already.
+	r.pickUpSteers(p, log)
 
 	var timedOut atomic.Bool
 	if mins := r.Config.Budget.MaxMinutes; mins > 0 {
@@ -401,6 +403,9 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	defer ex.stall.stop()
 
 	sessions := r.consume(ctx, p, sess, log, pl, ex)
+	// The session is over, so no turn boundary is coming: whatever is
+	// still queued waits for the run to settle.
+	r.holdSteers(p, log)
 
 	// The cancellation happened on the timer's goroutine, so the event
 	// log is written here, once the stream has drained and nothing else
@@ -723,8 +728,12 @@ func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session
 func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, pl *pool, ex *execution) {
 	done := ctx.Done()
 	events := sess.Events()
+	inbox := time.NewTicker(r.steerPoll())
+	defer inbox.Stop()
 	for events != nil {
 		select {
+		case <-inbox.C:
+			r.pickUpSteers(p, log)
 		case <-done:
 			done = nil // an interrupt is handled once; the stream still drains
 			ex.interrupted = true
@@ -1172,10 +1181,6 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		// Write everything the run exists to produce before waiting on
 		// anything else, then end the session on purpose instead of
 		// hoping it ends by itself.
-		// The answer is in; what happens to the process now is
-		// endSession's business, and a provider that takes its time
-		// exiting is not a stalled run.
-		ex.stall.stop()
 		switch {
 		case p.steer != nil && len(p.previousFinal) > 0 && jsonEqual(p.previousFinal, ex.final):
 			// A steer whose answer is the same document leaves the
@@ -1197,6 +1202,16 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		if werr := p.run.WriteState(p.state); werr != nil {
 			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, werr)
 		}
+		// The turn boundary: the answer is filed, and a steer typed
+		// while the agent worked goes in now, as the session's next
+		// user message, when the session takes one.
+		if r.deliverSteers(ctx, p, sess, log, ex) {
+			return
+		}
+		// The answer is in; what happens to the process now is
+		// endSession's business, and a provider that takes its time
+		// exiting is not a stalled run.
+		ex.stall.stop()
 		r.endSession(p, sess)
 		return
 	}

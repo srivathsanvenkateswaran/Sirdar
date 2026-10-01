@@ -161,6 +161,10 @@ type Runner struct {
 	// off whatever the workspace configured.
 	StallTimeout time.Duration
 
+	// SteerPoll overrides how often a working run reads its steer inbox
+	// between provider events. Zero means half a second.
+	SteerPoll time.Duration
+
 	// onPause, when set, is called every time a rate-limit pause is
 	// recorded, so a test can synchronise on it. Production leaves it nil.
 	onPause func(time.Time)
