@@ -170,6 +170,30 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   which model answered which stretch of it, so the register row and the session header name the
   model that finished it, and `sirdar doctor` prints the fallback list under the claude rows
   (`docs/config.md`, `docs/steer.md`).
+- The model picker's list is discovered rather than typed into the frontend. A static table
+  offered "Opus 5" to a login whose `opus` was something else; now the list is what the login
+  and the workspace have shown. For claude, Sirdar asks the CLI what `opus`, `sonnet`, `haiku`
+  and the workspace's configured model resolve to — one `claude -p . --max-turns 1` per alias,
+  stopped as soon as its `system/init` line names the model, so no turn is spent — and keeps the
+  answer under `~/.sirdar/models/claude.json` for a day (an hour when nothing resolved). Claude
+  Code has no command that lists models, which is why it is asked this way. Every model the
+  workspace's runs reported, newest first, and the operator's own `providers.<p>.models` pins
+  (an id, or `{id, label}`) join it, each id once. Nothing probes on app start: opening a picker
+  probes only when the cache is empty or stale, and Refresh probes on demand. The popover groups
+  the list by source with when each was seen ("probed today", "seen in a run 2d ago"), keeps an
+  Other… row for free text and a footer with the probe's age and Refresh; Settings › Providers
+  shows the same list per provider. With nothing discovered the static names are still offered,
+  marked "not verified on this login". Labels are derived from the id
+  (`claude-opus-4-5-20251101` reads "Opus 4.5"). `GET /api/workspaces/{id}/models`,
+  `POST /api/workspaces/{id}/models/refresh` and the bridge's `Models`/`RefreshModels` carry it
+  (`docs/config.md`).
+- The session composer's Model chip is locked while a run is preparing or running: muted, a lock
+  where the chevron was, and the tooltip "The model is fixed while the run works. Change it when
+  it stops." On a blocked or settled run it stays a picker and reads `next: <model>` when the pick
+  differs from the model that ran. The pick is now kept per run for the life of the window, so
+  switching the session layout no longer drops it silently and another run never inherits it; a
+  picker whose chip turns read-only or disabled while open closes; and New session drops its pick
+  when the workspace changes.
 - `provider: acp` reads session modes the way the agents actually publish them. A mode id may be
   a URL — every one of GitHub Copilot's is a link into the protocol's own documentation, ending
   `#plan`, `#agent` or `#autopilot` — so ids are now matched on their last fragment or path
