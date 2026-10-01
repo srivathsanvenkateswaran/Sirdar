@@ -18,6 +18,12 @@ export interface ComposerSend {
    * screen's primary action and the word is what the reader is looking for.
    */
   wide?: boolean
+  /**
+   * Draw the send bordered rather than filled: another control on the
+   * screen is the one filled button right now — the decision bar's Allow
+   * once — and the send is the second way to answer, in words.
+   */
+  quiet?: boolean
 }
 
 /**
@@ -261,7 +267,7 @@ export default function ComposerCard({
           ) : strip ? (
             <Button
               type="submit"
-              variant="primary"
+              variant={send.quiet ? 'secondary' : 'primary'}
               busy={send.busy}
               disabled={send.disabled && !send.busy}
               title={send.title}
@@ -273,7 +279,7 @@ export default function ComposerCard({
           ) : (
             <Button
               type="submit"
-              variant="primary"
+              variant={send.quiet ? 'secondary' : 'primary'}
               iconOnly={!send.wide}
               icon={<ArrowUpIcon />}
               busy={send.busy}

@@ -1,0 +1,92 @@
+/*
+ * The decision bar: a blocked run's permission question above the composer.
+ *
+ * It wears the blocked hue the way the model-limit banner does — a 10% tint
+ * under an inline-start rule in the hue — because waiting on a person is
+ * what the state is. The question is one line that never wraps: the tool in
+ * the ledger face, the call in mono cut with an ellipsis, and the policy's
+ * short reason after it. The buttons sit on a second row so a narrow pane
+ * keeps all three at their full width. Every value is a token and every
+ * side is logical.
+ */
+
+.sn-decide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
+  border-inline-start: 3px solid var(--sd-st-blocked);
+  border-radius: var(--sd-radius-sm);
+  background: color-mix(in srgb, var(--sd-st-blocked) 10%, transparent);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  line-height: 1.5;
+  min-inline-size: 0;
+  margin-block-end: var(--sd-space-2);
+}
+
+.sn-decide__q {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+  white-space: nowrap;
+}
+
+.sn-decide__tool {
+  flex: 0 0 auto;
+  color: var(--sd-st-blocked);
+  font-weight: 600;
+  unicode-bidi: isolate;
+}
+
+.sn-decide__call {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  unicode-bidi: isolate;
+}
+
+.sn-decide__why {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+.sn-decide__why::before {
+  content: '· ';
+  opacity: 0.6;
+}
+
+.sn-decide__actions,
+.sn-decide__deny {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+
+.sn-decide__reason {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  min-block-size: var(--sd-control-h);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font: inherit;
+  unicode-bidi: plaintext;
+}
+
+.sn-decide__reason::placeholder {
+  color: var(--sd-ink-3);
+}

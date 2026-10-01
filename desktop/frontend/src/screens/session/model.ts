@@ -166,6 +166,16 @@ export function shortenPaths(command: string, root: string): string {
   return command.split(above).join('…')
 }
 
+/**
+ * A `grant` event's text, as the operator's own line: the run writes "you
+ * allowed rg for this run", and the bubble is already theirs, so it reads
+ * "Allowed rg for this run".
+ */
+export function grantLine(text: string): string {
+  const t = text.replace(/^you\s+/i, '')
+  return t ? t[0].toUpperCase() + t.slice(1) : t
+}
+
 function lineCount(text: string): number {
   if (text === '') return 0
   return text.split('\n').length
@@ -189,6 +199,11 @@ function decisionOf(call: ToolCall): { decision: Decision; reason: string; sugge
     }
   }
   const text = str(permission.payload?.text) || str(request?.decision_reason)
+  // A call put to the operator did not run, and is not a refusal either
+  // until they say so: the decision bar is where it is answered.
+  if (permission.payload?.decision === 'ask') {
+    return { decision: 'denied', reason: 'waiting on you', suggestedRule: '' }
+  }
   if (permission.payload?.decision === 'deny') {
     return { decision: 'denied', reason: text.replace(/^Sirdar policy:\s*/i, ''), suggestedRule }
   }
@@ -487,12 +502,13 @@ class SessionBuilder {
     switch (event.kind) {
       case 'steer':
       case 'answer':
+      case 'grant':
         this.flush(event.t)
         this.steered = true
         this.add({
           kind: 'you',
           index: row.index,
-          text: str(event.payload?.text),
+          text: event.kind === 'grant' ? grantLine(str(event.payload?.text)) : str(event.payload?.text),
           at: clock(event.t, this.startedAt),
           continuation: event.payload?.continuation,
         })

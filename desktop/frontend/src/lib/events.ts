@@ -84,6 +84,7 @@ export function classify(event: RunEvent): EventClass {
   switch (event.kind) {
     case 'steer':
     case 'answer':
+    case 'grant':
       return 'you'
     case 'tool_started':
     case 'tool_finished':
@@ -452,6 +453,30 @@ export function askedQuestion(reason: string | undefined): string {
   if (!reason) return ''
   const match = /^agent asked:\s*/i.exec(reason)
   return match ? reason.slice(match[0].length).trim() : ''
+}
+
+/**
+ * The call a run blocked on a permission question wants to make, off its
+ * reason, or '' when it stopped for something else. `internal/run` writes
+ * `asking: <call>` — the command, the URL, the MCP tool.
+ */
+export function askingFor(reason: string | undefined): string {
+  if (!reason) return ''
+  const match = /^asking:\s*/i.exec(reason)
+  return match ? reason.slice(match[0].length).trim() : ''
+}
+
+/**
+ * The board card's few words for a permission question: "asking: rg …" —
+ * the program or tool, and an ellipsis when there was more. The whole call
+ * is the session's to show.
+ */
+export function askingDetail(reason: string | undefined): string {
+  const call = askingFor(reason)
+  if (!call) return ''
+  const [head, ...rest] = call.split(/\s+/)
+  const word = head.length > 24 ? `${head.slice(0, 23)}…` : head
+  return rest.length > 0 ? `asking: ${word} …` : `asking: ${word}`
 }
 
 /**
