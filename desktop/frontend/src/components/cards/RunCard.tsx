@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { RunSummary, SourcesSummary } from '../../api/types'
-import { modelLimited } from '../../lib/events'
+import { askingDetail, modelLimited } from '../../lib/events'
 import { elapsedSince } from '../../lib/format'
 import { useNow } from '../../lib/useNow'
 import {
@@ -63,7 +63,13 @@ export default function RunCard(props: {
   // on an answer, and the two sit in the same lane. Three words on the card
   // is the whole difference: "open this and pick a model" against "open
   // this and answer the agent".
-  const detail = blocked && modelLimited(run.reason) ? 'model limit' : undefined
+  // A permission question names what it is asking to run, so the card can
+  // be answered from the session without reading the transcript first.
+  const detail = blocked
+    ? modelLimited(run.reason)
+      ? 'model limit'
+      : askingDetail(run.reason) || undefined
+    : undefined
   const shown = shownNumber(run, show, sources)
 
   return (
@@ -76,7 +82,15 @@ export default function RunCard(props: {
       provider={run.provider}
       assignee={run.assignee}
       clock={clock || undefined}
-      clockTitle={live ? 'Running for' : detail ? 'Waiting for a model for' : 'Waiting for an answer for'}
+      clockTitle={
+        live
+          ? 'Running for'
+          : detail === 'model limit'
+            ? 'Waiting for a model for'
+            : detail
+              ? 'Waiting for your decision for'
+              : 'Waiting for an answer for'
+      }
       detail={detail}
       onOpen={() => onOpen(run.runId)}
     />

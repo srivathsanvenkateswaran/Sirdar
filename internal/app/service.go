@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -30,6 +31,15 @@ var ErrNoSuchJob = errors.New("app: no such job")
 
 // ErrNoSuchRun is returned for a run id no workspace holds.
 var ErrNoSuchRun = errors.New("app: no such run")
+
+// ErrBadDecision is a resume whose decision names no verdict Sirdar knows.
+// The HTTP layer answers 400.
+var ErrBadDecision = errors.New("app: bad decision")
+
+// ErrNotAsking is a decision sent to a run that is not waiting on a
+// permission question — it never asked, or the question was answered. The
+// HTTP layer answers 409.
+var ErrNotAsking = errors.New("app: run is not waiting on a permission question")
 
 // DepsBuilder assembles a runner's dependencies for one workspace. It is
 // injected so tests can drive a stub provider, and so the desktop shell and
@@ -766,16 +776,37 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 // after it asks for. It is how a run blocked on a per-model limit carries
 // on: the banner's buttons and the composer's model picker both send one.
 // Empty leaves the run on the model it has.
-func (s *Service) Resume(ctx context.Context, wsID, runID, answer, model string) (JobID, error) {
+//
+// decision, when given, answers the permission question the run blocked
+// on: allow, allow_run or deny, with an optional reason. answer beside it
+// is passed on as the operator's words; without it, answer is the free
+// answer to whatever the run asked. A decision for a run that is not
+// waiting on a permission question is refused before any job starts.
+func (s *Service) Resume(ctx context.Context, wsID, runID, answer, model string, decision *PermissionDecision) (JobID, error) {
 	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
 		return "", err
 	}
+	var d *runner.Decision
+	if decision != nil {
+		if !provider.ValidVerdict(decision.Verdict) {
+			return "", fmt.Errorf("%w: %q: want allow, allow_run or deny", ErrBadDecision, decision.Verdict)
+		}
+		detail, err := s.Run(wsID, runID)
+		if err != nil {
+			return "", err
+		}
+		if detail.Question == nil || detail.Question.Decision == nil {
+			return "", fmt.Errorf("%w: %s", ErrNotAsking, runID)
+		}
+		d = &runner.Decision{Verdict: decision.Verdict, Reason: strings.TrimSpace(decision.Reason)}
+	}
 	return s.start(ctx, wsID, "", "", func(jctx context.Context, deps runner.Deps) []JobOutcome {
-		// The runner reads the operator's answer from Stdin; a desktop
-		// session has none, so the answer is handed over as the input.
+		// The runner reads the operator's answer from Stdin when it is not
+		// handed one; a desktop session has no terminal, so the answer is
+		// both handed over and given as the input.
 		deps.Stdin = strings.NewReader(answer + "\n")
 		r := &runner.Runner{Deps: deps}
-		out, err := r.Resume(jctx, runID, runner.ResumeOptions{Model: model})
+		out, err := r.Resume(jctx, runID, runner.ResumeOptions{Model: model, Decision: d, Answer: answer})
 		if err != nil {
 			s.log(err)
 			if out.State.RunID == "" {

@@ -12,6 +12,7 @@ import type {
   MCPCallResult,
   MCPInventory,
   MCPToolList,
+  PermissionDecision,
   PlaybookSummary,
   RetroReport,
   Quota,
@@ -368,10 +369,10 @@ export function createHTTPTransport(): Transport {
         `/workspaces/${encodeURIComponent(ws)}/playbooks/${encodeURIComponent(name)}/open`,
       )
     },
-    resume: (ws, runId, answer, model) =>
+    resume: (ws, runId, answer, model, decision) =>
       postJSON<{ jobId: string }>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/resume`,
-        { answer, ...(model ? { model } : {}) },
+        { answer, ...(model ? { model } : {}), ...(decision ? { decision } : {}) },
       ),
     steer: (ws, runId, text, model) =>
       postJSON<SteerStarted>(
@@ -484,7 +485,7 @@ interface BridgeBindings {
   DeletePlaybook(ws: string, name: string): Promise<void>
   ScaffoldPlaybooks(ws: string): Promise<PlaybookSummary[] | null>
   OpenPlaybook(ws: string, name: string): Promise<void>
-  Resume(ws: string, runId: string, answer: string, model: string): Promise<string>
+  Resume(ws: string, runId: string, answer: string, model: string, decision: PermissionDecision | null): Promise<string>
   Steer(ws: string, runId: string, text: string, model: string): Promise<string>
   RunDiff(ws: string, runId: string): Promise<RunDiff>
   DropHunk(ws: string, runId: string, path: string, hunk: number, etag: string): Promise<RunDiff>
@@ -630,8 +631,8 @@ export function createWailsTransport(): Transport {
     openPlaybook: async (ws, name) => {
       await bridge().OpenPlaybook(ws, name)
     },
-    resume: async (ws, runId, answer, model) => ({
-      jobId: await bridge().Resume(ws, runId, answer ?? '', model ?? ''),
+    resume: async (ws, runId, answer, model, decision) => ({
+      jobId: await bridge().Resume(ws, runId, answer ?? '', model ?? '', decision ?? null),
     }),
     steer: async (ws, runId, text, model) => {
       // An empty job id is the service saying the run was still working and

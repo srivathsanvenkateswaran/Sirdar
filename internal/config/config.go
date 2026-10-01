@@ -561,6 +561,16 @@ type Config struct {
 		// wildcard-free entry names a directory and everything under
 		// it.
 		ReadAlso []string `yaml:"readAlso"`
+		// Ask (default true) turns a refusal the operator could lift
+		// into a question: the run blocks on it and is resumed with
+		// Allow once, Allow for this run or Deny. A shell command off
+		// the allow-list, an MCP tool permissions.mcp does not cover, a
+		// fetch to an unlisted host and a read outside the scope are
+		// asked about; a write in a triage run, a shell construct and a
+		// path outside the workspace never are. false restores the old
+		// behaviour: the call is refused and the agent carries on. The
+		// answers are kept on the run, never written here.
+		Ask *bool `yaml:"ask"`
 	} `yaml:"permissions"`
 	// MCP controls which MCP servers the agent session can see at all.
 	// WorkspaceOnly (default true) starts the session with
@@ -1507,6 +1517,13 @@ func credentialRef(key, ref string) error {
 // (in a test, say) reads as the default rather than as "off".
 func (c *Config) WorkspaceOnlyMCP() bool {
 	return c.MCP.WorkspaceOnly == nil || *c.MCP.WorkspaceOnly
+}
+
+// AskOperator is permissions.ask, true unless the workspace turned it off:
+// whether a refused call the operator could allow blocks the run on a
+// question.
+func (c *Config) AskOperator() bool {
+	return c == nil || c.Permissions.Ask == nil || *c.Permissions.Ask
 }
 
 // FallbackModels is providers.claude.fallbackModels with the blanks and

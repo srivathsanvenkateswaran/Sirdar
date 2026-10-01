@@ -651,7 +651,10 @@ func (s *session) runToolCalls(calls []ToolCall) bool {
 
 		decision := s.policy.Decide(name, args)
 		verdict := "deny"
-		if decision.Allow {
+		switch {
+		case decision.Ask != nil:
+			verdict = "ask"
+		case decision.Allow:
 			verdict = "allow"
 		}
 		if !s.emit(provider.Event{
@@ -659,9 +662,23 @@ func (s *session) runToolCalls(calls []ToolCall) bool {
 			Tool:     name,
 			Input:    args,
 			Decision: verdict,
+			Ask:      decision.Ask,
 			Text:     decision.Message,
 			Raw:      rawOf(map[string]any{"tool": name, "decision": verdict, "message": decision.Message}),
 		}) {
+			return false
+		}
+		if decision.Ask != nil {
+			// The operator is being asked, so the loop stops here. Every
+			// call in the batch is answered — this one as waiting, the
+			// rest as skipped — so the transcript a resume reads back is
+			// one the endpoint accepts, and it is written now because no
+			// later turn will write it.
+			s.answerTool(call.ID, name, "denied: "+provider.AskPending)
+			for _, rest := range calls[i+1:] {
+				s.answerTool(rest.ID, rest.Function.Name, "skipped: the run is waiting on the operator")
+			}
+			s.persist()
 			return false
 		}
 		if !decision.Allow {

@@ -614,6 +614,18 @@ func (s *session) answerControl(raw []byte) bool {
 
 	decision := s.policy.Decide(req.Request.ToolName, req.Request.Input)
 	response := map[string]any{"behavior": "deny", "message": decision.Message}
+	verdict := "deny"
+	switch {
+	case decision.Ask != nil:
+		// The operator is being asked. interrupt ends the turn here,
+		// rather than letting the agent work around a refusal that may
+		// yet become an allow; the run blocks, and the resumed session
+		// is told the answer.
+		response = map[string]any{"behavior": "deny", "message": provider.AskPending, "interrupt": true}
+		verdict = "ask"
+	case decision.Allow:
+		verdict = "allow"
+	}
 	if decision.Allow {
 		input := req.Request.Input
 		if len(input) == 0 {
@@ -626,10 +638,8 @@ func (s *session) answerControl(raw []byte) bool {
 	ev := newEvent(provider.EvPermission, raw)
 	ev.Tool = req.Request.ToolName
 	ev.Input = req.Request.Input
-	ev.Decision = "deny"
-	if decision.Allow {
-		ev.Decision = "allow"
-	}
+	ev.Decision = verdict
+	ev.Ask = decision.Ask
 	ev.Text = decision.Message
 	s.events <- ev
 	return true

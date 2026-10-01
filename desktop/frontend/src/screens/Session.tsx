@@ -1,6 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import type { FixStart, NoteKind, SourcesSummary, Transport } from '../api/types'
-import type { Decision } from '../components/session/ComposerStrip'
+import type { FixStart, NoteKind, PermissionDecision, SourcesSummary, Transport } from '../api/types'
 import { modelOf } from '../components/session/model'
 import RunHeader from '../components/session/RunHeader'
 import { useSessionModel, withoutCode } from '../components/session/useSessionModel'
@@ -192,13 +191,15 @@ function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document'
   )
 
   const answer = useCallback(
-    async (text: string, _decision?: Decision) => {
+    async (text: string, decision?: PermissionDecision) => {
       setPending('answer')
       setActionError('')
       try {
-        const started = await transport.resume(workspaceId, runId, text)
+        const started = decision
+          ? await transport.resume(workspaceId, runId, text, undefined, decision)
+          : await transport.resume(workspaceId, runId, text)
         if (started?.jobId) setRunJob(runId, started.jobId)
-        noteAnswer(text)
+        if (text) noteAnswer(text)
         setSent((n) => n + 1)
       } catch (err: unknown) {
         setActionError(withoutCode(err))
@@ -263,16 +264,17 @@ function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document'
 
   const composer = steerRefusal ? ({ kind: 'disabled', reason: steerRefusal } as const) : data.model.composer
   const sendBusy = pending === 'answer' || pending === 'steer'
+  const asking = detail?.status === 'blocked' && Boolean(detail.question?.decision)
   // The screen's one filled control, whichever it is: the strip's send, or
   // the Stop that stands in its place while the run works.
   useProvidePrimaryAction(
     detail
       ? {
-          label: composer.kind === 'reply' ? 'Answer' : composer.kind === 'running' ? 'Stop' : 'Steer',
+          label: composer.kind === 'reply' ? (asking ? 'Allow once' : 'Answer') : composer.kind === 'running' ? 'Stop' : 'Steer',
           onRun: () => {},
           disabled: composer.kind === 'disabled' || (composer.kind === 'running' && !jobId),
           busy: composer.kind === 'running' ? pending === 'cancel' : sendBusy,
-          shortcut: composer.kind === 'running' ? undefined : '↵',
+          shortcut: composer.kind === 'running' ? undefined : asking && composer.kind === 'reply' ? '⌘⏎' : '↵',
           title: composer.kind === 'disabled' ? composer.reason : undefined,
           placement: 'screen',
         }

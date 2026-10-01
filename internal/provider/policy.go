@@ -136,6 +136,17 @@ func FixPolicy(root string, fixBash, mcpAllow, extraReserved []string) *Permissi
 type Decision struct {
 	Allow   bool
 	Message string
+
+	// Ask is set on a refusal the operator could turn into an allow, when
+	// the policy was built with Ask on: the provider answers the agent with
+	// AskPending, reports the question on an EvPermission event whose
+	// Decision is "ask", and the run blocks on it.
+	Ask *PermissionAsk
+
+	// Granted names the verdict of the operator's grant that settled this
+	// call ("allow", "allow_run", "deny"), and is empty when the policy's
+	// own rules did.
+	Granted string
 }
 
 // mcpPrefix is the name prefix every MCP tool carries.
@@ -252,13 +263,49 @@ type PermissionPolicy struct {
 	// Mode is ModeTriage (the zero value) for a read-only run and ModeFix
 	// for a run allowed to edit the workspace.
 	Mode Mode
+
+	// Ask turns a refusal the operator could lift into a question: the
+	// decision carries Ask, and the run blocks on it instead of letting the
+	// agent carry on without the call. permissions.ask sets it.
+	Ask bool
+
+	// Grants are the operator's answers to earlier questions in this run,
+	// consulted before the policy asks again. Nil means none.
+	Grants *Grants
 }
 
 // IsFix reports whether this policy is a fix policy.
 func (p *PermissionPolicy) IsFix() bool { return p != nil && p.Mode.IsFix() }
 
-// Decide applies the policy rules to one tool call.
+// Decide applies the policy rules to one tool call. A call the rules refuse
+// is then looked up in the run's grants — a call the operator denied stays
+// denied with their reason, one they allowed goes through — and failing
+// that, when the policy asks, comes back carrying the question.
 func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
+	d := p.decide(tool, input)
+	if d.Allow || (p.Grants == nil && !p.Ask) {
+		return d
+	}
+	ask, ok := p.askFor(tool, input)
+	if !ok {
+		return d
+	}
+	ask.Reason = d.Message
+	if g, ok := p.Grants.find(p, ask, tool, input); ok {
+		if g.Verdict == VerdictDeny {
+			return Decision{Allow: false, Message: deniedMessage(g), Granted: g.Verdict}
+		}
+		return Decision{Allow: true, Message: grantedMessage(g), Granted: g.Verdict}
+	}
+	if p.Ask && p.askable(ask, tool, input) {
+		d.Ask = &ask
+	}
+	return d
+}
+
+// decide is Decide without the grants and the question: the workspace's
+// own rules alone.
+func (p *PermissionPolicy) decide(tool string, input json.RawMessage) Decision {
 	if strings.HasPrefix(tool, mcpPrefix) {
 		return p.decideMCP(tool)
 	}

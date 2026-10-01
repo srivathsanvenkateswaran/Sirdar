@@ -139,6 +139,61 @@ type RunDetail struct {
 	// steer. `model` above is the one it is on now. A run that never
 	// changed omits this.
 	ModelSegments []ModelSegmentInfo `json:"modelSegments,omitempty"`
+
+	// Question is what a blocked run is waiting on the operator for, when
+	// it is a question: Text in the agent's words, and Decision when the
+	// question is a permission one — a call the policy refused that the
+	// operator can allow once, allow for the run, or deny. Absent on every
+	// run that is not blocked on one.
+	Question *QuestionInfo `json:"question,omitempty"`
+}
+
+// QuestionInfo is a blocked run's question. Text is always set; Decision is
+// set only for a permission question, and a free-form one (Codex asking for
+// user input) carries Text alone.
+type QuestionInfo struct {
+	Text     string       `json:"text"`
+	Decision *DecisionAsk `json:"decision,omitempty"`
+}
+
+// DecisionAsk is a permission question as the decision bar draws it: the
+// kind of call (tool, bash, mcp, fetch), the tool, the call in one line,
+// what "allow for this run" would add, and the policy's own verdict and
+// reason.
+type DecisionAsk struct {
+	Kind     string   `json:"kind"`
+	Tool     string   `json:"tool"`
+	Summary  string   `json:"summary"`
+	Patterns []string `json:"patterns,omitempty"`
+	Verdict  string   `json:"verdict"`
+	Reason   string   `json:"reason"`
+}
+
+// PermissionDecision is the operator's answer to a permission question, as
+// a resume carries it: allow (this call, once), allow_run (this call and
+// any later one matching the same pattern, for the rest of the run) or
+// deny, with an optional reason the agent is shown.
+type PermissionDecision struct {
+	Verdict string `json:"verdict"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+// questionOf reads a blocked run's question off its state.
+func questionOf(s store.State) *QuestionInfo {
+	if s.Status != store.StatusBlocked {
+		return nil
+	}
+	if a := s.Ask; a != nil {
+		text, _ := strings.CutPrefix(s.Reason, "asking: ")
+		return &QuestionInfo{Text: text, Decision: &DecisionAsk{
+			Kind: a.Kind, Tool: a.Tool, Summary: a.Summary,
+			Patterns: append([]string(nil), a.Patterns...), Verdict: a.Verdict, Reason: a.Reason,
+		}}
+	}
+	if q, ok := strings.CutPrefix(s.Reason, "agent asked: "); ok {
+		return &QuestionInfo{Text: q}
+	}
+	return nil
 }
 
 // ModelSegmentInfo is one stretch of a run under one model, for the run
@@ -667,6 +722,7 @@ func DetailFor(root string, s store.State, self config.Identity) RunDetail {
 		d.Fix = &f
 	}
 	d.Instruction = s.Instruction
+	d.Question = questionOf(s)
 	for _, st := range s.Steers {
 		d.Steers = append(d.Steers, SteerInfo{At: wireTime(st.At), Text: st.Text, Continuation: st.Continuation})
 	}

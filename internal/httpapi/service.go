@@ -57,7 +57,7 @@ type Service interface {
 	MCPServers(ctx context.Context, wsID string, connect bool) (MCPInventory, error)
 	MCPTools(ctx context.Context, wsID, server string) (MCPToolList, error)
 	MCPCall(ctx context.Context, wsID, server, tool string, args json.RawMessage) (MCPCallResult, error)
-	Resume(ctx context.Context, wsID, runID, answer, model string) (JobID, error)
+	Resume(ctx context.Context, wsID, runID, answer, model string, decision *PermissionDecision) (JobID, error)
 	Steer(ctx context.Context, wsID, runID, text, model string) (JobID, error)
 	Cancel(jobID JobID) error
 	Register(wsID string) ([]RegisterRow, error)
@@ -118,6 +118,10 @@ func classify(err error) (int, string) {
 		return 409, "conflict"
 	case errors.Is(err, app.ErrMCPDenied):
 		return 403, "forbidden"
+	case errors.Is(err, app.ErrBadDecision):
+		return 400, "bad_request"
+	case errors.Is(err, app.ErrNotAsking):
+		return 409, "conflict"
 	case errors.Is(err, ErrRefused), errors.Is(err, ErrRunLive), errors.Is(err, ErrPlaybookExists):
 		return 409, "conflict"
 	case errors.Is(err, ErrNoDiff):

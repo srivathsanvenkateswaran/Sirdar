@@ -1,6 +1,7 @@
 import type { RunDetail, RunDiff, RunEvent } from '../../api/types'
 import {
   askedQuestion,
+  grantLine,
   conversation,
   groupTurns,
   inputSummary,
@@ -457,8 +458,9 @@ export function buildSessionModel(
       const at = clock(event.t, startedAt)
       switch (event.kind) {
         case 'steer':
-        case 'answer': {
-          const text = str(event.payload?.text)
+        case 'answer':
+        case 'grant': {
+          const text = event.kind === 'grant' ? grantLine(str(event.payload?.text)) : str(event.payload?.text)
           const label = event.kind === 'steer' ? 'resumed the session' : 'answered'
           items.push({ kind: 'you', index: row.index, at, text, label })
           if (event.kind === 'steer') lastSteer = { at, text }

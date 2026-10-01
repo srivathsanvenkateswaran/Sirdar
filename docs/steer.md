@@ -14,7 +14,9 @@ sirdar steer 20260915T091200Z-3f2a "Read it again, carefully" --model claude-opu
 `sirdar resume` is for a run that stopped and is waiting — a question, a rate limit, an
 interrupt. `sirdar steer` is for a run that is done and that you want more from. A blocked run
 can be steered too; the instruction is then what the agent gets instead of an answer. A run that
-is still working takes the instruction into a queue instead of refusing it (below).
+is still working takes the instruction into a queue instead of refusing it (below). A run
+blocked on a permission question is answered with a decision — `sirdar resume RUN --allow`,
+`--allow-run` or `--deny` — rather than words; see [Blocked runs](blocked.md).
 
 ## While the run works
 

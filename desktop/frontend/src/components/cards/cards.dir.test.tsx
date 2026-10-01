@@ -56,4 +56,13 @@ describe('board cards', () => {
     expect(screen.getByText('blocked · model limit')).toBeInTheDocument()
     expect(screen.queryByText(limited.reason)).toBeNull()
   })
+
+  // A permission question names the program it is asking for, and only
+  // that: the arguments are the session's to show.
+  it('says what a blocked run is asking to run', () => {
+    const asking = { ...RUN, reason: 'asking: rg -n refund src' }
+    render(<RunCard run={asking} title={ARABIC_TITLE} onOpen={() => {}} />)
+    expect(screen.getByText('blocked · asking: rg …')).toBeInTheDocument()
+    expect(screen.queryByText(/refund src/)).toBeNull()
+  })
 })

@@ -12,7 +12,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import ReactMarkdown from 'react-markdown'
-import type { FixStart, NoteKind, QueuedSteer, RunDiff, SourcesSummary, Transport } from '../../api/types'
+import type { FixStart, NoteKind, QueuedSteer, RunDiff, SourcesSummary, Transport, Verdict } from '../../api/types'
 import ChangesView, { withoutCode } from '../../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
@@ -421,7 +421,30 @@ export default function SessionConversation(props: SessionConversationProps): JS
     }
   }, [jobId, transport, runId])
 
-  const question = askedQuestion(detail?.reason)
+  const question = detail?.question?.text ?? askedQuestion(detail?.reason)
+  /** The permission question, when that is what the run is waiting on. */
+  const ask = blocked ? detail?.question?.decision : undefined
+
+  const decide = useCallback(
+    async (verdict: Verdict, reason?: string) => {
+      setPending('answer')
+      setActionError('')
+      try {
+        const started = await transport.resume(workspaceId, runId, '', pickedModel, {
+          verdict,
+          ...(reason ? { reason } : {}),
+        })
+        if (started?.jobId) setRunJob(runId, started.jobId)
+        setSent((n) => n + 1)
+        stick.current = true
+      } catch (err: unknown) {
+        setActionError(withoutCode(err))
+      } finally {
+        setPending('')
+      }
+    },
+    [transport, workspaceId, runId, pickedModel],
+  )
   /**
    * The model the login has no room for, when that is why the run stopped.
    * It is a choice rather than a wait — every other model on the account is
@@ -453,11 +476,11 @@ export default function SessionConversation(props: SessionConversationProps): JS
   useProvidePrimaryAction(
     detail
       ? {
-          label: mode.kind === 'answer' ? 'Answer' : mode.kind === 'running' ? 'Stop' : 'Steer',
+          label: mode.kind === 'answer' ? (ask ? 'Allow once' : 'Answer') : mode.kind === 'running' ? 'Stop' : 'Steer',
           onRun: () => {},
           disabled: mode.kind === 'disabled' || (mode.kind === 'running' && !jobId),
           busy: mode.kind === 'running' ? pending === 'cancel' : sendBusy,
-          shortcut: mode.kind === 'running' ? undefined : '↵',
+          shortcut: mode.kind === 'running' ? undefined : ask && mode.kind === 'answer' ? '⌘⏎' : '↵',
           title: mode.kind === 'disabled' ? mode.reason : undefined,
           placement: 'screen',
         }
@@ -742,6 +765,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                   reason={detail.reason}
                   at={clock(detail.updatedAt, detail.startedAt)}
                   pendingCall={model.pendingCall}
+                  ask={ask}
                 />
               ) : null}
               {finishLine()}
@@ -785,6 +809,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               onPickModel={terminal || blocked ? setPickedModel : undefined}
               catalog={catalog}
               queued={withLocalQueued(detail.queuedSteers, localQueued)}
+              decision={ask ? { ask, onDecide: (verdict, reason) => void decide(verdict, reason) } : undefined}
             />
           </div>
         </div>

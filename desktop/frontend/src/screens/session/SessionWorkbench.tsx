@@ -8,8 +8,9 @@ import {
   type JSX,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../../api/types'
+import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport, Verdict } from '../../api/types'
 import type { ComposerMode } from '../../components/run/Composer'
+import DecisionBar from '../../components/session/DecisionBar'
 import { LIVE, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { parseTime, reasonOf } from '../../lib/format'
@@ -238,7 +239,11 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   )
   const report = isFix ? session.report : undefined
   const checks = session.checks
-  const question = useMemo(() => (detail ? pendingQuestion(detail, events) : undefined), [detail, events])
+  // A permission question is the decision bar's to show; the band is for a question in words.
+  const question = useMemo(
+    () => (detail && !(detail.status === 'blocked' && detail.question?.decision) ? pendingQuestion(detail, events) : undefined),
+    [detail, events],
+  )
   const dropped = useMemo(
     () =>
       runEvents
@@ -298,6 +303,24 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
       }
     },
     [transport, workspaceId, runId, noteOwnLine],
+  )
+
+  /** Answers a permission question from the decision bar. */
+  const decide = useCallback(
+    async (verdict: Verdict, reason?: string) => {
+      setPending('answer')
+      setActionError('')
+      try {
+        const started = await transport.resume(workspaceId, runId, '', undefined, { verdict, ...(reason ? { reason } : {}) })
+        if (started?.jobId) setRunJob(runId, started.jobId)
+        setSent((n) => n + 1)
+      } catch (err: unknown) {
+        setActionError(withoutCode(err))
+      } finally {
+        setPending('')
+      }
+    },
+    [transport, workspaceId, runId],
   )
 
   const steer = useCallback(
@@ -366,17 +389,19 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
 
   const send = mode.kind === 'answer' ? answerRun : steer
   const sendBusy = pending === 'answer' || pending === 'steer'
+  /** The permission question, when that is what the run is waiting on. */
+  const ask = detail?.status === 'blocked' ? detail.question?.decision : undefined
 
   // The screen's one filled control, whichever it is: the bar's send, or
   // the Stop that stands in its place while the run works.
   useProvidePrimaryAction(
     detail
       ? {
-          label: mode.kind === 'answer' ? 'Answer' : mode.kind === 'running' ? 'Stop' : 'Send',
+          label: mode.kind === 'answer' ? (ask ? 'Allow once' : 'Answer') : mode.kind === 'running' ? 'Stop' : 'Send',
           onRun: () => {},
           disabled: mode.kind === 'disabled' || (mode.kind === 'running' && !jobId),
           busy: mode.kind === 'running' ? pending === 'cancel' : sendBusy,
-          shortcut: mode.kind === 'running' ? undefined : '↵',
+          shortcut: mode.kind === 'running' ? undefined : ask && mode.kind === 'answer' ? '⌘⏎' : '↵',
           title: mode.kind === 'disabled' ? mode.reason : undefined,
           placement: 'screen',
         }
@@ -593,8 +618,14 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
             onVisibleTurns={setVisibleTurns}
           />
 
+          {ask ? (
+            <div className="wb-decide">
+              <DecisionBar ask={ask} busy={sendBusy} onDecide={(verdict, reason) => void decide(verdict, reason)} />
+            </div>
+          ) : null}
           <ComposerCard
             variant="strip"
+            quiet={Boolean(ask)}
             mode={mode}
             busy={sendBusy}
             error={mode.kind === 'disabled' ? '' : actionError}

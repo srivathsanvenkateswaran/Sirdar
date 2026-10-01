@@ -163,6 +163,21 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   `steer` line with `continuation: live`. The desktop composer stays editable while the run
   works: Enter queues, Stop still stops, and chips above the box say what became of each
   (`docs/steer.md`).
+- A refused call the operator could allow blocks the run on a question instead of being
+  refused outright (`permissions.ask`, on by default). A command off `permissions.bash`, an MCP
+  tool `permissions.mcp` does not cover, a fetch to an unlisted host or a read outside the scope
+  stops the session through each provider's own protocol — Claude's permission tool answers
+  `deny` with `interrupt`, Codex's approval `cancel`, ACP's request the `cancelled` outcome,
+  Qwen's hook `deny` with `continue: false`, Sirdar's own loop stops — and the run goes
+  `blocked` with reason `asking: <call>` and the question on `state.json`. The run detail
+  carries it as `question.decision` (kind, tool, the call, what "allow for this run" would add,
+  the policy's verdict and reason). `sirdar resume RUN --allow | --allow-run | --deny
+  [--reason …]`, a `decision` beside `answer` on the resume route and bridge call, and a
+  decision bar over the session composer (Allow once, Allow for this run, Deny; ⌘⏎ and ⌘⌫)
+  answer it. Allow for this run and Deny are kept on the run as grants the policy consults
+  before it asks again, and never written to `config.yaml`; every answer is a `grant` line in
+  the transcript. A write in a triage run, a shell construct or a path out of the workspace is
+  never asked about. The board card reads `blocked · asking: rg …` (`docs/blocked.md`).
 - A per-model limit blocks a run for a model choice instead of failing it. Claude Code limits
   some models on their own and says so as an ordinary assistant message — "You've reached your
   Fable limit. Switch to another model, or manage usage credits at claude.ai/settings/usage" —

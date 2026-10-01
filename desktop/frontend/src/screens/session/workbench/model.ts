@@ -1,6 +1,7 @@
 import type { RunDetail, RunEvent } from '../../../api/types'
 import {
   askedQuestion,
+  grantLine,
   callId,
   conversation,
   inputJSON,
@@ -444,9 +445,10 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
       const step = stepOf.get(call.started.index)
       const started = call.started.event
       const tool = step?.tool ?? (toolLabel(str(started.payload?.tool)) || 'tool')
-      const decision = step ? (step.decision === 'denied' ? 'deny' : 'allow') : str(call.permission?.event.payload?.decision)
+      const asked = str(call.permission?.event.payload?.decision) === 'ask'
+      const decision = step ? (step.decision === 'denied' ? 'deny' : asked ? 'ask' : 'allow') : str(call.permission?.event.payload?.decision)
       const reason = step?.reason ?? str(call.permission?.event.payload?.text)
-      const denied = decision === 'deny'
+      const denied = decision === 'deny' || decision === 'ask'
       const rawCommand = inputSummary(started)
       const command = step?.summary ?? rawCommand
       const description = step?.description || toolDescription(started)
@@ -549,11 +551,12 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
       }
       case 'steer':
       case 'answer':
+      case 'grant':
         rows.push({
           ...base,
           kind: 'steer',
           tool: 'you',
-          summary: str(event.payload?.text),
+          summary: event.kind === 'grant' ? grantLine(str(event.payload?.text)) : str(event.payload?.text),
           output: str(event.payload?.continuation) || (event.kind === 'answer' ? 'answer' : undefined),
         })
         break
@@ -583,7 +586,7 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
       case 'permission':
         rows.push({
           ...base,
-          kind: str(event.payload?.decision) === 'deny' ? 'deny' : 'sys',
+          kind: ['deny', 'ask'].includes(str(event.payload?.decision)) ? 'deny' : 'sys',
           tool: toolLabel(str(event.payload?.tool)) || 'permission',
           summary: str(event.payload?.decision) || 'permission',
           reason: str(event.payload?.text) || undefined,
@@ -705,6 +708,7 @@ function railKindOf(events: IndexedEvent[]): RailKind {
         break
       case 'permission':
         if (str(event.payload?.decision) === 'deny') consider('deny')
+        else if (str(event.payload?.decision) === 'ask') consider('ask')
         break
       case 'final':
         consider('final')

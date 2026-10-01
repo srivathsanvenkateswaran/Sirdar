@@ -9,6 +9,8 @@ import QueuedSteers, { visibleQueuedSteers } from './QueuedSteers'
 
 /** The Model chip's tooltip while the run works. */
 export const MODEL_LOCKED = 'The model is fixed while the run works. Change it when it stops.'
+import type { DecisionAsk, Verdict } from '../../api/types'
+import DecisionBar from '../session/DecisionBar'
 
 /** What the composer's one button does right now. */
 export type ComposerMode =
@@ -71,6 +73,13 @@ export interface ComposerProps {
    * as chips above the box, the newest few.
    */
   queued?: QueuedSteer[]
+  /**
+   * The permission question a blocked run is waiting on. Given, the
+   * decision bar sits above the box and its Allow once is the screen's
+   * filled control; the box stays for an answer in words, with a bordered
+   * send.
+   */
+  decision?: { ask: DecisionAsk; onDecide: (verdict: Verdict, reason?: string) => void }
 }
 
 /**
@@ -111,6 +120,7 @@ export default function Composer({
   onPickModel,
   catalog,
   queued,
+  decision,
 }: ComposerProps) {
   const [text, setText] = useState('')
 
@@ -126,7 +136,8 @@ export default function Composer({
   const canQueue = running && steerable(provider)
   const trimmed = text.trim()
   const label = mode.kind === 'answer' ? 'Answer' : 'Steer'
-  const needsText = mode.kind === 'steer' || canQueue || (mode.kind === 'answer' && mode.question !== '')
+  const deciding = mode.kind === 'answer' && decision !== undefined
+  const needsText = mode.kind === 'steer' || canQueue || (mode.kind === 'answer' && (mode.question !== '' || deciding))
   const disabled = mode.kind === 'disabled' || (running && !canQueue) || (needsText && trimmed === '')
   const title =
     mode.kind === 'disabled'
@@ -144,18 +155,21 @@ export default function Composer({
     ? runningPlaceholder(provider)
     : mode.kind === 'disabled'
       ? mode.reason
-      : ownPlaceholder ??
-        (mode.kind === 'answer'
-          ? mode.question
-            ? 'Answer the question'
-            : 'Anything the agent should know before it goes on (optional)'
-          : 'What should the agent do next?')
+      : deciding
+        ? 'Or answer in words — the call is not run'
+        : ownPlaceholder ??
+          (mode.kind === 'answer'
+            ? mode.question
+              ? 'Answer the question'
+              : 'Anything the agent should know before it goes on (optional)'
+            : 'What should the agent do next?')
 
   const chips = visibleQueuedSteers(queued, running)
 
   return (
     <div className="session-composer" data-mode={mode.kind}>
       <QueuedSteers items={chips} />
+      {deciding && decision ? <DecisionBar ask={decision.ask} busy={busy} onDecide={decision.onDecide} /> : null}
       <ComposerCard
         name={label}
         label={label}
@@ -210,6 +224,7 @@ export default function Composer({
           title,
           onClick: () => onSend(trimmed),
           wide: wideWhenAnswering && mode.kind === 'answer',
+          quiet: deciding,
         }}
         stop={
           running && onCancel

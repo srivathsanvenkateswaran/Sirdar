@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/worktree"
@@ -74,6 +75,14 @@ type prepared struct {
 	// whose answer does not change leaves the note as it is.
 	steer         *store.Steer
 	previousFinal []byte
+
+	// once is the allow-once grant a resume answering a permission
+	// question carries: it goes to this execute's policy and is spent by
+	// the call it names, and is never kept on the run. answered is the
+	// operator's answer as the event line execute writes ahead of the
+	// session ("you allowed rg for this run").
+	once     []provider.Grant
+	answered *answeredAsk
 }
 
 // sessionRoot is the directory this run's session stands in: its own root

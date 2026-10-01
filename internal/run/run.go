@@ -381,6 +381,20 @@ type ResumeOptions struct {
 	// Empty leaves the run on the model it has, which is every resume
 	// that is answering a question or picking up an interrupt.
 	Model string
+
+	// Decision answers the permission question the run blocked on: allow,
+	// allow_run or deny, with an optional reason. It is what `sirdar
+	// resume --allow | --allow-run | --deny` and the composer's decision
+	// bar send. Nil on a run blocked on anything else, and on a permission
+	// question answered in words.
+	Decision *Decision
+
+	// Answer is the operator's answer when the caller already has it — the
+	// desktop's composer, the HTTP route — rather than reading it from
+	// Stdin. Beside a Decision it is passed on to the agent as the
+	// operator's words; without one it is the free answer to whatever the
+	// run asked.
+	Answer string
 }
 
 // Resume continues a blocked or interrupted run: it reopens the run, asks
@@ -429,7 +443,7 @@ func (r *Runner) Resume(ctx context.Context, runID string, o ResumeOptions) (Out
 
 	applyModel(p, o.Model, "resume --model", r.now())
 
-	text, err := r.resumeText(state)
+	text, err := r.resumeText(p, o)
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -468,10 +482,34 @@ func applyModel(p *prepared, model, why string, at time.Time) {
 const askedPrefix = "agent asked: "
 
 // resumeText is the message the resumed session opens with: the operator's
-// answer when the run blocked on a question, else a plain nudge to finish.
-func (r *Runner) resumeText(state store.State) (string, error) {
+// decision when the run blocked on a permission question, their answer
+// when it blocked on a question in words, else a plain nudge to finish.
+func (r *Runner) resumeText(p *prepared, o ResumeOptions) (string, error) {
+	state := p.state
+	answer := strings.TrimSpace(o.Answer)
+	if o.Decision != nil {
+		return answerAsk(p, *o.Decision, answer)
+	}
+	if state.Ask != nil {
+		if answer == "" {
+			d, typed, err := r.readDecision(state)
+			if err != nil {
+				return "", err
+			}
+			if d != nil {
+				return answerAsk(p, *d, "")
+			}
+			answer = typed
+		}
+		text := freeAnswerPrompt(state.Ask, answer)
+		p.state.Ask = nil
+		return text, nil
+	}
 	if !strings.HasPrefix(state.Reason, askedPrefix) {
 		return resumeContinue, nil
+	}
+	if answer != "" {
+		return answer, nil
 	}
 	question := strings.TrimPrefix(state.Reason, askedPrefix)
 	fmt.Fprintf(r.stderr(), "[%s] the agent asked: %s\n[%s] answer: ", state.Key, question, state.Key)
@@ -485,7 +523,7 @@ func (r *Runner) resumeText(state store.State) (string, error) {
 		}
 		return "", fmt.Errorf("run: no answer given for %s", state.RunID)
 	}
-	answer := strings.TrimSpace(sc.Text())
+	answer = strings.TrimSpace(sc.Text())
 	if answer == "" {
 		return "", fmt.Errorf("run: no answer given for %s", state.RunID)
 	}

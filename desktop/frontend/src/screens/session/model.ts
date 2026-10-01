@@ -3,6 +3,7 @@ import type { RunDetail, RunEvent } from '../../api/types'
 import {
   callId,
   classify,
+  grantLine,
   drawsNothing,
   inputSummary,
   isReplace,
@@ -189,6 +190,11 @@ function decisionOf(call: ToolCall): { decision: Decision; reason: string; sugge
     }
   }
   const text = str(permission.payload?.text) || str(request?.decision_reason)
+  // A call put to the operator did not run, and is not a refusal either
+  // until they say so: the decision bar is where it is answered.
+  if (permission.payload?.decision === 'ask') {
+    return { decision: 'policy', reason: '', suggestedRule: '' }
+  }
   if (permission.payload?.decision === 'deny') {
     return { decision: 'denied', reason: text.replace(/^Sirdar policy:\s*/i, ''), suggestedRule }
   }
@@ -487,12 +493,13 @@ class SessionBuilder {
     switch (event.kind) {
       case 'steer':
       case 'answer':
+      case 'grant':
         this.flush(event.t)
         this.steered = true
         this.add({
           kind: 'you',
           index: row.index,
-          text: str(event.payload?.text),
+          text: event.kind === 'grant' ? grantLine(str(event.payload?.text)) : str(event.payload?.text),
           at: clock(event.t, this.startedAt),
           continuation: event.payload?.continuation,
           turn: typeof event.payload?.turns === 'number' ? event.payload.turns : undefined,

@@ -401,6 +401,38 @@ func TestResume(t *testing.T) {
 	}
 }
 
+// A permission question is answered with a structured decision beside the
+// answer; the route decodes it and hands it to the service as given.
+func TestResumeDecodesADecision(t *testing.T) {
+	f := newFake()
+	var got jobResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/resume",
+		`{"answer":"only src/","decision":{"verdict":"allow_run","reason":"read-only"}}`), 202, &got)
+	if f.gotDecision == nil || *f.gotDecision != (PermissionDecision{Verdict: "allow_run", Reason: "read-only"}) {
+		t.Fatalf("decision %+v", f.gotDecision)
+	}
+	if f.gotAnswer != "only src/" {
+		t.Fatalf("answer %q", f.gotAnswer)
+	}
+
+	f = newFake()
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/resume", `{"answer":"yes"}`), 202, &got)
+	if f.gotDecision != nil {
+		t.Fatalf("a plain answer carried a decision: %+v", f.gotDecision)
+	}
+
+	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/resume",
+		`{"decision":{"verdict":"allow","why":"x"}}`), 400, "bad_request")
+}
+
+func TestResumeDecisionErrors(t *testing.T) {
+	f := newFake()
+	f.resumeErr = fmt.Errorf("%w: %q", app.ErrBadDecision, "maybe")
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/resume", `{"decision":{"verdict":"maybe"}}`), 400, "bad_request")
+	f.resumeErr = fmt.Errorf("%w: r1", app.ErrNotAsking)
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/resume", `{"decision":{"verdict":"allow"}}`), 409, "conflict")
+}
+
 func TestResumeWithoutBody(t *testing.T) {
 	// Resuming an interrupted run answers no question, so the UI sends
 	// nothing at all.

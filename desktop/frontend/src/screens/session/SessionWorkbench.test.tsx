@@ -293,6 +293,29 @@ describe('SessionWorkbench', () => {
       expect(field).toHaveValue('')
     })
 
+    it('answers a permission question from the decision bar above the command bar', async () => {
+      const f = fake({
+        detail: {
+          ...BLOCKED_FIX_RUN,
+          reason: 'asking: go test ./...',
+          question: {
+            text: 'go test ./...',
+            decision: { kind: 'bash', tool: 'Bash', summary: 'go test ./...', patterns: ['go test *'], verdict: 'deny', reason: 'not on permissions.fixBash' },
+          },
+        },
+        events: fixEvents({ untilBlocked: true }),
+      })
+      renderWorkbench(f, BLOCKED_FIX_RUN)
+      const bar = await screen.findByTestId('decision-bar')
+      expect(bar).toHaveTextContent('go test ./...')
+      expect(within(commandBar()).getByRole('button', { name: /Answer/ })).toHaveAttribute('data-variant', 'secondary')
+      await waitFor(() => expect(screen.getByTestId('published')).toHaveTextContent('Allow once inline'))
+      fireEvent.click(within(bar).getByRole('button', { name: /Allow once/ }))
+      await waitFor(() =>
+        expect(f.transport.resume).toHaveBeenCalledWith('ws1', BLOCKED_FIX_RUN.runId, '', undefined, { verdict: 'allow' }),
+      )
+    })
+
     it('grows as the run goes on, and the header follows the run.updated', async () => {
       const f = blocked()
       renderWorkbench(f, BLOCKED_FIX_RUN)

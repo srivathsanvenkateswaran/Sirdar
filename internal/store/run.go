@@ -223,6 +223,42 @@ type State struct {
 		Local    bool   `json:",omitempty"`
 		DiffPath string `json:",omitempty"`
 	} `json:",omitempty"`
+
+	// Ask is the permission question a blocked run is waiting on: the call
+	// the policy refused and the operator could allow. It is set when the
+	// run blocks on one and cleared when it is answered. A run blocked on
+	// anything else — a free-form question, a rate limit — has none.
+	Ask *PermissionAsk `json:",omitempty"`
+
+	// Grants are the operator's answers to this run's permission questions
+	// that last the run: "allow for this run" and "deny". The policy reads
+	// them before it asks again. They are per run and never reach
+	// config.yaml; an allow-once answer is spent by the resumed session and
+	// is not kept here.
+	Grants []Grant `json:",omitempty"`
+}
+
+// PermissionAsk is a refused tool call the operator can answer. It mirrors
+// provider.PermissionAsk field for field, so the run layer converts between
+// the two directly; see that type for what each field holds.
+type PermissionAsk struct {
+	Kind     string   `json:"kind"`
+	Tool     string   `json:"tool"`
+	Summary  string   `json:"summary"`
+	Patterns []string `json:"patterns,omitempty"`
+	Verdict  string   `json:"verdict"`
+	Reason   string   `json:"reason"`
+}
+
+// Grant is one answer the operator gave, kept for the rest of the run. It
+// mirrors provider.Grant field for field.
+type Grant struct {
+	Verdict  string   `json:"verdict"`
+	Kind     string   `json:"kind"`
+	Tool     string   `json:"tool"`
+	Summary  string   `json:"summary"`
+	Patterns []string `json:"patterns,omitempty"`
+	Reason   string   `json:"reason,omitempty"`
 }
 
 // RequestedModel is the model a session of this run should ask for: the

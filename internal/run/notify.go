@@ -103,6 +103,11 @@ func notifyReason(reason string) string {
 	if strings.HasPrefix(reason, askedPrefix) {
 		return "agent asked a question"
 	}
+	// A permission question names the call, and a command can quote the
+	// ticket as easily as a question can.
+	if strings.HasPrefix(reason, askingPrefix) {
+		return "agent asked for permission"
+	}
 	r := []rune(reason)
 	if len(r) <= maxNotifyReason {
 		return reason
