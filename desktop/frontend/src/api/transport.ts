@@ -633,10 +633,12 @@ export function createWailsTransport(): Transport {
     resume: async (ws, runId, answer, model) => ({
       jobId: await bridge().Resume(ws, runId, answer ?? '', model ?? ''),
     }),
-    steer: async (ws, runId, text, model) => ({
-      jobId: await bridge().Steer(ws, runId, text, model ?? ''),
-      runId,
-    }),
+    steer: async (ws, runId, text, model) => {
+      // An empty job id is the service saying the run was still working and
+      // the instruction was queued rather than started as a job.
+      const jobId = await bridge().Steer(ws, runId, text, model ?? '')
+      return jobId ? { jobId, runId } : { jobId, runId, queued: true }
+    },
     runDiff: async (ws, runId) => {
       const d = await bridge().RunDiff(ws, runId)
       return { ...d, files: list(d.files) }

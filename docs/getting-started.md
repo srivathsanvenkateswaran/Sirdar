@@ -143,12 +143,29 @@ investigation, not a verdict — review it before acting on anything in it.
 
 ## Start the board
 
-`sirdar serve` starts the local web UI and API on loopback, for watching runs and reviewing
-notes from a browser instead of the terminal:
+`sirdar` on its own starts the local web UI and API on loopback and opens it in your browser,
+for watching runs and reviewing notes instead of using the terminal. It is the same as:
 
 ```sh
 sirdar serve --open
 ```
+
+Leave that terminal open; Ctrl-C stops the server. It serves the workspace you ran it in plus
+every workspace registered before, on http://127.0.0.1:7777.
+
+### Which Claude login the runs use
+
+Sirdar starts the `claude` binary directly, so shell aliases and functions that pick an
+account never apply to it. Runs use the login in `~/.claude` unless `CLAUDE_CONFIG_DIR` is
+set when Sirdar starts; it is passed through to every run, and the Plan usage bars in the
+sidebar show that account's windows. To run on another login:
+
+```sh
+CLAUDE_CONFIG_DIR=$HOME/.claude-other sirdar
+```
+
+`sirdar doctor` prints the email of the login a run would use. The desktop app, launched from
+the Dock, has no shell at all and always uses `~/.claude`.
 
 It binds to `127.0.0.1` and refuses a non-loopback address unless you pass `--allow-remote`,
 since there is no authentication in front of it. The same frontend also ships as a desktop app

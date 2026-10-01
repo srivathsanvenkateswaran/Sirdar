@@ -88,7 +88,7 @@ export type ChatItem =
   /** The structured answer being written: the StructuredOutput call. */
   | { kind: 'wrote'; index: number; what: string; seconds: number; from: string; to: string }
   /** The operator's own words. */
-  | { kind: 'you'; index: number; text: string; at: string; continuation?: string }
+  | { kind: 'you'; index: number; text: string; at: string; continuation?: string; turn?: number }
   /** The model's prose. */
   | { kind: 'say'; index: number; text: string; at: string }
   /** A `final` event. Every one but the last is `superseded`. */
@@ -495,8 +495,14 @@ class SessionBuilder {
           text: str(event.payload?.text),
           at: clock(event.t, this.startedAt),
           continuation: event.payload?.continuation,
+          turn: typeof event.payload?.turns === 'number' ? event.payload.turns : undefined,
         })
         this.mark(event.t, null)
+        return
+      case 'steer_queued':
+      case 'steer_held':
+        // Said by the chips over the composer while it matters; the
+        // instruction itself joins the transcript where the agent read it.
         return
       case 'final': {
         this.flush(event.t)

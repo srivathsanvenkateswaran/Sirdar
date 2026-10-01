@@ -12,7 +12,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import ReactMarkdown from 'react-markdown'
-import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../../api/types'
+import type { FixStart, NoteKind, QueuedSteer, RunDiff, SourcesSummary, Transport } from '../../api/types'
 import ChangesView, { withoutCode } from '../../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
@@ -91,9 +91,22 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /** The words a steer's continuation is shown by. */
-function continuationWord(continuation: string | undefined): string {
+function continuationWord(continuation: string | undefined, turn?: number): string {
   if (continuation === 'primed') return 'continued in a new session'
+  // Typed while the run worked, and read by the same session between turns.
+  if (continuation === 'live') return turn ? `delivered at turn ${turn}` : 'delivered while running'
   return continuation ?? ''
+}
+
+/**
+ * The steers to draw as chips: the run's own record, and any this window
+ * has queued that the record does not carry yet — the executor writes it at
+ * its next look at the queue, half a second at most.
+ */
+function withLocalQueued(record: QueuedSteer[] | undefined, local: QueuedSteer[]): QueuedSteer[] {
+  const known = record ?? []
+  const pending = local.filter((l) => !known.some((q) => q.text === l.text))
+  return [...known, ...pending]
 }
 
 export interface SessionConversationProps {
@@ -136,6 +149,8 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const [pending, setPending] = useState('')
   const [actionError, setActionError] = useState('')
   const [steerRefusal, setSteerRefusal] = useState('')
+  /** Steers this window queued on the working run, until the run's record carries them. */
+  const [localQueued, setLocalQueued] = useState<QueuedSteer[]>([])
   const [sent, setSent] = useState(0)
   const [changed, setChanged] = useState<number | null>(null)
   /** The one open card, by its event index. */
@@ -357,6 +372,13 @@ export default function SessionConversation(props: SessionConversationProps): JS
       setActionError('')
       try {
         const started = await transport.steer(workspaceId, runId, text, pickedModel)
+        if (started?.queued) {
+          // The run is still working: the instruction waits in its queue,
+          // and joins the transcript where the agent reads it.
+          setLocalQueued((prev) => [...prev, { id: `local-${prev.length}`, at: '', text, status: 'queued' }])
+          setSent((n) => n + 1)
+          return
+        }
         if (started?.jobId) setRunJob(runId, started.jobId)
         setSent((n) => n + 1)
         setDetail((prev) => (prev ? { ...prev, status: 'running' } : prev))
@@ -500,7 +522,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               {item.continuation ? (
                 <>
                   <span>·</span>
-                  <span>{continuationWord(item.continuation)}</span>
+                  <span>{continuationWord(item.continuation, item.turn)}</span>
                 </>
               ) : null}
             </div>
@@ -762,6 +784,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               pickedModel={pickedModel}
               onPickModel={terminal || blocked ? setPickedModel : undefined}
               catalog={catalog}
+              queued={withLocalQueued(detail.queuedSteers, localQueued)}
             />
           </div>
         </div>

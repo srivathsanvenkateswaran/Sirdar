@@ -304,7 +304,9 @@ func (b *Bridge) Resume(ws, runId, answer, model string) (string, error) {
 // Steer continues a finished run with a follow-up instruction, on the
 // same run.
 // model, when given, is the model the continued session asks for; empty
-// leaves the run on the model it has.
+// leaves the run on the model it has. On a run that is still working the
+// instruction is queued for the executor already running it, and the job
+// id is empty: no job was started.
 func (b *Bridge) Steer(ws, runId, text, model string) (string, error) {
 	id, err := b.svc.Steer(context.Background(), ws, runId, text, model)
 	return string(id), err

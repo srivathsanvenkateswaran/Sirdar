@@ -36,6 +36,13 @@ export interface ComposerStop {
   /** The accessible name; "Stop the run" unless a layout has its own word. */
   label?: string
   title?: string
+  /**
+   * Enter still sends while the Stop is up: a working run takes what is
+   * typed into its queue, to be read at its next turn. The round button
+   * stays the Stop; Enter is the only way in, so the one filled control
+   * does not change meaning under the reader's pointer.
+   */
+  sendOnEnter?: boolean
 }
 
 export interface ComposerCardProps {
@@ -193,9 +200,9 @@ export default function ComposerCard({
   }, [value, maxRows, disabled, placeholder])
 
   function submit(): void {
-    // A run that is working has a Stop where its send was; Enter has
-    // nothing to reach.
-    if (stop || send.disabled || send.busy) return
+    // A run that is working has a Stop where its send was; Enter reaches
+    // the send only when the run queues what is typed.
+    if ((stop && !stop.sendOnEnter) || send.disabled || send.busy) return
     send.onClick()
   }
 

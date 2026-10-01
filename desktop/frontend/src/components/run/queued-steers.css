@@ -1,0 +1,54 @@
+/* The steers typed while the run works, above the composer's box: one row of
+   chips that wraps, each the instruction cut to a line and what became of it. */
+.queued-steers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  margin: 0;
+  margin-block-end: var(--sd-space-2);
+  padding: 0;
+  list-style: none;
+}
+
+.queued-steer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  max-inline-size: 100%;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-surface);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.queued-steer__text {
+  overflow: hidden;
+  min-inline-size: 0;
+  max-inline-size: 36ch;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-ink);
+  unicode-bidi: plaintext;
+}
+
+.queued-steer__status {
+  flex: 0 0 auto;
+  color: var(--sd-ink-3);
+  unicode-bidi: isolate;
+}
+
+/* The words carry the state; the rule only echoes it. */
+.queued-steer[data-status='delivered'] {
+  border-color: var(--sd-st-done);
+}
+
+.queued-steer[data-status='dropped'] {
+  border-color: var(--sd-st-failed);
+}
+
+.queued-steer[data-status='dropped'] .queued-steer__status {
+  color: var(--sd-st-failed);
+}

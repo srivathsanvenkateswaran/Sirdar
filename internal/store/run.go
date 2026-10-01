@@ -53,11 +53,44 @@ type Usage struct {
 // Steer records one follow-up instruction a person typed on a finished
 // run. Continuation says who answered it: "resume" when the provider
 // carried on the session that wrote the note, "primed" when a fresh
-// session was handed the note and the instruction instead.
+// session was handed the note and the instruction instead, "live" when
+// the instruction was typed while the run worked and the running session
+// took it as its next user message.
 type Steer struct {
 	At           time.Time
 	Text         string
 	Continuation string
+}
+
+// The states a queued steer moves through. It is queued the moment it is
+// typed; delivered when the live session took it as its next user message;
+// held when the session could not take one, so it waits for the run to
+// settle; applied once a steer segment carried it after the run settled;
+// dropped when the settled run could not be steered at all, with Reason
+// saying why.
+const (
+	SteerQueued    = "queued"
+	SteerDelivered = "delivered"
+	SteerHeld      = "held"
+	SteerApplied   = "applied"
+	SteerDropped   = "dropped"
+)
+
+// QueuedSteer is one instruction typed while its run was still working.
+//
+// Turn is the run's turn count when the instruction reached the session:
+// the agent read it after that turn and before the next. It is zero until
+// the steer is delivered, and stays zero on one that was held, since a
+// held steer starts a segment of its own.
+type QueuedSteer struct {
+	ID     string
+	At     time.Time
+	Text   string
+	Model  string `json:",omitempty"`
+	Status string
+	Turn   int       `json:",omitempty"`
+	Done   time.Time `json:",omitempty"`
+	Reason string    `json:",omitempty"`
 }
 
 // ModelSegment records one stretch of a run and the model that answered
@@ -125,6 +158,13 @@ type State struct {
 	// session started, which is where a reader of the transcript sees
 	// them; this is the summary a screen listing runs reads.
 	Steers []Steer `json:",omitempty"`
+
+	// QueuedSteers is every instruction a person typed while the run was
+	// working, oldest first, with what became of each. The queue itself is
+	// the run's steers.jsonl inbox (see Run.QueueSteer); this is the
+	// executor's account of it, so a screen can say which of them the
+	// agent has seen. A run nobody steered while it worked omits it.
+	QueuedSteers []QueuedSteer `json:",omitempty"`
 
 	// Instruction is what the operator typed into the composer alongside
 	// the ticket key when they started the run: "check the tax rounding

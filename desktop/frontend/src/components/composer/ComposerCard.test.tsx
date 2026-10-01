@@ -137,6 +137,18 @@ describe('ComposerCard', () => {
       expect(onClick).not.toHaveBeenCalled()
     })
 
+    it('lets Enter queue what is typed when the run takes steers, and keeps the round button the Stop', () => {
+      const onClick = vi.fn()
+      const onStop = vi.fn()
+      render(<Harness send={{ onClick }} stop={{ onStop, sendOnEnter: true }} />)
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'also check the export worker' } })
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
+      expect(onClick).toHaveBeenCalledTimes(1)
+      expect(onStop).not.toHaveBeenCalled()
+      expect(screen.getByRole('button', { name: 'Stop the run' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+    })
+
     it('says why it cannot stop, when it cannot', () => {
       const onStop = vi.fn()
       render(

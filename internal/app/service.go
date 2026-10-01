@@ -853,6 +853,10 @@ func (s *Service) startJob(
 			// flow with an answer, supplies its own reader.
 			deps.Stdin = strings.NewReader("")
 			outcomes = work(jctx, deps)
+			// A steer typed while the run worked, that its session could
+			// not take mid-run, is applied the moment the run settles —
+			// here, in the same job, so the run goes straight on.
+			outcomes = s.applyHeld(jctx, deps, outcomes)
 		}
 
 		s.dropJob(id)
@@ -860,6 +864,20 @@ func (s *Service) startJob(
 		s.publish(Event{Kind: KindJobFinished, JobID: id, WorkspaceID: ws.ID, Outcomes: outcomes})
 	}()
 	return id, nil
+}
+
+// applyHeld applies every held steer on the runs a job settled, replacing
+// each such run's outcome with the steer's.
+func (s *Service) applyHeld(ctx context.Context, deps runner.Deps, outcomes []JobOutcome) []JobOutcome {
+	for i, o := range outcomes {
+		if o.RunID == "" {
+			continue
+		}
+		if out, ok := ApplyHeldSteers(ctx, deps, o.RunID); ok {
+			outcomes[i] = outcomesOf([]runner.Outcome{out})[0]
+		}
+	}
+	return outcomes
 }
 
 func (s *Service) addJob(cancel context.CancelFunc) JobID {

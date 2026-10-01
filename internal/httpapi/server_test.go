@@ -427,6 +427,18 @@ func TestSteer(t *testing.T) {
 	}
 }
 
+// A steer on a working run is queued for the executor that owns it: no
+// job, and the answer says so.
+func TestSteerQueuedOnALiveRun(t *testing.T) {
+	f := newFake()
+	f.steerQueued = true
+	var got steerResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"also check the export worker"}`), 202, &got)
+	if got.JobID != "" || !got.Queued || got.RunID != knownRun || f.gotSteer != "also check the export worker" {
+		t.Fatalf("got %+v, text %q", got, f.gotSteer)
+	}
+}
+
 // A steer is an instruction; without one there is nothing to send, and
 // the service is not asked.
 func TestSteerRequiresText(t *testing.T) {

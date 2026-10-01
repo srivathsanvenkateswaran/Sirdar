@@ -52,6 +52,7 @@ func cmdTriage(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1
 	}
+	outs = applyHeld(ctx, deps, outs)
 
 	rows := make([]note.DigestRow, len(outs))
 	for i, o := range outs {

@@ -25,7 +25,12 @@ var commands = map[string]command{}
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
+	// Bare `sirdar` is the web UI: serve on loopback and open the browser,
+	// the way the desktop app opens. `sirdar help` still prints the list.
+	if len(args) == 0 {
+		return cmdServe([]string{"--open"}, stdout, stderr)
+	}
+	if args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 		usage(stderr)
 		return 2
 	}
@@ -42,8 +47,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return cmd(args[1:], stdout, stderr)
 }
 
-func usage(w io.Writer) {
-	fmt.Fprintln(w, `usage: sirdar <command> [flags]
+func usage(w io.Writer) { fmt.Fprintln(w, usageText()) }
+
+func usageText() string {
+	return `usage: sirdar [<command> [flags]]
+
+With no command, sirdar serves the web UI on http://127.0.0.1:7777 and opens it.
 
 commands:
   init        scaffold .sirdar/config.yaml and playbooks
@@ -59,7 +68,7 @@ commands:
   runs        list runs and states; 'runs diff RUN_ID' reviews a fix run's change
   register    print the register
   serve       serve the web UI and API on loopback
-  version     print version`)
+  version     print version`
 }
 
 // displayVersion prefixes release versions with "v" and leaves dev builds as they are.
