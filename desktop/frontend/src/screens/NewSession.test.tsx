@@ -163,7 +163,7 @@ describe('NewSession', () => {
     const form = screen.getByRole('form', { name: 'Start' })
     const chips = form.querySelector('.composer-bar__chips')!
     expect(within(chips as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
-      'Model claude · sonnet',
+      'Model claude · Sonnet',
       'Mode: Triage',
       'Access: Read-only',
     ])
@@ -401,7 +401,7 @@ describe('NewSession', () => {
 
     it('names the workspace model when the config has one', () => {
       mount()
-      expect(modelChip()).toHaveAccessibleName('Model claude · sonnet')
+      expect(modelChip()).toHaveAccessibleName('Model claude · Sonnet')
     })
 
     it('says CLI default when the config names no model and no run has reported one', () => {

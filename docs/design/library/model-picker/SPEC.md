@@ -17,12 +17,20 @@ it the shape of T3 Code's picker on Sirdar's own tokens: a search field, a
 rail of provider marks, rows with a provider meta line, ⌘1…⌘9 shortcut
 badges, and a star per row for favourites.
 
-The lists it draws from live in `src/lib/models.ts`: a curated list per
-provider with "CLI default" first, then the names the research observed on
-the wire. Nothing in a list is guessed. The search field is also the
-free-text entry: text that answers no row is offered back as one row, "Use
-“…” as the model id", and a provider whose names were never seen carries a
-hint saying where an id would come from.
+The list is discovered, not typed in. A screen holds a `ModelCatalog`
+(`src/lib/modelCatalog.ts`) over `Transport.models` and hands it down as
+`catalog`; the picker fetches nothing itself. Opening the popover loads the
+provider's list: the models the CLI resolved `opus`, `sonnet`, `haiku` and
+the workspace's configured model to on this login (the probe, claude only,
+cached a day under `~/.sirdar/models/`), every model the workspace's runs
+reported, and the operator's `providers.<p>.models` pins. A probe starts
+only when that list says one is due, or on Refresh. With nothing discovered —
+or no catalog given — the static table in `src/lib/models.ts` stands in, each
+name marked "not verified on this login". Labels come from the id
+(`claude-opus-4-5-20251101` reads "Opus 4.5"), with a pin's own label
+first. The search field is also the free-text entry: text that answers no row
+is offered back as one row, "Use “…” as the model id", and the Other… row at
+the list's foot hands the typing to it.
 
 ## Anatomy
 
@@ -30,13 +38,20 @@ hint saying where an id would come from.
   to (`lib/anchor.ts`). The popover is `position: fixed`, so it adds nothing
   to the wrapper's width.
 - `button.sd-model-chip` — the trigger, in the composer bar: a small provider
-  mark, `.sd-model-chip__value` (the model's curated label — `Sonnet 5`,
+  mark, `.sd-model-chip__value` (the model's label — `Opus 4.5`, `Sonnet 5`,
   `CLI default`, or the id itself) and `.sd-model-chip__chevron`. 32 tall,
   `--sd-radius-sm`, no border of its own (the bar draws the hairlines between
   chips), `--sd-nav-hover` on hover and while open. Its accessible name and
   `title` carry the whole pair: `Model claude · Sonnet 5`, or `Model claude ·
   CLI default · last used claude-sonnet-5`. `aria-haspopup="dialog"`,
   `aria-expanded`, `aria-controls`.
+- With `next` the chip's value reads `next: Opus 4.5`, its name "Model for
+  the next turn …": the choice is for the next answer or steer of a run that
+  ran on something else.
+- `button.sd-model-chip[data-readonly="true"]` — the fixed chip: muted to
+  `--sd-ink-3`, `.sd-model-chip__lock` (12px, lucide lock) where the chevron
+  was, `cursor: default`, no popup; `title` and the accessible name carry the
+  reason.
 - With `trigger="change"` the trigger is a pale Button reading "Change" and
   the row draws the words itself.
 - `div.sd-model-picker__popover[role="dialog"]` — non-modal, fixed to the
@@ -74,8 +89,22 @@ hint saying where an id would come from.
   no star and no key, with `.sd-model-picker__hint` under it naming where a
   model id for this provider was observed. Enter in the search, or on the
   row, takes it.
-- `.sd-model-picker__hint--foot` — the same hint at the list's foot for a
-  provider whose list is "CLI default" alone, before anything is typed.
+- The groups, each under its heading, in this order: "Models" (CLI
+  default, then — with nothing discovered — the static names), "On this
+  login" (probe), "Seen in runs", "Pinned in config". Each discovered row's
+  meta says when: `· probed today`, `· seen in a run 2d ago`, `· pinned in
+  config`; a static one says `· not verified on this login`. ⌘1…⌘9 run on
+  across the groups.
+- `.sd-model-picker__row--other` — "Other…" at the list's foot while
+  nothing is typed, with the provider's hint under it (or "Type a model id
+  in the search"); picking it focuses the search. No star, no key.
+- `.sd-model-picker__foot` — with a `catalog`, a 36-tall row on `--sd-sheet`
+  under a `--sd-rule` hairline: `.sd-model-picker__status[role=status]`
+  (micro, third ink: "Probed 3h ago", "Asking the CLI which models this
+  login has…", "From runs and config", or the error; its `title` lists the
+  aliases the last probe could not resolve) and `.sd-model-picker__refresh`,
+  a small outlined button with a rotate icon, off while a load or probe is
+  out.
 
 ## States
 
@@ -90,14 +119,16 @@ hint saying where an id would come from.
 | favourite | The star is filled in `--sd-accent` and stays visible; the row floats under "Favourites" and takes the first shortcuts. Kept in `localStorage` under `sirdar.modelFavourites.<provider>`. |
 | searching | The heading reads "Matches"; rows from every provider that answer the query, each naming its provider in its meta. Enter picks the first match. When nothing answers, the one row is "Use “<typed>” as the model id", and Enter takes it. |
 | nothing chosen | The chip reads `CLI default`; the CLI default row's meta and the chip's name say what the last run on that provider used. |
-| workspace model | An override of neither provider nor model shows the workspace's configured model by its label, or the id itself when the list has no label for it (`sonnet` stays `sonnet`; the CLI takes the alias). |
+| workspace model | An override of neither provider nor model shows the workspace's configured model by its label: the list's, else one derived from the id (`sonnet` reads `Sonnet`; the id passed on is still `sonnet`, which the CLI takes as the alias). |
 | free text | An id the list lacks is typed in the search and taken from the "Use …" row, trimmed, on the provider the rail has. The chip then reads the id itself, and no row in the list is selected. |
 | disabled | The chip at `opacity: .45`; nothing opens. |
-| read-only | `readOnly` names the reason: the chip is a disabled button with that reason as its `title` and in its accessible name, at full opacity — a fact, not a control. |
+| read-only | `readOnly` names the reason: the chip is a disabled button with that reason as its `title` and in its accessible name — a fact, not a control: muted ink, a lock in place of the chevron, no hover. |
 | no provider | The value reads "not set" and no mark is drawn; the popover still opens so one can be chosen. |
 | no room below | The popover opens above the chip (`data-side="above"`), or stays below held to the room when that is more; the list scrolls inside. The window never scrolls. |
-| loading | n/a. The lists are static. |
-| error | n/a. A wrong id is the provider's to refuse when the run starts. |
+| loading | The list keeps what it had (or the static names) with `aria-busy`; the foot says the CLI is being asked and Refresh is off. |
+| error | The foot says "Could not read the list: …" and the last list stays. A wrong id is still the provider's to refuse when the run starts. |
+| next | `next: <label>` on the chip; the popover is unchanged. |
+| locked while open | The chip turning read-only or disabled closes the popover; it does not reopen on its own. |
 | empty | n/a. Every list has "CLI default", and a search that finds nothing offers the typed text instead of an empty list. |
 | RTL | The popover lines its leading edge up with the trigger's leading (right) edge; the rail is on the inline start, its accent rail on the leading edge; the check and the shortcut key swap sides with the page. The chip's value, each row's meta and the box stay `dir="ltr"`, because a model id is Latin. |
 
@@ -120,9 +151,10 @@ hint saying where an id would come from.
 - **Do** apply every choice as it is made. The chip is the truth; picking a
   row closes. Escape and a click outside close the same way and keep the
   choice; the search is cleared for next time.
-- **Don't** invent a model name for a list. A name goes in `lib/models.ts`
-  only once the research has seen it on the wire; until then the provider
-  offers free text and a hint.
+- **Don't** treat the static table as the list. It is the fallback, marked
+  unverified; the list is what the login and the workspace have shown.
+- **Don't** probe from the picker on every open. Opening asks for the list;
+  a probe runs only when the list says one is due, or on Refresh.
 - **Do** pass ids through unchanged. The Claude CLI takes `opus`, `sonnet`
   and `haiku` as well as full ids; the picker does not correct a reader who
   typed one.
@@ -130,8 +162,9 @@ hint saying where an id would come from.
   row's meta and the chip's name carry the newest run's reported model.
 - **Don't** offer `agy`. It is disabled, and a provider a run cannot start on
   is not a choice.
-- **Do** make the chip read-only where the choice is already made — a steer
-  continues the run the session has, on the model it has.
+- **Do** make the chip read-only while a run works — its session already
+  has a model — and a control again once it stops, saying `next:` when the
+  pick differs from what ran.
 - **Don't** hang the popover under the chip with `position: absolute`. The
   window is `overflow: hidden`; a popover taller than the room would be cut
   off. Anchor it with `lib/anchor`.
@@ -160,6 +193,15 @@ selected row is `--sd-ink` on `--sd-card-row`, **15.70:1** light and
 `--sd-dur-1`, 1ms under reduced motion.
 
 ## Changelog
+
+### 2026-10-01 (discovered models)
+The list is discovered: probe, runs and config pins through a `catalog`,
+grouped by source with when each was seen, a foot with the probe's age and
+Refresh, and an Other… row. The static names are the fallback, marked "not
+verified on this login". Labels derive from the id, so an alias reads by its
+family (`sonnet` is "Sonnet"). New `next` prop. The read-only chip is muted
+with a lock in place of the chevron. A popover whose chip turns read-only or
+disabled closes. The foot hint went into the Other… row.
 
 ### 2026-09-17 (density)
 The search row and each option go 44 → 36 tall, and the

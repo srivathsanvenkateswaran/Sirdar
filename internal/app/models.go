@@ -329,6 +329,9 @@ var (
 	contextTag = regexp.MustCompile(`\[(\d+)([km])\]$`)
 )
 
+// modelFamilies are the names a bare alias or a versionless id may carry.
+var modelFamilies = []string{"opus", "sonnet", "haiku", "fable"}
+
 // ModelLabel is how an id reads on a chip: "claude-opus-4-5-20251101" is
 // "Opus 4.5", "claude-3-5-sonnet-20241022" is "Sonnet 3.5",
 // "claude-opus-5[1m]" is "Opus 5 (1M)", and the bare aliases are their
@@ -341,8 +344,7 @@ func ModelLabel(id string) string {
 		suffix = " (" + m[1] + strings.ToUpper(m[2]) + ")"
 		id = strings.TrimSuffix(id, m[0])
 	}
-	switch id {
-	case "opus", "sonnet", "haiku", "fable":
+	if contains(modelFamilies, id) {
 		return strings.ToUpper(id[:1]) + id[1:] + suffix
 	}
 	rest, ok := strings.CutPrefix(id, "claude-")
@@ -363,7 +365,9 @@ func ModelLabel(id string) string {
 			return id + suffix
 		}
 	}
-	if family == "" {
+	// A family with no version is only a name when it is one of the known
+	// ones: "claude-next" is somebody's id, not a model called Next.
+	if family == "" || (len(version) == 0 && !contains(modelFamilies, family)) {
 		return id + suffix
 	}
 	label := strings.ToUpper(family[:1]) + family[1:]

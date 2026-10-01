@@ -107,13 +107,56 @@ export function hintFor(provider: string): string {
   return MODELS[provider as Provider]?.hint ?? ''
 }
 
+/** The note a row from the static table carries: nothing has confirmed it on this login. */
+export const NOT_VERIFIED = 'not verified on this login'
+
 /**
- * How a model id reads on a chip: its curated label when the list has it,
- * otherwise the id itself, which is what the CLI will be told.
+ * How a model id reads by itself: "claude-opus-4-5-20251101" is "Opus
+ * 4.5", "claude-3-5-sonnet-20241022" is "Sonnet 3.5", "claude-opus-5[1m]"
+ * is "Opus 5 (1M)", and the bare aliases are their own capitalised names.
+ * Anything that is not a Claude id reads as the id, which is what the CLI is
+ * told. The same rule as `app.ModelLabel` on the Go side, which labels the
+ * list the service answers with.
  */
-export function modelLabel(provider: string, model: string): string {
+const FAMILIES = ['opus', 'sonnet', 'haiku', 'fable']
+
+export function deriveLabel(raw: string): string {
+  let id = raw.trim()
+  let suffix = ''
+  const tag = /\[(\d+)([km])\]$/.exec(id)
+  if (tag) {
+    suffix = ` (${tag[1]}${tag[2].toUpperCase()})`
+    id = id.slice(0, -tag[0].length)
+  }
+  if (FAMILIES.includes(id)) return id[0].toUpperCase() + id.slice(1) + suffix
+  if (!id.startsWith('claude-') || id === 'claude-') return id + suffix
+  let family = ''
+  const version: string[] = []
+  for (const tok of id.slice('claude-'.length).split('-')) {
+    if (/^\d{8}$/.test(tok)) continue
+    if (/^\d+$/.test(tok)) version.push(tok)
+    else if (!family && tok) family = tok
+    else return id + suffix
+  }
+  // A family with no version is only a name when it is one of the known
+  // ones; "claude-next" is somebody's id, not a model called Next.
+  if (!family || (version.length === 0 && !FAMILIES.includes(family))) return id + suffix
+  const name = family[0].toUpperCase() + family.slice(1)
+  return (version.length > 0 ? `${name} ${version.join('.')}` : name) + suffix
+}
+
+/**
+ * How a model id reads on a chip: the label a discovered list gave it (an
+ * operator's pin can name it), else the static table's word as a hint, else
+ * the label derived from the id.
+ */
+export function modelLabel(provider: string, model: string, discovered?: ModelChoice[]): string {
   if (!model) return CLI_DEFAULT.label
-  return modelsFor(provider).find((m) => m.id === model)?.label ?? model
+  return (
+    discovered?.find((m) => m.id === model)?.label ??
+    modelsFor(provider).find((m) => m.id === model)?.label ??
+    deriveLabel(model)
+  )
 }
 
 /**
@@ -129,9 +172,10 @@ export function describeModel(
   model: string,
   lastUsed = '',
   unknownAs = CLI_DEFAULT.label,
+  discovered?: ModelChoice[],
 ): string {
   if (!provider) return 'not set'
-  const parts = [provider, model ? modelLabel(provider, model) : unknownAs]
+  const parts = [provider, model ? modelLabel(provider, model, discovered) : unknownAs]
   if (!model && lastUsed) parts.push(`last used ${lastUsed}`)
   return parts.join(' · ')
 }

@@ -47,7 +47,11 @@ describe('the model lists', () => {
 describe('modelLabel', () => {
   it('reads a curated id by its label and any other id as itself', () => {
     expect(modelLabel('claude', 'claude-sonnet-5')).toBe('Sonnet 5')
-    expect(modelLabel('claude', 'sonnet')).toBe('sonnet')
+    expect(modelLabel('claude', 'sonnet')).toBe('Sonnet')
+    expect(modelLabel('claude', 'claude-opus-4-5-20251101')).toBe('Opus 4.5')
+    expect(modelLabel('codex', 'gpt-5.6-luna')).toBe('gpt-5.6-luna')
+    // A discovered list's label wins: an operator's pin can name it.
+    expect(modelLabel('claude', 'claude-opus-4-5', [{ id: 'claude-opus-4-5', label: 'Opus (team)' }])).toBe('Opus (team)')
     expect(modelLabel('claude', '')).toBe('CLI default')
   })
 })

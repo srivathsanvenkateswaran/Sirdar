@@ -30,6 +30,8 @@ func TestModelLabel(t *testing.T) {
 		"qwen3-coder":                "qwen3-coder",
 		"claude-":                    "claude-",
 		"claude-a-b":                 "claude-a-b",
+		"claude-next":                "claude-next",
+		"claude-opus":                "Opus",
 		"":                           "",
 	} {
 		if got := ModelLabel(id); got != want {
