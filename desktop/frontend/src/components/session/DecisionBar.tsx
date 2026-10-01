@@ -137,29 +137,29 @@ export default function DecisionBar({ ask, busy, onDecide }: DecisionBarProps): 
   }
 
   return (
-    <div className="sn-decide" role="group" aria-label="The agent asks to run" data-kind={ask.kind} data-testid="decision-bar">
-      <div className="sn-decide__q" title={full}>
-        <span className="sn-decide__tool" dir="ltr">
+    <div className="sn-askbar" role="group" aria-label="The agent asks to run" data-kind={ask.kind} data-testid="decision-bar">
+      <div className="sn-askbar__q" title={full}>
+        <span className="sn-askbar__tool" dir="ltr">
           {tool}
         </span>
         {call ? (
-          <code className="sn-decide__call" dir="ltr">
+          <code className="sn-askbar__call" dir="ltr">
             {call}
           </code>
         ) : null}
-        <span className="sn-decide__why">{askWhy(ask)}</span>
+        <span className="sn-askbar__why">{askWhy(ask)}</span>
       </div>
       {denying ? (
         // The three answers give way to the reason: one row, the field and
         // the two ways out of it.
-        <form className="sn-decide__deny" onSubmit={confirmDeny}>
+        <form className="sn-askbar__deny" onSubmit={confirmDeny}>
           <label className="visually-hidden" htmlFor={reasonId}>
             Why not
           </label>
           <input
             id={reasonId}
             ref={reasonRef}
-            className="sn-decide__reason"
+            className="sn-askbar__reason"
             value={reason}
             dir="auto"
             placeholder="Why not (optional) — the agent is told"
@@ -174,7 +174,7 @@ export default function DecisionBar({ ask, busy, onDecide }: DecisionBarProps): 
           </Button>
         </form>
       ) : (
-        <div className="sn-decide__actions">
+        <div className="sn-askbar__actions">
           <Button
             variant="primary"
             busy={busy}

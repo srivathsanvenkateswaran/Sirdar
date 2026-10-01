@@ -31,7 +31,7 @@ describe('DecisionBar', () => {
     bar(ASKS[kind])
     const group = screen.getByRole('group', { name: 'The agent asks to run' })
     expect(group).toHaveAttribute('data-kind', kind)
-    const line = group.querySelector('.sn-decide__q') as HTMLElement
+    const line = group.querySelector('.sn-askbar__q') as HTMLElement
     expect(within(line).getByText(tool)).toBeInTheDocument()
     if (call) expect(within(line).getByText(call).tagName).toBe('CODE')
     expect(line).toHaveTextContent(why)

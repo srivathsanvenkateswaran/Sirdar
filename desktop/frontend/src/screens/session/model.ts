@@ -193,7 +193,7 @@ function decisionOf(call: ToolCall): { decision: Decision; reason: string; sugge
   // A call put to the operator did not run, and is not a refusal either
   // until they say so: the decision bar is where it is answered.
   if (permission.payload?.decision === 'ask') {
-    return { decision: 'denied', reason: 'waiting on you', suggestedRule: '' }
+    return { decision: 'policy', reason: '', suggestedRule: '' }
   }
   if (permission.payload?.decision === 'deny') {
     return { decision: 'denied', reason: text.replace(/^Sirdar policy:\s*/i, ''), suggestedRule }

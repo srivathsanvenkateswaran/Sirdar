@@ -10,7 +10,7 @@
  * side is logical.
  */
 
-.sn-decide {
+.sn-askbar {
   display: flex;
   flex-direction: column;
   gap: var(--sd-space-3);
@@ -24,24 +24,28 @@
   line-height: 1.5;
   min-inline-size: 0;
   margin-block-end: var(--sd-space-2);
+  /* The bar reads from the start whatever column it is dropped into. */
+  align-items: stretch;
+  text-align: start;
 }
 
-.sn-decide__q {
+.sn-askbar__q {
   display: flex;
+  justify-content: flex-start;
   align-items: baseline;
   gap: var(--sd-space-2);
   min-inline-size: 0;
   white-space: nowrap;
 }
 
-.sn-decide__tool {
+.sn-askbar__tool {
   flex: 0 0 auto;
   color: var(--sd-st-blocked);
   font-weight: 600;
   unicode-bidi: isolate;
 }
 
-.sn-decide__call {
+.sn-askbar__call {
   flex: 0 1 auto;
   min-inline-size: 0;
   overflow: hidden;
@@ -52,7 +56,7 @@
   unicode-bidi: isolate;
 }
 
-.sn-decide__why {
+.sn-askbar__why {
   flex: 0 1 auto;
   min-inline-size: 0;
   overflow: hidden;
@@ -61,20 +65,21 @@
   font-size: var(--sd-text-meta);
 }
 
-.sn-decide__why::before {
+.sn-askbar__why::before {
   content: '· ';
   opacity: 0.6;
 }
 
-.sn-decide__actions,
-.sn-decide__deny {
+.sn-askbar__actions,
+.sn-askbar__deny {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--sd-space-2);
 }
 
-.sn-decide__reason {
+.sn-askbar__reason {
   flex: 1 1 16rem;
   min-inline-size: 0;
   min-block-size: var(--sd-control-h);
@@ -87,6 +92,6 @@
   unicode-bidi: plaintext;
 }
 
-.sn-decide__reason::placeholder {
+.sn-askbar__reason::placeholder {
   color: var(--sd-ink-3);
 }

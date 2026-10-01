@@ -445,7 +445,8 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
       const step = stepOf.get(call.started.index)
       const started = call.started.event
       const tool = step?.tool ?? (toolLabel(str(started.payload?.tool)) || 'tool')
-      const decision = step ? (step.decision === 'denied' ? 'deny' : 'allow') : str(call.permission?.event.payload?.decision)
+      const asked = str(call.permission?.event.payload?.decision) === 'ask'
+      const decision = step ? (step.decision === 'denied' ? 'deny' : asked ? 'ask' : 'allow') : str(call.permission?.event.payload?.decision)
       const reason = step?.reason ?? str(call.permission?.event.payload?.text)
       const denied = decision === 'deny' || decision === 'ask'
       const rawCommand = inputSummary(started)

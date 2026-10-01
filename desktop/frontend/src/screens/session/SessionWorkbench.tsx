@@ -239,7 +239,11 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   )
   const report = isFix ? session.report : undefined
   const checks = session.checks
-  const question = useMemo(() => (detail ? pendingQuestion(detail, events) : undefined), [detail, events])
+  // A permission question is the decision bar's to show; the band is for a question in words.
+  const question = useMemo(
+    () => (detail && !(detail.status === 'blocked' && detail.question?.decision) ? pendingQuestion(detail, events) : undefined),
+    [detail, events],
+  )
   const dropped = useMemo(
     () =>
       runEvents
