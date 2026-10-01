@@ -109,6 +109,7 @@ type fake struct {
 	gotSteer     string
 	gotModel     string
 	steerErr     error // when set, Steer refuses with it
+	steerQueued  bool  // when set, Steer queues on a live run and starts no job
 	gotCancelled JobID
 	gotConnect   bool
 	gotCall      mcpCall
@@ -674,6 +675,9 @@ func (f *fake) Steer(_ context.Context, wsID, runID, text, model string) (JobID,
 		return "", f.steerErr
 	}
 	f.gotSteer, f.gotModel = text, model
+	if f.steerQueued {
+		return "", nil
+	}
 	return knownJob, nil
 }
 

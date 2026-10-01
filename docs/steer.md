@@ -13,7 +13,61 @@ sirdar steer 20260915T091200Z-3f2a "Read it again, carefully" --model claude-opu
 
 `sirdar resume` is for a run that stopped and is waiting — a question, a rate limit, an
 interrupt. `sirdar steer` is for a run that is done and that you want more from. A blocked run
-can be steered too; the instruction is then what the agent gets instead of an answer.
+can be steered too; the instruction is then what the agent gets instead of an answer. A run that
+is still working takes the instruction into a queue instead of refusing it (below).
+
+## While the run works
+
+A steer on a `preparing` or `running` run is queued, not refused:
+
+```
+$ sirdar steer 20260915T091200Z-3f2a "Also check the export worker"
+queued; delivered at turn 4
+```
+
+The instruction is appended to the run's `steers.jsonl`, an inbox any process may append to —
+the desktop app hosting a run the CLI steers, or the other way round. The executor that owns the
+run reads it every half second and at every turn boundary, writes a `steer_queued` line to
+`events.jsonl` for each instruction it finds, and records it in `state.json`'s `QueuedSteers`.
+
+The turn boundary is the moment a provider turn ends with an answer. The answer is filed as
+usual; then, if instructions are queued, they go into the same session as its next user message,
+joined in the order typed and framed the way a steer on a finished run is ("Follow-up
+instruction from the operator…", then the whole document again). The run stays `running`, the
+`steer` line in `events.jsonl` carries `"continuation": "live"` and the turn it was read after,
+and the next answer is validated and filed the same way — or left alone if it is the same
+document. `sirdar steer` prints `queued; delivered at turn N`.
+
+Whether a session takes another message is decided by the session itself, through the same
+`Send` the schema retry uses, so nothing here guesses:
+
+| Provider | Mid-run | Why |
+|---|---|---|
+| `claude` | delivered | `claude -p --input-format stream-json` reads further user messages on stdin; after its result line the CLI waits for the next one (`claude --help`: "realtime streaming input") |
+| `acp` | delivered | a second `session/prompt` on the same session |
+| `openai` | delivered | the loop takes a follow-up message on its own channel |
+| `codex` | held, in practice | `turn/start` on the active thread works only while the event stream is open, and the app-server stream closes when the turn completes — the boundary usually arrives after it has |
+| `qwen`, `cursor` | held | one message per session: `Send` refuses |
+| `agy` | held | disabled |
+
+A held instruction waits for the run to settle and is then applied as an ordinary steer — the
+`completed → running` segment above, with `continuation` of `resume` or `primed` — by whatever
+hosted the run: the desktop app or `sirdar serve` in the same job, the CLI command before it
+prints its digest. `sirdar steer` prints `queued; applied when the run settles`. A queued steer
+that names a different `--model` is always held, since a model is a session. A run stopped
+with Stop or Ctrl-C drops its held steers (`dropped`, reason "the run was stopped"); a run
+blocked on a question or a limit keeps them for the session that resumes it; a run that cannot
+be steered at all — over budget, a pushed fix — drops them with that reason.
+
+Each entry in `QueuedSteers` says what became of it: `queued`, `delivered` (with `Turn`),
+`held`, `applied` or `dropped` (with `Reason`). The run summary carries them as `queuedSteers`,
+so `run.updated` moves the desktop composer's chips as they resolve.
+
+In the desktop app the composer stays editable while the run works on a provider that can be
+steered. Enter queues what is typed; the round button stays Stop. A row of chips above the box
+lists the newest few queued steers with `queued for the next turn`, `delivered at turn N`,
+`waiting for the run to finish` or `not delivered: …`, and the transcript shows each one as a
+"you" card at the point the agent read it.
 
 ## Changing the model
 
@@ -38,7 +92,10 @@ composer's Model chip picks it on a run that has stopped.
 ## Over HTTP
 
 `POST /api/workspaces/{id}/runs/{runId}/steer` with `{"text": "..."}`, answering `202` with
-`{"jobId": ..., "runId": ...}`; `POST .../resume` takes `{"answer": "..."}`. Both also take an
+`{"jobId": ..., "runId": ...}` — or, on a run that is still working, `{"jobId": "", "runId":
+..., "queued": true}`, since the executor already running it takes the instruction and no job
+starts. The desktop bridge's `Steer` returns an empty job id for the same case.
+`POST .../resume` takes `{"answer": "..."}`. Both also take an
 optional `"model"`. The run's `state.json` goes to `running`, and `run.updated` and `run.event`
 flow over `/api/events` as they do for any run. The desktop app has the same two calls on its
 bridge.
@@ -49,7 +106,9 @@ bridge.
   `Usage.ElapsedSeconds`, the wall-clock time every session of the run has spent. A run that
   changed model partway through also gains `ModelSegments`.
 - `events.jsonl` gets a `steer` line ahead of the session's own events, carrying the instruction
-  and a `continuation` of `resume` or `primed`. A primed continuation also records a `system` line
+  and a `continuation` of `resume` or `primed` — or `live`, with `turns`, for one delivered into
+  a working session. A steer typed while the run worked also leaves `steer_queued` and, when it
+  had to wait for the run to settle, `steer_held`. A primed continuation also records a `system` line
   reading `continued in a new session`.
 - The status goes `completed → running → completed` (or `blocked`, `failed`, `over_budget`, as any
   session can end). If the new answer differs from `result.json`, the note is rendered again in
@@ -109,7 +168,6 @@ run that has already reached any cap is refused before a session starts.
 
 ## Refused
 
-- a run that is `preparing` or `running` — a live run is answered, not steered
 - an `over_budget` run, or one whose turns, minutes or cost have reached the cap
 - a provider with no continuation (`cursor`, `agy`), or a run made under a different provider
   than the one the workspace now uses — the handle would name a session that CLI never held

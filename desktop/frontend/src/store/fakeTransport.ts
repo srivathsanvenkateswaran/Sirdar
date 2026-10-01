@@ -658,6 +658,10 @@ export function createFakeTransport(seed: {
     steer: async (ws, runId, text, model) => {
       calls.steer.push({ ws, runId, text, model: model ?? '' })
       if (!text.trim()) throw new Error('steer refused: the instruction is empty')
+      // A working run queues the instruction for the executor that owns it,
+      // as Service.Steer does: no job, and the answer says so.
+      const status = seed.sessions?.[runId]?.detail.status ?? runList.find((r) => r.runId === runId)?.status
+      if (status === 'running' || status === 'preparing') return { jobId: '', runId, queued: true }
       return { jobId: `job-steer-${calls.steer.length}`, runId }
     },
     runDiff: async (ws, runId) => {

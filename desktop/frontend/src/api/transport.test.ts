@@ -583,6 +583,15 @@ describe('wails transport', () => {
     expect(bridge.Steer).toHaveBeenCalledWith('ws1', 'r1', 'go on', '')
   })
 
+  it('reads an empty job id from Steer as a steer queued on a working run', async () => {
+    stubBridge({ Steer: async () => '' })
+    await expect(createWailsTransport().steer('ws1', 'r1', 'also check the export worker')).resolves.toEqual({
+      jobId: '',
+      runId: 'r1',
+      queued: true,
+    })
+  })
+
   it('carries a model on a resume and on a steer', async () => {
     const bridge = stubBridge({ Resume: async () => 'job-8', Steer: async () => 'job-9' })
     const t = createWailsTransport()

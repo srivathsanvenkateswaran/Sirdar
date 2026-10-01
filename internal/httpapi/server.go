@@ -469,10 +469,13 @@ func (s *server) resume(w http.ResponseWriter, r *http.Request) {
 // steerResponse is what a steer answers with: the job that carries the
 // session, and the run it continues — the same id the caller passed, said
 // back so a client that fired the request off a list can tell which row
-// to watch.
+// to watch. Queued says the run was still working, so the instruction
+// went into its queue for the executor already running it and no job was
+// started; jobId is empty then.
 type steerResponse struct {
-	JobID JobID  `json:"jobId"`
-	RunID string `json:"runId"`
+	JobID  JobID  `json:"jobId"`
+	RunID  string `json:"runId"`
+	Queued bool   `json:"queued,omitempty"`
 }
 
 func (s *server) steer(w http.ResponseWriter, r *http.Request) {
@@ -495,7 +498,7 @@ func (s *server) steer(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, steerResponse{JobID: id, RunID: runID})
+	writeJSON(w, http.StatusAccepted, steerResponse{JobID: id, RunID: runID, Queued: id == ""})
 }
 
 func (s *server) cancel(w http.ResponseWriter, r *http.Request) {

@@ -159,15 +159,28 @@ type stubSession struct {
 	cancelled chan struct{}
 	handle    string
 	result    provider.Result
+	// sendErr, when set, is what Send answers: a session that takes no
+	// message mid-run. sent receives every message it does take.
+	sendErr error
+	sent    chan string
 
 	cancelOnce sync.Once
 	finishOnce sync.Once
 }
 
-func (s *stubSession) Events() <-chan provider.Event                   { return s.events }
-func (s *stubSession) Send(ctx context.Context, userText string) error { return nil }
-func (s *stubSession) Wait() (provider.Result, error)                  { return s.result, nil }
-func (s *stubSession) Handle() string                                  { return s.handle }
+func (s *stubSession) Events() <-chan provider.Event { return s.events }
+func (s *stubSession) Send(ctx context.Context, userText string) error {
+	if s.sendErr != nil {
+		return s.sendErr
+	}
+	select {
+	case s.sent <- userText:
+	default:
+	}
+	return nil
+}
+func (s *stubSession) Wait() (provider.Result, error) { return s.result, nil }
+func (s *stubSession) Handle() string                 { return s.handle }
 
 // CloseInput takes the runner's "no further message is coming" and does
 // nothing with it: the stub's stream ends when its script ends, which is
@@ -193,7 +206,8 @@ func (s *stubSession) emit(ev provider.Event) bool {
 func (s *stubSession) finish() { s.finishOnce.Do(func() { close(s.events) }) }
 
 type stubProvider struct {
-	script func(spec provider.SessionSpec, s *stubSession)
+	script  func(spec provider.SessionSpec, s *stubSession)
+	sendErr error // handed to every session it starts
 
 	mu       sync.Mutex
 	sessions []*stubSession
@@ -219,6 +233,8 @@ func (p *stubProvider) Start(ctx context.Context, spec provider.SessionSpec) (pr
 		events:    make(chan provider.Event),
 		cancelled: make(chan struct{}),
 		handle:    "handle-abc",
+		sendErr:   p.sendErr,
+		sent:      make(chan string, 4),
 	}
 	s.result.Handle = s.handle
 	p.mu.Lock()

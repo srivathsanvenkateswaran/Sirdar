@@ -153,6 +153,16 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   when the answer changes; turns, minutes and cost accumulate on the run and the same caps apply
   to the total. A `--local` or deviation-blocked fix run is steered in its own worktree with its
   commit amended, never pushed (`docs/steer.md`).
+- A steer on a working run is queued instead of refused. `sirdar steer RUN "…"`, the HTTP
+  route and the bridge append it to the run's `steers.jsonl`; the executor delivers it at the
+  next turn boundary as the live session's next user message when the session takes one
+  (`claude` over stream-json stdin, `acp`, `openai`), and otherwise holds it and applies it as
+  an ordinary steer the moment the run settles (`codex` in practice, `qwen`, `cursor`). The CLI
+  prints `queued; delivered at turn N` or `queued; applied when the run settles`; `state.json`
+  records each one in `QueuedSteers`, `events.jsonl` gains `steer_queued`, `steer_held` and a
+  `steer` line with `continuation: live`. The desktop composer stays editable while the run
+  works: Enter queues, Stop still stops, and chips above the box say what became of each
+  (`docs/steer.md`).
 - A per-model limit blocks a run for a model choice instead of failing it. Claude Code limits
   some models on their own and says so as an ordinary assistant message — "You've reached your
   Fable limit. Switch to another model, or manage usage credits at claude.ai/settings/usage" —

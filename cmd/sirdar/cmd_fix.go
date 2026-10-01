@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/fix"
 )
 
@@ -54,7 +55,17 @@ func cmdFix(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1
 	}
-	return printFix(res, stdout)
+	code := printFix(res, stdout)
+	// A steer typed while the fix worked, that its session could not take
+	// mid-run, is applied as a steer on the fix: its commit amended in its
+	// worktree, never pushed. A pushed fix cannot take one, and the steer
+	// is dropped with that reason on the run.
+	if res.RunID != "" {
+		if out, ok := app.ApplyHeldSteers(ctx, deps, res.RunID); ok {
+			fmt.Fprintf(stdout, "[%s] held steer applied; the run is %s\n", out.Key, out.State.Status)
+		}
+	}
+	return code
 }
 
 // printFix reports what the run did, and returns the exit status: non-zero

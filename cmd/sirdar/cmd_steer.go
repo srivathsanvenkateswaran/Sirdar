@@ -13,7 +13,10 @@ func init() { commands["steer"] = cmdSteer }
 
 // cmdSteer continues a finished run with a follow-up instruction: the same
 // run goes back to running, its transcript grows, and its note is rendered
-// again when the answer changes.
+// again when the answer changes. On a run that is still working the
+// instruction is queued instead, and the command says what became of it:
+// "queued; delivered at turn N" when the live session took it, or "queued;
+// applied when the run settles" when the session takes no message mid-run.
 func cmdSteer(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("steer", stderr, "usage: sirdar steer RUN_ID \"instruction\" [--model NAME]")
 	model := fs.String("model", "", "continue on this model instead of the run's")
@@ -27,6 +30,14 @@ func cmdSteer(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return exitUsage
 	}
+
+	ctx, stop := interruptible()
+	defer stop()
+
+	if code, handled := queueLiveSteer(ctx, cfg.Root, runID, text, *model, stdout, stderr); handled {
+		return code
+	}
+
 	deps, cleanup, err := buildDeps(cfg, "", "", stdout, stderr)
 	defer cleanup()
 	if err != nil {
@@ -34,14 +45,12 @@ func cmdSteer(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	ctx, stop := interruptible()
-	defer stop()
-
 	out, err := app.Steer(ctx, deps, runID, text, *model)
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1
 	}
+	out = applyHeld(ctx, deps, []runner.Outcome{out})[0]
 	for _, path := range out.State.Notes {
 		fmt.Fprintln(stdout, path)
 	}

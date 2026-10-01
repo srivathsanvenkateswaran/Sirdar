@@ -636,7 +636,7 @@ describe('SessionConversation', () => {
       // Said once: the box carries the whole of it, the button is a Stop,
       // and nothing repeats the sentence beside the button.
       const box = screen.getByRole('textbox', { name: 'Steer' })
-      expect(box).toBeDisabled()
+      expect(box).toBeEnabled()
       expect(box).toHaveAttribute('placeholder', 'Steer the run — it picks this up at its next turn')
       expect(send('Stop the run')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull()
@@ -661,6 +661,69 @@ describe('SessionConversation', () => {
       expect(screen.getByRole('tab', { name: /Tools/ })).toHaveTextContent('Tools6')
     })
 
+
+    it('queues a steer typed while the run works, lists it, and shows it where the agent read it', async () => {
+      const running: RunDetail = { ...TRIAGE_DETAIL, status: 'running', usage: { turns: 3, inputTokens: 1000, outputTokens: 20, costUsd: 0.05 } }
+      const f = fake({ detail: running, events: triageEvents().slice(0, 12) })
+      f.transport.steer = vi.fn(async (_ws: string, runId: string) => ({ jobId: '', runId, queued: true }))
+      renderScene(f)
+      const stream = await screen.findByTestId('conversation')
+      act(() => setRunJob(TRIAGE_DETAIL.runId, 'job-1'))
+
+      const box = screen.getByRole('textbox', { name: 'Steer' })
+      fireEvent.change(box, { target: { value: 'Also check the export worker' } })
+      fireEvent.keyDown(box, { key: 'Enter' })
+      await waitFor(() =>
+        expect(f.transport.steer).toHaveBeenCalledWith('ws1', TRIAGE_DETAIL.runId, 'Also check the export worker', ''),
+      )
+      // Queued, not a job: the Stop is still the Stop, and the box is empty.
+      expect(f.transport.cancel).not.toHaveBeenCalled()
+      expect(send('Stop the run')).toBeInTheDocument()
+      await waitFor(() => expect(box).toHaveValue(''))
+      const list = screen.getByRole('list', { name: 'Queued steers' })
+      expect(within(list).getByText('Also check the export worker')).toBeInTheDocument()
+      expect(within(list).getByText('queued for the next turn')).toBeInTheDocument()
+      // Not in the transcript until the agent reads it.
+      expect(within(stream).queryByTestId('you-bubble')).toBeNull()
+
+      // The executor's record arrives on the summary, then the delivery.
+      f.emit({
+        kind: 'run.updated',
+        workspaceId: 'ws1',
+        run: {
+          ...running,
+          updatedAt: '2026-09-15T12:12:00Z',
+          queuedSteers: [
+            { id: 'q1', at: '2026-09-15T12:11:50Z', text: 'Also check the export worker', status: 'delivered', turn: 3 },
+            { id: 'q2', at: '2026-09-15T12:11:55Z', text: 'And the tax rounding', status: 'held' },
+          ],
+        },
+      })
+      await waitFor(() => expect(within(list).getByText('delivered at turn 3')).toBeInTheDocument())
+      expect(within(list).getByText('waiting for the run to finish')).toBeInTheDocument()
+      expect(within(list).getAllByRole('listitem')).toHaveLength(2)
+
+      f.emit({
+        kind: 'run.event',
+        workspaceId: 'ws1',
+        runId: TRIAGE_DETAIL.runId,
+        index: 40,
+        event: { t: '2026-09-15T12:12:01Z', kind: 'steer', payload: { text: 'Also check the export worker', continuation: 'live', turns: 3 } },
+      })
+      const you = await within(stream).findByTestId('you-bubble')
+      expect(you).toHaveTextContent('Also check the export worker')
+      expect(you).toHaveTextContent('delivered at turn 3')
+    })
+
+    it('keeps the box read-only on a provider that cannot be steered at all', async () => {
+      const running: RunDetail = { ...TRIAGE_DETAIL, status: 'running', provider: 'cursor' }
+      const f = fake({ detail: running, events: triageEvents().slice(0, 12) })
+      renderScene(f)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+      const box = screen.getByRole('textbox', { name: 'Steer' })
+      expect(box).toBeDisabled()
+      expect(box).toHaveAttribute('placeholder', 'Waiting for the run to finish')
+    })
 
     it('stops the run this window started, and says why when it cannot', async () => {
       const running: RunDetail = { ...TRIAGE_DETAIL, status: 'running' }

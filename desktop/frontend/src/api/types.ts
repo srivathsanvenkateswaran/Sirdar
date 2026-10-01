@@ -32,7 +32,24 @@ export interface Usage { turns: number; inputTokens: number; outputTokens: numbe
  * screen shows `key` under the tracker's mark whatever the reader's
  * "Sessions show" preference says.
  */
-export interface RunSummary { runId: string; key: string; helpdeskKey?: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[] }
+export interface RunSummary { runId: string; key: string; helpdeskKey?: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[];
+  /** Every instruction typed while the run worked, and what became of each; absent when there were none. */
+  queuedSteers?: QueuedSteer[] }
+/**
+ * One steer typed on a working run. `queued` waits for the run's next turn
+ * boundary; `delivered` reached the live session after turn `turn`; `held`
+ * waits for the run to finish, because its session takes no message mid-run;
+ * `applied` went in as a steer once the run settled; `dropped` could not, and
+ * `reason` says why.
+ */
+export interface QueuedSteer {
+  id: string
+  at: string
+  text: string
+  status: 'queued' | 'delivered' | 'held' | 'applied' | 'dropped'
+  turn?: number
+  reason?: string
+}
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo;
   /** What the operator asked for when they started the run, in their own words; absent when they asked for nothing in particular. */
   instruction?: string; modelSegments?: ModelSegmentInfo[] }
@@ -96,7 +113,15 @@ export interface DropHunkRequest { path: string; hunk: number; etag: string }
  * continues — the same id the caller passed, said back so a client that fired
  * the request off a list can tell which row to watch.
  */
-export interface SteerStarted { jobId: string; runId: string }
+export interface SteerStarted {
+  jobId: string
+  runId: string
+  /**
+   * The run was still working: the instruction went into its queue for the
+   * executor already running it, and no job was started (`jobId` is empty).
+   */
+  queued?: boolean
+}
 
 // --- MCP inspection, mirrored from internal/app/mcp.go ---
 /**
