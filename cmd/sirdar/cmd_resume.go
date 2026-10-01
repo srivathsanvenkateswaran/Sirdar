@@ -39,6 +39,7 @@ func cmdResume(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1
 	}
+	out = applyHeld(ctx, deps, []runner.Outcome{out})[0]
 	for _, path := range out.State.Notes {
 		fmt.Fprintln(stdout, path)
 	}
