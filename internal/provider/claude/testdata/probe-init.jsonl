@@ -1,0 +1,3 @@
+{"type":"system","subtype":"hook_started","hook_id":"h1","hook_name":"SessionStart:startup","hook_event":"SessionStart","session_id":"0b1c"}
+{"type":"system","subtype":"hook_response","hook_id":"h1","hook_name":"SessionStart:startup","exit_code":0,"outcome":"success","session_id":"0b1c"}
+{"type":"system","subtype":"init","cwd":"/private/tmp/sirdar-probe-1","session_id":"0b1c","tools":[],"mcp_servers":[],"model":"claude-opus-4-5-20251101","permissionMode":"default","slash_commands":[],"apiKeySource":"none","claude_code_version":"2.1.283","output_style":"default","agents":[],"skills":[],"plugins":[],"uuid":"u1"}

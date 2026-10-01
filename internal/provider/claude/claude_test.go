@@ -31,8 +31,9 @@ import (
 // hardlinked into place under the name the fake should have.
 func TestMain(m *testing.M) {
 	testbin.Dispatch(map[string]func() int{
-		"claude-ok":  fakeDoctorCurrent,
-		"claude-old": fakeDoctorOld,
+		"claude-ok":    fakeDoctorCurrent,
+		"claude-old":   fakeDoctorOld,
+		"claude-probe": fakeProbe,
 	})
 	if script := os.Getenv("SIRDAR_FAKE_CLAUDE"); script != "" {
 		os.Exit(fakeCLI(script))
