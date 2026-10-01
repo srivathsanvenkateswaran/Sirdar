@@ -61,6 +61,22 @@ export function sourceNote(source: ModelSource, seenAt: string | undefined, now 
 }
 
 /**
+ * What the list says about the probe, in one line: "Probed 3h ago", "From
+ * runs and config" for a provider that cannot be probed, "Not probed yet",
+ * or — when the last probe resolved no alias at all — that it failed, so a
+ * login or path problem is not dressed up as a fresh list. The reasons are
+ * `probeErrors`, which the caller puts in a title.
+ */
+export function probeStatus(list: ModelList, now = Date.now()): string {
+  if (!list.canProbe) return 'From runs and config'
+  if (!list.probedAt) return 'Not probed yet'
+  const when = relativeTime(list.probedAt, now)
+  const resolved = list.models.some((m) => m.source === 'probe')
+  if (!resolved && (list.probeErrors?.length ?? 0) > 0) return `The CLI answered no alias ${when}`
+  return `Probed ${when}`
+}
+
+/**
  * The rows for one provider, CLI default first. A list that discovered
  * something gives its models under their sources; one that discovered
  * nothing — or has not answered yet — falls back to the static table, each

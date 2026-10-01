@@ -88,22 +88,34 @@ func TestMergeModelsWithoutAProbe(t *testing.T) {
 	if !stale.ProbeDue {
 		t.Fatal("a probe older than the TTL is due again")
 	}
-	fresh := mergeModels("claude", &modelCache{ProbedAt: now.Add(-ModelsTTL + time.Minute)}, nil, nil, now)
+	resolved := []probedModel{{Alias: "opus", ID: "claude-opus-4-5"}}
+	fresh := mergeModels("claude", &modelCache{ProbedAt: now.Add(-ModelsTTL + time.Minute), Models: resolved}, nil, nil, now)
 	if fresh.ProbeDue {
 		t.Fatal("a probe inside the TTL is reused")
+	}
+	// A probe that resolved nothing is asked again after an hour, not a day.
+	failed := &modelCache{ProbedAt: now.Add(-failedTTL + time.Minute), Errors: []string{"opus: no init"}}
+	if mergeModels("claude", failed, nil, nil, now).ProbeDue {
+		t.Fatal("a failed probe inside the hour is reused")
+	}
+	failed.ProbedAt = now.Add(-failedTTL - time.Minute)
+	if !mergeModels("claude", failed, nil, nil, now).ProbeDue {
+		t.Fatal("a failed probe past the hour is not due again")
 	}
 }
 
 // probeRecorder is a ProbeFunc that resolves the three aliases and counts
 // every call, so a test can say how many times the CLI would have started.
 type probeRecorder struct {
-	mu    sync.Mutex
-	calls []string
+	mu       sync.Mutex
+	calls    []string
+	binaries []string
 }
 
 func (p *probeRecorder) probe(_ context.Context, binary, alias string, _ []string) (string, error) {
 	p.mu.Lock()
 	p.calls = append(p.calls, alias)
+	p.binaries = append(p.binaries, binary)
 	p.mu.Unlock()
 	switch alias {
 	case "opus":
@@ -150,6 +162,12 @@ func TestModelsNeverProbesAndRefreshCaches(t *testing.T) {
 	}
 	if rec.count() != 3 {
 		t.Fatalf("probed %v, want opus, sonnet and haiku once each", rec.calls)
+	}
+	// No providers.claude.path is the CLI on PATH, not the workspace root.
+	for _, b := range rec.binaries {
+		if b != "" {
+			t.Fatalf("probe binary %q, want the empty PATH lookup", b)
+		}
 	}
 	if list.ProbeDue || len(list.Models) != 3 || list.Models[0].Label != "Opus 4.5" || len(list.ProbeErrors) != 1 {
 		t.Fatalf("after a probe: %+v", list)

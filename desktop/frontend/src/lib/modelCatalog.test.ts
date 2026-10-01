@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { ModelList } from '../api/types'
 import { createFakeTransport } from '../store/fakeTransport'
-import { catalogChoices, sourceNote, useModelCatalog } from './modelCatalog'
+import { catalogChoices, probeStatus, sourceNote, useModelCatalog } from './modelCatalog'
 import { deriveLabel, NOT_VERIFIED } from './models'
 
 const NOW = Date.parse('2026-10-01T12:00:00Z')
@@ -51,6 +51,22 @@ describe('sourceNote', () => {
     expect(sourceNote('run', '2026-09-29T12:00:00Z', NOW)).toBe('seen in a run 2d ago')
     expect(sourceNote('run', undefined, NOW)).toBe('seen in a run')
     expect(sourceNote('config', undefined, NOW)).toBe('pinned in config')
+  })
+})
+
+describe('probeStatus', () => {
+  it('says when the CLI was asked, and says so plainly when it answered nothing', () => {
+    expect(probeStatus(discovered, NOW)).toBe('Probed 3h ago')
+    expect(probeStatus({ ...discovered, probedAt: undefined }, NOW)).toBe('Not probed yet')
+    expect(probeStatus({ ...discovered, canProbe: false }, NOW)).toBe('From runs and config')
+    const failed: ModelList = {
+      ...discovered,
+      models: discovered.models.filter((m) => m.source !== 'probe'),
+      probeErrors: ['opus: claude: executable file not found in $PATH'],
+    }
+    expect(probeStatus(failed, NOW)).toBe('The CLI answered no alias 3h ago')
+    // One alias failing among several that resolved is still a probe.
+    expect(probeStatus({ ...discovered, probeErrors: ['haiku: no init line'] }, NOW)).toBe('Probed 3h ago')
   })
 })
 

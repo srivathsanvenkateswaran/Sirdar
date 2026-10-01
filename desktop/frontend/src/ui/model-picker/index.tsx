@@ -11,13 +11,13 @@ import {
 import { useAnchor } from '../../lib/anchor'
 import {
   catalogChoices,
+  probeStatus,
   GROUP_HEADINGS,
   GROUP_ORDER,
   type CatalogChoice,
   type ModelCatalog,
   type RowGroup,
 } from '../../lib/modelCatalog'
-import { relativeTime } from '../../lib/format'
 import { CLI_DEFAULT, describeModel, hintFor, modelLabel, PICKABLE_PROVIDERS } from '../../lib/models'
 import Button from '../button'
 import ProviderMark, { providerName } from '../provider-mark'
@@ -563,9 +563,7 @@ export default function ModelPicker({
     if (entry.state === 'ready' && entry.probing) return 'Asking the CLI which models this login has…'
     if (entry.state === 'loading') return 'Checking…'
     if (entry.state === 'error') return `Could not read the list: ${entry.message}`
-    const list = entry.list
-    if (!list.canProbe) return 'From runs and config'
-    return list.probedAt ? `Probed ${relativeTime(list.probedAt)}` : 'Not probed yet'
+    return probeStatus(entry.list)
   }
 
   const busy = entry?.state === 'loading' || (entry?.state === 'ready' && entry.probing === true)

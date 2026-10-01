@@ -65,6 +65,12 @@ type ModelList struct {
 // ModelsTTL is how long a probe is reused before a picker asks again.
 const ModelsTTL = 24 * time.Hour
 
+// failedTTL is how long a probe in which no alias resolved is kept before
+// a picker asks again: long enough that opening pickers does not keep
+// starting a CLI that cannot answer, short enough that fixing the login or
+// the path shows up the same afternoon.
+const failedTTL = time.Hour
+
 // refreshDebounce is how recent a probe has to be for a Refresh to answer
 // with it rather than start the CLI again: a double click, or two pickers
 // opening together on an empty cache, probes once.
@@ -190,7 +196,12 @@ func (s *Service) probeClaude(ctx context.Context, cfg *config.Config) error {
 	if cfg.Billing == "api" {
 		env = append(env, "SIRDAR_BILLING=api")
 	}
-	binary := cfg.ExpandPath(cfg.Providers.Claude.Path)
+	// Empty is the CLI on PATH. ExpandPath would turn it into the workspace
+	// root, which is a directory, not a program.
+	binary := cfg.Providers.Claude.Path
+	if binary != "" {
+		binary = cfg.ExpandPath(binary)
+	}
 	probe := s.probeFunc()
 
 	type answer struct {
@@ -298,7 +309,11 @@ func mergeModels(provider string, cache *modelCache, runs []RunSummary, pins []c
 	}
 
 	if out.CanProbe {
-		out.ProbeDue = cache == nil || now.Sub(cache.ProbedAt) >= ModelsTTL
+		ttl := ModelsTTL
+		if cache != nil && len(cache.Models) == 0 {
+			ttl = failedTTL
+		}
+		out.ProbeDue = cache == nil || now.Sub(cache.ProbedAt) >= ttl
 	}
 	if cache != nil {
 		out.ProbedAt = wireTime(cache.ProbedAt)

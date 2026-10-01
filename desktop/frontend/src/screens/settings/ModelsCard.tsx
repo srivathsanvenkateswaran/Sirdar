@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ModelList, Transport } from '../../api/types'
-import { reasonOf, relativeTime } from '../../lib/format'
-import { GROUP_HEADINGS, sourceNote } from '../../lib/modelCatalog'
+import { reasonOf } from '../../lib/format'
+import { GROUP_HEADINGS, probeStatus, sourceNote } from '../../lib/modelCatalog'
 import { PICKABLE_PROVIDERS } from '../../lib/models'
 import { providerName } from '../../ui/provider-mark'
 import SegmentedControl from '../../ui/segmented-control'
@@ -58,13 +58,9 @@ export default function ModelsCard({
   const list = state.status === 'done' ? state.list : null
   const status = probing
     ? 'Asking the CLI which models this login has…'
-    : !list
-      ? ''
-      : !list.canProbe
-        ? 'From runs and config'
-        : list.probedAt
-          ? `Probed ${relativeTime(list.probedAt)}`
-          : 'Not probed yet'
+    : list
+      ? probeStatus(list)
+      : ''
 
   return (
     <SettingCard heading="Models">
