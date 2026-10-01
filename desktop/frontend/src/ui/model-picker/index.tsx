@@ -10,14 +10,15 @@ import {
 } from 'react'
 import { useAnchor } from '../../lib/anchor'
 import {
-  CLI_DEFAULT,
-  describeModel,
-  hintFor,
-  modelLabel,
-  modelsFor,
-  PICKABLE_PROVIDERS,
-  type ModelChoice,
-} from '../../lib/models'
+  catalogChoices,
+  probeStatus,
+  GROUP_HEADINGS,
+  GROUP_ORDER,
+  type CatalogChoice,
+  type ModelCatalog,
+  type RowGroup,
+} from '../../lib/modelCatalog'
+import { CLI_DEFAULT, describeModel, hintFor, modelLabel, PICKABLE_PROVIDERS } from '../../lib/models'
 import Button from '../button'
 import ProviderMark, { providerName } from '../provider-mark'
 import './ModelPicker.css'
@@ -56,6 +57,18 @@ export interface ModelPickerProps {
   /** What an empty model reads as where "CLI default" would be a claim. */
   unknownAs?: string
   disabled?: boolean
+  /**
+   * The discovered list (`lib/modelCatalog`). Given, opening the popover
+   * loads it and the list shows what this login and this workspace have
+   * actually used; absent, the static table is the list, marked as not
+   * verified on this login.
+   */
+  catalog?: ModelCatalog
+  /**
+   * The choice is for the next turn of a run that ran on another model: the
+   * chip reads "next: Opus 4.5", so it is not mistaken for the past.
+   */
+  next?: boolean
 }
 
 /**
@@ -73,8 +86,8 @@ export function effectivePair(
   return { provider: defaultProvider, model: model || defaultModel }
 }
 
-/** One row of the list: a curated model on a provider. */
-export interface ModelRow extends ModelChoice {
+/** One row of the list: a model on a provider, under its group. */
+export interface ModelRow extends CatalogChoice {
   provider: string
 }
 
@@ -106,7 +119,7 @@ function writeFavourites(provider: string, ids: string[]): void {
  * Whether a row answers a search: by its label, its id, the provider's
  * config name or the vendor's name, case folded.
  */
-export function matchesQuery(row: ModelRow, query: string): boolean {
+export function matchesQuery(row: Pick<ModelRow, 'id' | 'label' | 'provider'>, query: string): boolean {
   const q = query.trim().toLowerCase()
   if (!q) return true
   return [row.label, row.id, row.provider, providerName(row.provider)].some((s) =>
@@ -124,17 +137,27 @@ export function listRows(
   provider: string,
   query: string,
   favourites: (provider: string) => string[],
-): { favourites: ModelRow[]; rest: ModelRow[] } {
-  const providers = query.trim() ? PICKABLE_PROVIDERS : [provider]
+  choicesFor: (provider: string) => CatalogChoice[] = (p) => catalogChoices(p, undefined),
+): { favourites: ModelRow[]; rest: ModelRow[]; groups: { group: RowGroup; rows: ModelRow[] }[] } {
+  const searching = query.trim() !== ''
+  const providers = searching ? PICKABLE_PROVIDERS : [provider]
   const all: ModelRow[] = []
   for (const p of providers) {
-    for (const m of modelsFor(p)) all.push({ ...m, provider: p })
+    for (const m of choicesFor(p)) all.push({ ...m, provider: p })
   }
   const shown = all.filter((row) => matchesQuery(row, query))
   const starred = new Map(providers.map((p) => [p, new Set(favourites(p))] as const))
+  const rest = shown.filter((row) => !starred.get(row.provider)?.has(row.id))
+  // A search is one list of matches; otherwise each source is its own group.
+  const groups = searching
+    ? [{ group: 'default' as RowGroup, rows: rest }]
+    : GROUP_ORDER.map((group) => ({ group, rows: rest.filter((r) => r.group === group) })).filter(
+        (g) => g.rows.length > 0,
+      )
   return {
     favourites: shown.filter((row) => starred.get(row.provider)?.has(row.id)),
-    rest: shown.filter((row) => !starred.get(row.provider)?.has(row.id)),
+    rest: groups.flatMap((g) => g.rows),
+    groups,
   }
 }
 
@@ -160,6 +183,26 @@ function ChevronIcon(): JSX.Element {
   return (
     <Icon className="sd-model-chip__chevron">
       <path d="m6 9 6 6 6-6" />
+    </Icon>
+  )
+}
+
+/** lucide `lock`: the chip is fixed while the run works. */
+function LockIcon(): JSX.Element {
+  return (
+    <Icon className="sd-model-chip__lock">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </Icon>
+  )
+}
+
+/** lucide `rotate-cw`. */
+function RefreshIcon(): JSX.Element {
+  return (
+    <Icon className="sd-model-picker__refresh-icon">
+      <path d="M21 12a9 9 0 1 1-2.6-6.4L21 8" />
+      <path d="M21 3v5h-5" />
     </Icon>
   )
 }
@@ -227,6 +270,8 @@ export default function ModelPicker({
   readOnly,
   unknownAs,
   disabled = false,
+  catalog,
+  next = false,
 }: ModelPickerProps): JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -241,12 +286,16 @@ export default function ModelPicker({
   const id = useId()
 
   const pair = effectivePair(provider, model, defaultProvider, defaultModel)
-  const value = describeModel(pair.provider, pair.model, lastUsed, unknownAs)
-  const label = !pair.provider
+  const entry = catalog?.entry(pair.provider)
+  const discovered = entry?.list?.models
+  const value = describeModel(pair.provider, pair.model, lastUsed, unknownAs, discovered)
+  const named = !pair.provider
     ? 'not set'
     : pair.model
-      ? modelLabel(pair.provider, pair.model)
+      ? modelLabel(pair.provider, pair.model, discovered)
       : (unknownAs ?? CLI_DEFAULT.label)
+  const label = next ? `next: ${named}` : named
+  const spoken = next ? `Model for the next turn ${value}` : `Model ${value}`
 
   useAnchor(open, root, popover)
 
@@ -262,6 +311,24 @@ export default function ModelPicker({
     if (open) search.current?.focus()
   }, [open])
 
+  // A chip that stops being a control while its popover is open — the run
+  // started working, the screen went busy — takes the popover with it. Left
+  // open, the list went on offering rows whose pick nothing would take.
+  const locked = Boolean(readOnly) || disabled
+  useEffect(() => {
+    if (!locked) return
+    setOpen(false)
+    setQuery('')
+  }, [locked])
+
+  // Opening loads the provider's discovered list, and so does moving to
+  // another provider on the rail while open. `load` asks for a probe only
+  // when the list says one is due.
+  const load = catalog?.load
+  useEffect(() => {
+    if (open && pair.provider) load?.(pair.provider)
+  }, [open, pair.provider, load])
+
   useEffect(() => {
     if (!open) return
     function onDown(event: globalThis.MouseEvent): void {
@@ -274,11 +341,14 @@ export default function ModelPicker({
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
-  const { favourites, rest } = useMemo(
-    () => listRows(pair.provider, query, readFavourites),
+  const { favourites, rest, groups } = useMemo(
+    () =>
+      listRows(pair.provider, query, readFavourites, (p) =>
+        catalogChoices(p, catalog ? catalog.entry(p) : undefined),
+      ),
     // `starred` and `open` carry no value of their own: each re-reads the
     // favourites out of storage, after a star or on opening.
-    [pair.provider, query, starred, open],
+    [pair.provider, query, starred, open, catalog],
   )
   const rows = [...favourites, ...rest]
   // The search field is the free-text entry: text that answers no row is
@@ -359,7 +429,8 @@ export default function ModelPicker({
         if (at < 0) return
         event.preventDefault()
         if (at < rows.length) pickRow(rows[at])
-        else useTyped()
+        else if (offerTyped) useTyped()
+        else search.current?.focus()
         return
       }
       case 'f':
@@ -442,7 +513,8 @@ export default function ModelPicker({
     const selected = isSelected(row)
     const starred = favourites.includes(row)
     const shortcut = index < SHORTCUT_ROWS ? `⌘${index + 1}` : ''
-    const note = row.id === '' && row.provider === pair.provider && lastUsed ? `last used ${lastUsed}` : ''
+    const note =
+      row.id === '' && row.provider === pair.provider && lastUsed ? `last used ${lastUsed}` : (row.note ?? '')
     return (
       <div
         key={`${row.provider}/${row.id || CLI_DEFAULT.label}`}
@@ -450,6 +522,7 @@ export default function ModelPicker({
         className="sd-model-picker__row"
         aria-selected={selected}
         aria-keyshortcuts={shortcut ? `Meta+${index + 1}` : undefined}
+        data-group={row.group}
         tabIndex={-1}
         onClick={() => pickRow(row)}
       >
@@ -467,7 +540,7 @@ export default function ModelPicker({
           <StarIcon filled={starred} />
         </button>
         <span className="sd-model-picker__text">
-          <span className="sd-model-picker__label">{row.label}</span>
+          <span className="sd-model-picker__label" dir="auto">{row.label}</span>
           <span className="sd-model-picker__meta" dir="ltr">
             <ProviderMark provider={row.provider} size="sm" />
             <span>{row.provider}</span>
@@ -484,6 +557,20 @@ export default function ModelPicker({
     )
   }
 
+  /** The footer's one line: where the list stands, and when the CLI was last asked. */
+  function footStatus(): string {
+    if (!entry || (entry.state === 'loading' && !entry.list)) return 'Checking which models are known…'
+    if (entry.state === 'ready' && entry.probing) return 'Asking the CLI which models this login has…'
+    if (entry.state === 'loading') return 'Checking…'
+    if (entry.state === 'error') return `Could not read the list: ${entry.message}`
+    return probeStatus(entry.list)
+  }
+
+  const busy = entry?.state === 'loading' || (entry?.state === 'ready' && entry.probing === true)
+  const probeErrors = entry?.list?.probeErrors ?? []
+  // Shortcut numbers run on across the groups, in display order.
+  let shown = favourites.length
+
   return (
     <span className="sd-model-picker" ref={root}>
       {readOnly ? (
@@ -493,9 +580,10 @@ export default function ModelPicker({
           data-readonly="true"
           disabled
           title={readOnly}
-          aria-label={`Model ${value}. ${readOnly}`}
+          aria-label={`${spoken}. ${readOnly}`}
         >
           {chipBody}
+          <LockIcon />
         </button>
       ) : trigger === 'change' ? (
         <Button
@@ -512,12 +600,13 @@ export default function ModelPicker({
         <button
           type="button"
           className="sd-model-chip"
+          data-next={next ? 'true' : undefined}
           disabled={disabled}
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? popoverId : undefined}
-          aria-label={`Model ${value}`}
-          title={`Model: ${value}`}
+          aria-label={spoken}
+          title={next ? `For the next turn: ${value}` : `Model: ${value}`}
           onClick={() => setOpen((was) => !was)}
         >
           {chipBody}
@@ -545,7 +634,7 @@ export default function ModelPicker({
               className="sd-model-picker__search-input"
               type="search"
               value={query}
-              placeholder="Search models"
+              placeholder="Search models, or type a model id"
               autoComplete="off"
               spellCheck={false}
               onChange={(e) => setQuery(e.target.value)}
@@ -588,6 +677,7 @@ export default function ModelPicker({
               className="sd-model-picker__list"
               role="listbox"
               aria-label="Model"
+              aria-busy={busy || undefined}
               onKeyDown={onListKey}
             >
               {favourites.length > 0 ? (
@@ -598,11 +688,20 @@ export default function ModelPicker({
                   {favourites.map((row, i) => renderRow(row, i))}
                 </div>
               ) : null}
-              <div role="group" aria-labelledby={`${id}-models`}>
-                <span className="sd-model-picker__heading" id={`${id}-models`}>
-                  {query.trim() ? 'Matches' : 'Models'}
-                </span>
-                {rest.map((row, i) => renderRow(row, favourites.length + i))}
+              {groups.map((g) => {
+                const start = shown
+                shown += g.rows.length
+                const headingId = `${id}-group-${g.group}`
+                return (
+                  <div key={g.group} role="group" aria-labelledby={headingId}>
+                    <span className="sd-model-picker__heading" id={headingId}>
+                      {typed ? 'Matches' : GROUP_HEADINGS[g.group]}
+                    </span>
+                    {g.rows.map((row, i) => renderRow(row, start + i))}
+                  </div>
+                )
+              })}
+              <div role="group" aria-label="Other">
                 {offerTyped ? (
                   <div
                     role="option"
@@ -621,16 +720,48 @@ export default function ModelPicker({
                     </span>
                   </div>
                 ) : null}
-                {!typed && rows.length === 1 && hintFor(pair.provider) ? (
-                  // A provider with no curated names: say where an id would
-                  // come from before anything is typed.
-                  <p className="sd-model-picker__hint sd-model-picker__hint--foot">
-                    {hintFor(pair.provider)}
-                  </p>
+                {!typed ? (
+                  // The free-text row: any id the list lacks is typed into
+                  // the search, which offers it back as "Use …".
+                  <div
+                    role="option"
+                    className="sd-model-picker__row sd-model-picker__row--other"
+                    aria-selected={false}
+                    tabIndex={-1}
+                    onClick={() => search.current?.focus()}
+                  >
+                    <span className="sd-model-picker__text">
+                      <span className="sd-model-picker__label">Other…</span>
+                      <span className="sd-model-picker__hint">
+                        {hintFor(pair.provider) || 'Type a model id in the search'}
+                      </span>
+                    </span>
+                  </div>
                 ) : null}
               </div>
             </div>
           </div>
+
+          {catalog ? (
+            <div className="sd-model-picker__foot">
+              <span
+                className="sd-model-picker__status"
+                role="status"
+                title={probeErrors.length > 0 ? probeErrors.join('\n') : undefined}
+              >
+                {footStatus()}
+              </span>
+              <button
+                type="button"
+                className="sd-model-picker__refresh"
+                disabled={busy}
+                onClick={() => catalog.refresh(pair.provider)}
+              >
+                <RefreshIcon />
+                Refresh
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </span>

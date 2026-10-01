@@ -334,7 +334,7 @@ describe('Eval run suite', () => {
   it('passes the one-off provider and model picked through Change', async () => {
     const { onStartEval } = mount({}, { defaultProvider: 'claude', defaultModel: 'sonnet' })
     await screen.findByRole('checkbox', { name: 'OMNI-2510' })
-    expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
+    expect(screen.getByText('claude · Sonnet')).toBeInTheDocument()
 
     // Change opens the same picker New session has, not a dialog of fields.
     const change = screen.getByRole('button', { name: 'Change' })

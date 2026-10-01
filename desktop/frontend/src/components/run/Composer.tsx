@@ -4,7 +4,11 @@ import ChipMenu from '../composer/ChipMenu'
 import ComposerCard from '../composer/ComposerCard'
 import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder, steerable } from '../composer/modes'
 import ModelPicker from '../../ui/model-picker'
+import type { ModelCatalog } from '../../lib/modelCatalog'
 import QueuedSteers, { visibleQueuedSteers } from './QueuedSteers'
+
+/** The Model chip's tooltip while the run works. */
+export const MODEL_LOCKED = 'The model is fixed while the run works. Change it when it stops.'
 
 /** What the composer's one button does right now. */
 export type ComposerMode =
@@ -60,6 +64,8 @@ export interface ComposerProps {
    * be chosen; a live run's session already has one.
    */
   onPickModel?: (model: string) => void
+  /** The discovered model list the chip's popover draws (`lib/modelCatalog`). */
+  catalog?: ModelCatalog
   /**
    * The steers typed while the run worked, and what became of each: drawn
    * as chips above the box, the newest few.
@@ -103,6 +109,7 @@ export default function Composer({
   cancelBusy = false,
   pickedModel = '',
   onPickModel,
+  catalog,
   queued,
 }: ComposerProps) {
   const [text, setText] = useState('')
@@ -164,19 +171,19 @@ export default function Composer({
                 takes a different --model on --resume and answers under it, so
                 the next answer or steer can be a different model on the same
                 session. While the run is working there is nothing to choose —
-                its session already has a model — and the chip states the pair
-                instead. */}
+                its session already has a model — and the chip is locked: muted,
+                a lock for a chevron, and a tooltip saying when it frees. */}
             <ModelPicker
               provider={provider}
               model={onPickModel ? pickedModel || model : model}
               defaultProvider={provider}
               defaultModel={model}
               unknownAs="model unknown"
-              readOnly={
-                onPickModel
-                  ? undefined
-                  : 'A steer resumes the same session, so the provider and model cannot change here'
-              }
+              readOnly={onPickModel ? undefined : MODEL_LOCKED}
+              catalog={catalog}
+              // A pick that is not what the run ran on is for the next turn,
+              // and the chip says so rather than seeming to rewrite the past.
+              next={Boolean(onPickModel && pickedModel && pickedModel !== model)}
               // A run's provider cannot change on a resume — the session
               // handle names a session that CLI holds — so a row from
               // another provider, which only the popover's search can

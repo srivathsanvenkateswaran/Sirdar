@@ -55,6 +55,10 @@ type fake struct {
 	summary ConfigSummary
 	diff    RunDiff
 
+	// models is what Models answers with; probes counts RefreshModels.
+	models []ModelInfo
+	probes int
+
 	inventory MCPInventory
 	toolList  MCPToolList
 
@@ -500,6 +504,28 @@ func (f *fake) ConfigSummary(wsID string) (ConfigSummary, error) {
 		return ConfigSummary{}, err
 	}
 	return f.summary, nil
+}
+
+func (f *fake) Models(wsID, provider string) (ModelList, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return ModelList{}, err
+	}
+	if provider == "" {
+		provider = "claude"
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return ModelList{Provider: provider, Models: f.models, CanProbe: provider == "claude", ProbeDue: f.probes == 0}, nil
+}
+
+func (f *fake) RefreshModels(_ context.Context, wsID, provider string) (ModelList, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return ModelList{}, err
+	}
+	f.mu.Lock()
+	f.probes++
+	f.mu.Unlock()
+	return f.Models(wsID, provider)
 }
 
 // --- playbooks ---

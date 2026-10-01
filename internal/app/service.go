@@ -51,6 +51,12 @@ type Options struct {
 	// service, and never by a request: a caller who could name the
 	// directory could read any bundle on the machine through it.
 	GoldenDir string
+	// ModelsDir is where the model picker's probe is cached; empty means
+	// config.UserDir()/models.
+	ModelsDir string
+	// ProbeModel resolves one model alias with the provider's CLI; nil
+	// means claude.ProbeModel. Tests set it so no CLI is started.
+	ProbeModel ProbeFunc
 }
 
 // DefaultBuffer is how many events a subscriber may fall behind by before
@@ -90,6 +96,9 @@ type Service struct {
 
 	// running counts the job goroutines Stop waits for.
 	running sync.WaitGroup
+
+	// probes serialises the model picker's refreshes. See models.go.
+	probes modelProbes
 }
 
 // stopTimeout is how long Stop waits for the jobs it cancelled to end

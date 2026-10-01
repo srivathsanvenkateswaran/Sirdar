@@ -52,6 +52,19 @@
   opacity: 0.45;
 }
 
+/* Fixed while the run works: muted ink and a lock where the chevron was, so
+   it reads as a fact at a glance and the tooltip says why. */
+.sd-model-chip[data-readonly='true'] {
+  color: var(--sd-ink-3);
+}
+
+.sd-model-chip__lock {
+  flex: 0 0 auto;
+  inline-size: 12px;
+  block-size: 12px;
+  color: var(--sd-ink-3);
+}
+
 .sd-model-chip__value {
   min-inline-size: 0;
   overflow: hidden;
@@ -256,6 +269,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* An operator's pin may label a model in Arabic. */
+  unicode-bidi: plaintext;
 }
 
 .sd-model-picker__meta {
@@ -355,9 +370,11 @@
 
 /* "Use “…” as the model id": the one row a search that matches nothing
    offers, with no star and no key, the typed id in the ledger face. */
-.sd-model-picker__row--use {
+.sd-model-picker__row--use,
+.sd-model-picker__row--other {
   padding-inline-start: 36px;
 }
+
 
 .sd-model-picker__row--use .sd-model-picker__label {
   white-space: normal;
@@ -375,12 +392,62 @@
   line-height: 1.4;
 }
 
-/* The same hint at the list's foot for a provider with no curated names,
-   before anything is typed. */
-.sd-model-picker__hint--foot {
+/* ---------- the foot: where the list stands, and Refresh ---------- */
+
+.sd-model-picker__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-2);
+  min-block-size: 36px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3) var(--sd-space-2);
+  border-block-start: 1px solid var(--sd-rule);
+  background: var(--sd-sheet);
+  border-end-start-radius: var(--sd-radius-md);
+  border-end-end-radius: var(--sd-radius-md);
+}
+
+.sd-model-picker__status {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+}
+
+.sd-model-picker__refresh {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sd-space-1);
+  min-block-size: 28px;
   margin: 0;
-  padding-block: var(--sd-space-2);
-  padding-inline: 36px var(--sd-space-2);
+  padding-block: 0;
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+  color: var(--sd-ink-2);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  cursor: pointer;
+}
+
+.sd-model-picker__refresh:hover:not(:disabled) {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+.sd-model-picker__refresh:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.sd-model-picker__refresh-icon {
+  inline-size: 14px;
+  block-size: 14px;
 }
 
 @media (prefers-reduced-motion: reduce) {

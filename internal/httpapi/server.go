@@ -110,6 +110,8 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/mcp/{server}/tools", s.mcpTools)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/mcp/{server}/call", s.mcpCall)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/config/summary", s.configSummary)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/models", s.models)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/models/refresh", s.refreshModels)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/playbooks", s.playbooks)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/playbooks", s.addPlaybook)
 	// "scaffold" is registered ahead of the {name} pattern by being more

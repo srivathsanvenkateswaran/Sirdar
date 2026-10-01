@@ -610,10 +610,22 @@ type Config struct {
 			// skipped, so a list that repeats the configured model costs
 			// nothing.
 			FallbackModels []string `yaml:"fallbackModels"`
+
+			// Models are the operator's own pins for the model picker:
+			// see ModelPin.
+			Models []ModelPin `yaml:"models"`
 		} `yaml:"claude"`
 		Codex struct {
-			Path string `yaml:"path"`
+			Path   string     `yaml:"path"`
+			Models []ModelPin `yaml:"models"`
 		} `yaml:"codex"`
+		// The other providers keep their settings in their own top-level
+		// blocks; under providers: they have only the picker's pins, so
+		// providers.<p>.models reads the same for every provider.
+		OpenAI ModelPins `yaml:"openai"`
+		ACP    ModelPins `yaml:"acp"`
+		Qwen   ModelPins `yaml:"qwen"`
+		Cursor ModelPins `yaml:"cursor"`
 	} `yaml:"providers"`
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
 	Qwen   *QwenConfig   `yaml:"qwen,omitempty"`

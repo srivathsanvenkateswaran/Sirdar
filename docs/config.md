@@ -1653,6 +1653,38 @@ real run rather than after.
   ACP carries no equivalent, so both behave as they did.
 - `providers.codex.path`: path to the `codex` binary. Empty (the default) looks it up on
   `PATH`.
+- `providers.<p>.models` (`claude`, `codex`, `openai`, `acp`, `qwen`, `cursor`; a list, empty
+  by default): models to pin to the model picker for that provider, each written as the id the
+  start should carry, or as `{id, label}` when the picker should show other words for it. A pin
+  is listed whether or not the login has been seen to have it — it is your word, not a
+  discovery — and its label wins wherever the same id appears. `id` and `label` are the only
+  keys; a misspelt one is refused like any other unknown key.
+
+  ```yaml
+  providers:
+    claude:
+      models:
+        - claude-opus-4-5-20251101
+        - id: claude-sonnet-4-5
+          label: Sonnet (team default)
+    openai:
+      models: [qwen3-coder]
+  ```
+
+  The picker's list is these pins plus what Sirdar discovers. For `claude` it asks the CLI what
+  `opus`, `sonnet`, `haiku` and the workspace's `model` resolve to on this login: one
+  `claude -p . --max-turns 1 --output-format stream-json` per alias, in an empty temporary
+  directory with no tools and no MCP servers, stopped as soon as its `system/init` line names the
+  model, before the turn is spent. Claude Code has no command that lists the models a login can
+  use, so this is the way to ask. The answer is kept in `~/.sirdar/models/claude.json` (beside
+  the workspace registry, `config.UserDir`) for 24 hours, or one hour when no alias resolved.
+  Nothing probes when the app starts: opening a picker probes only when that file is missing or
+  stale, and Refresh in the picker or under Settings › Providers probes on demand. Every model the
+  workspace's runs reported joins the list too, newest first. The other providers have no probe:
+  their list is the runs and the pins. With nothing discovered the picker falls back to the names
+  it ships with, marked "not verified on this login". Note that the probe tells you what an alias
+  resolves to, not that your plan allows the model: a model the login cannot use is still refused
+  when a run starts on it.
 - `qwen.path`: path to the `qwen` binary. Empty (the default) looks it up on `PATH`. It sits in
   the `qwen:` block rather than under `providers:` because the rest of that block — the
   endpoint — belongs with it.

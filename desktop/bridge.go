@@ -151,6 +151,20 @@ func (b *Bridge) Doctor(ws string) ([]app.Check, error) {
 	return b.svc.Doctor(ctx, ws)
 }
 
+// Models lists what the model picker offers for a provider ("" is the
+// workspace's own). It starts no CLI.
+func (b *Bridge) Models(ws, provider string) (app.ModelList, error) {
+	return b.svc.Models(ws, provider)
+}
+
+// RefreshModels asks the provider's CLI again what each alias resolves to
+// (claude only) and answers with the list.
+func (b *Bridge) RefreshModels(ws, provider string) (app.ModelList, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return b.svc.RefreshModels(ctx, ws, provider)
+}
+
 // Quota returns the newest rate-limit reading per provider.
 func (b *Bridge) Quota() []app.Quota { return b.svc.Quota() }
 

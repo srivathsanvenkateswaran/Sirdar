@@ -269,6 +269,29 @@ func TestConfigSummaryRoute(t *testing.T) {
 	}
 }
 
+func TestModelsRoutes(t *testing.T) {
+	f := newFake()
+	f.models = []ModelInfo{{ID: "claude-opus-4-5-20251101", Label: "Opus 4.5", Source: "probe"}}
+
+	var list ModelList
+	decodeJSON(t, do(t, f, "GET", "/api/workspaces/"+knownWS+"/models?provider=claude", ""), 200, &list)
+	if !list.ProbeDue || len(list.Models) != 1 || list.Models[0].Label != "Opus 4.5" || f.probes != 0 {
+		t.Fatalf("GET models %+v, probes %d", list, f.probes)
+	}
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/models/refresh", `{"provider":"claude"}`), 200, &list)
+	if f.probes != 1 || list.ProbeDue {
+		t.Fatalf("refresh %+v, probes %d", list, f.probes)
+	}
+	// An empty body is the workspace's own provider.
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/models/refresh", `{}`), 200, &list)
+	if list.Provider != "claude" {
+		t.Fatalf("empty provider answered %q", list.Provider)
+	}
+	assertError(t, do(t, f, "GET", "/api/workspaces/"+knownWS+"/models?provider=nope", ""), 400, "bad_request")
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/models/refresh", `{"provider":"nope"}`), 400, "bad_request")
+	assertError(t, do(t, f, "GET", "/api/workspaces/nope/models", ""), 404, "not_found")
+}
+
 func TestConfigSummaryUnknownWorkspace(t *testing.T) {
 	assertError(t, do(t, newFake(), "GET", "/api/workspaces/nope/config/summary", ""), 404, "not_found")
 }

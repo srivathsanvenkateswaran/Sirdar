@@ -44,6 +44,9 @@ type Service interface {
 	Golden(wsID string) ([]GoldenEntry, error)
 	AddGolden(wsID, key, runID string) (GoldenEntry, error)
 	ConfigSummary(wsID string) (ConfigSummary, error)
+	// Models never starts a CLI; RefreshModels may (claude's probe).
+	Models(wsID, provider string) (ModelList, error)
+	RefreshModels(ctx context.Context, wsID, provider string) (ModelList, error)
 	Playbooks(wsID string) ([]PlaybookSummary, error)
 	Playbook(wsID, name string) (string, error)
 	SavePlaybook(wsID, name, body string) (PlaybookSummary, error)

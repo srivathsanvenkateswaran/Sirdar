@@ -1,3 +1,5 @@
+import { useModelCatalog } from '../../lib/modelCatalog'
+import { usePickedModel } from '../../lib/pickedModel'
 import {
   useCallback,
   useEffect,
@@ -150,12 +152,6 @@ export default function SessionConversation(props: SessionConversationProps): JS
   /** Steers this window queued on the working run, until the run's record carries them. */
   const [localQueued, setLocalQueued] = useState<QueuedSteer[]>([])
   const [sent, setSent] = useState(0)
-  /**
-   * The model the next answer or steer asks for, when the reader has picked
-   * one that is not the run's. Empty is the run's own, and it is cleared
-   * whenever the run moves: a choice is about the send it was made for.
-   */
-  const [pickedModel, setPickedModel] = useState('')
   const [changed, setChanged] = useState<number | null>(null)
   /** The one open card, by its event index. */
   const [openCall, setOpenCall] = useState(-1)
@@ -180,6 +176,15 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const openedOn = useRef('')
 
   const status = detail?.status ?? ''
+  /**
+   * The model the next answer or steer asks for, when the reader has picked
+   * one that is not the run's. Empty is the run's own. It is kept per run
+   * outside this layout, so switching layout does not drop it, and it is
+   * spent whenever the run moves: a choice is about the send it was made for
+   * (`lib/pickedModel`).
+   */
+  const [pickedModel, setPickedModel] = usePickedModel(workspaceId, runId, status)
+  const catalog = useModelCatalog(transport, workspaceId)
   const live = LIVE.has(status)
   const terminal = TERMINAL.has(status)
   const blocked = status === 'blocked'
@@ -198,7 +203,6 @@ export default function SessionConversation(props: SessionConversationProps): JS
 
   useEffect(() => {
     setSteerRefusal('')
-    setPickedModel('')
   }, [status])
 
   useEffect(() => {
@@ -779,6 +783,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               cancelBusy={pending === 'cancel'}
               pickedModel={pickedModel}
               onPickModel={terminal || blocked ? setPickedModel : undefined}
+              catalog={catalog}
               queued={withLocalQueued(detail.queuedSteers, localQueued)}
             />
           </div>
