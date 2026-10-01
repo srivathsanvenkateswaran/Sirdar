@@ -35,7 +35,33 @@ export interface Usage { turns: number; inputTokens: number; outputTokens: numbe
 export interface RunSummary { runId: string; key: string; helpdeskKey?: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo;
   /** What the operator asked for when they started the run, in their own words; absent when they asked for nothing in particular. */
-  instruction?: string; modelSegments?: ModelSegmentInfo[] }
+  instruction?: string; modelSegments?: ModelSegmentInfo[];
+  /** What a blocked run is waiting on, when it is a question; absent on every other run. */
+  question?: QuestionInfo }
+/**
+ * A blocked run's question. `text` is always there; `decision` is there only
+ * when the question is a permission one — a call the policy refused that the
+ * operator can allow once, allow for the run, or deny. A free-form question
+ * (Codex asking for input) carries `text` alone.
+ */
+export interface QuestionInfo { text: string; decision?: DecisionAsk }
+/** What kind of call a permission question is about. */
+export type AskKind = 'tool' | 'bash' | 'mcp' | 'fetch'
+/**
+ * A permission question as the decision bar draws it: the tool, the call in
+ * one line (`summary`: the command, the URL, the path, an MCP tool's
+ * arguments), what "allow for this run" would add (`patterns`), and the
+ * policy's own verdict and reason.
+ */
+export interface DecisionAsk { kind: AskKind; tool: string; summary: string; patterns?: string[]; verdict: string; reason: string }
+/**
+ * The operator's answer to a permission question. `allow` is this call,
+ * once; `allow_run` is this call and any later one matching the same tool
+ * and command pattern, for the rest of the run; `deny` refuses it, with the
+ * reason the agent is shown.
+ */
+export type Verdict = 'allow' | 'allow_run' | 'deny'
+export interface PermissionDecision { verdict: Verdict; reason?: string }
 /**
  * One stretch of a run under one model, for a run that changed model partway
  * through: when it started, which model, and what moved the run onto it —
@@ -67,7 +93,7 @@ export interface FixInfo { branch?: string; base?: string; commit?: string; prUr
  * preceded it rather than following them. A provider that reports a message
  * once sets neither.
  */
-export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string; delta?: boolean; replace?: boolean } }
+export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string; delta?: boolean; replace?: boolean; ask?: DecisionAsk } }
 /** One file in a fix run's change. A renamed file is named by the path it now has. */
 export interface DiffFile { path: string; status: 'added'|'modified'|'deleted'|'renamed'; additions: number; deletions: number }
 /**
@@ -435,8 +461,10 @@ export interface Transport {
    * Continues a blocked run. `model` puts the continued session, and every
    * session of the run after it, on another model — the way past a run
    * blocked on a per-model limit; omitted leaves the run on the model it has.
+   * `decision` answers a permission question — Allow once, Allow for this
+   * run, Deny — with `answer` passed on beside it as the operator's words.
    */
-  resume(ws: string, runId: string, answer?: string, model?: string): Promise<{ jobId: string }>; cancel(jobId: string): Promise<void>;
+  resume(ws: string, runId: string, answer?: string, model?: string, decision?: PermissionDecision): Promise<{ jobId: string }>; cancel(jobId: string): Promise<void>;
   /** Continues a finished run with a follow-up instruction, on the same run. `model` changes the model it continues on. */
   steer(ws: string, runId: string, text: string, model?: string): Promise<SteerStarted>;
   /** A fix run's change, file by file, with the unified patch. Starts nothing. */

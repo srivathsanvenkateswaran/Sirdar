@@ -201,6 +201,18 @@ describe('http transport', () => {
     })
   })
 
+  it('sends a permission decision beside the answer, and no decision key without one', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-6' })
+    const t = createTransport()
+
+    await t.resume('ws1', 'r1', 'only src/', undefined, { verdict: 'deny', reason: 'too broad' })
+    await t.resume('ws1', 'r1', 'yes')
+
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse(String((c[1] as RequestInit).body)))
+    expect(bodies[0]).toEqual({ answer: 'only src/', decision: { verdict: 'deny', reason: 'too broad' } })
+    expect(bodies[1]).toEqual({ answer: 'yes' })
+  })
+
   it('surfaces the API error envelope as an Error', async () => {
     mockFetch({ error: { code: 'unsupported', message: 'no tracker configured' } }, { status: 501 })
 
@@ -588,8 +600,16 @@ describe('wails transport', () => {
     const t = createWailsTransport()
     await t.resume('ws1', 'r1', '', 'claude-opus-5')
     await t.steer('ws1', 'r1', 'go on', 'claude-sonnet-5')
-    expect(bridge.Resume).toHaveBeenCalledWith('ws1', 'r1', '', 'claude-opus-5')
+    // The decision is the fifth argument, null when the resume answers no
+    // permission question: Go decodes it into a *PermissionDecision.
+    expect(bridge.Resume).toHaveBeenCalledWith('ws1', 'r1', '', 'claude-opus-5', null)
     expect(bridge.Steer).toHaveBeenCalledWith('ws1', 'r1', 'go on', 'claude-sonnet-5')
+  })
+
+  it('carries a permission decision on a resume', async () => {
+    const bridge = stubBridge({ Resume: async () => 'job-10' })
+    await createWailsTransport().resume('ws1', 'r1', '', undefined, { verdict: 'allow_run' })
+    expect(bridge.Resume).toHaveBeenCalledWith('ws1', 'r1', '', '', { verdict: 'allow_run' })
   })
 
   // The bound methods take every field, absent ones as their zero value,

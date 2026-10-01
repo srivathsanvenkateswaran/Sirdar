@@ -10,6 +10,7 @@ import type {
   MCPCallResult,
   MCPInventory,
   MCPToolList,
+  PermissionDecision,
   PlaybookSummary,
   Quota,
   RegisterRow,
@@ -37,6 +38,7 @@ export interface TransportCalls {
   runs: string[]
   queue: string[]
   steer: { ws: string; runId: string; text: string; model: string }[]
+  resume: { ws: string; runId: string; answer: string; model: string; decision?: PermissionDecision }[]
   runDiff: { ws: string; runId: string }[]
   dropHunk: { ws: string; runId: string; req: DropHunkRequest }[]
   mcpServers: { ws: string; connect: boolean }[]
@@ -445,6 +447,7 @@ export function createFakeTransport(seed: {
     runs: [],
     queue: [],
     steer: [],
+    resume: [],
     runDiff: [],
     dropHunk: [],
     mcpServers: [],
@@ -654,7 +657,10 @@ export function createFakeTransport(seed: {
       if (playbookBodies[name] === undefined) throw new Error(`not_found: no playbook named ${name}`)
     },
     configSummary: async () => seed.configSummary ?? emptyConfigSummary(),
-    resume: async () => ({ jobId: 'job-resume' }),
+    resume: async (ws, runId, answer, model, decision) => {
+      calls.resume.push({ ws, runId, answer: answer ?? '', model: model ?? '', ...(decision ? { decision } : {}) })
+      return { jobId: 'job-resume' }
+    },
     steer: async (ws, runId, text, model) => {
       calls.steer.push({ ws, runId, text, model: model ?? '' })
       if (!text.trim()) throw new Error('steer refused: the instruction is empty')
