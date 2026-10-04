@@ -671,6 +671,16 @@ describe('buildColumns', () => {
     expect(byId.done).toEqual(['ASK-20261004-why'])
     expect(byId.triaged).toEqual([])
   })
+
+  it('keeps a queued ticket in Queue when only a session has asked about it', () => {
+    const columns = buildColumns(
+      [ticket({ key: 'OMNI-5', title: 'Refund stuck in pending' })],
+      [run({ runId: 'a', key: 'OMNI-5', kind: 'session', status: 'completed' })],
+    )
+    const byId = Object.fromEntries(columns.map((c) => [c.id, c.cards.map((card) => card.key)]))
+    expect(byId.queue).toEqual(['OMNI-5'])
+    expect(byId.done).toEqual(['OMNI-5'])
+  })
 })
 
 describe('the queue lane’s ticket types', () => {

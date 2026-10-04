@@ -137,7 +137,9 @@ export function buildColumns(
   tickets: Ticket[] = queued,
 ): BoardColumn[] {
   const ticketByKey = new Map(tickets.map((t) => [t.key, t]))
-  const keysWithRuns = new Set(runs.map((r) => r.key))
+  // A session asked about a ticket has not worked it: the question leaves the
+  // ticket untriaged, so it stays in Queue beside the session's own card.
+  const keysWithRuns = new Set(runs.filter((r) => r.kind !== 'session').map((r) => r.key))
   const rcaDone = new Set(
     runs.filter((r) => r.kind === 'rca' && r.status === 'completed').map((r) => r.key),
   )
