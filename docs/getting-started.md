@@ -153,6 +153,27 @@ in Claude Code is opted in with `mcp.userServers: [slack]` — the link is then 
 it and the chip says `Slack (via MCP)`. [Starting from anything](config.md#starting-from-anything)
 has the details and the order the lookups are tried in.
 
+### Start from a Slack thread with no ticket
+
+Support requests often arrive as a Slack message before anyone opens a ticket: a company
+id, a domain, what was expected and what happened, maybe a pull request link. Paste that
+thread's link and Sirdar triages the thread itself:
+
+```sh
+sirdar triage 'https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059'
+# sirdar: Slack thread · no ticket yet · will triage the thread
+```
+
+The run is filed under `SLACK-D0FAKEDM01-1791100254`, made from the channel and the
+thread's timestamp, so the same thread pasted again lands beside the first run. The first
+message is the ticket's title and description, its `Name: value` lines become fields, and
+the whole thread is the conversation; the tracker and helpdesk are not called. If the
+thread links a repository other than this workspace's, the chip says so (`· mentions
+acme-co/Billing.Service (not this workspace)`) and so does the prompt. In the New session
+box the same chip appears under the composer and Enter starts the triage; on the Board the
+card carries Slack's mark. [A Slack thread with no ticket](config.md#a-slack-thread-with-no-ticket)
+lists what goes into the bundle.
+
 ## Read the note
 
 The triage note lands in `notes.dir` and a copy sits in the run directory at
