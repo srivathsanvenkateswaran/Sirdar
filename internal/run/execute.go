@@ -181,8 +181,9 @@ type execution struct {
 
 	// sessions is every session this execute has read from, in the order
 	// they started, and folded is how many of them had ended their part in
-	// the run when the note turn began. Their usage was folded into base
-	// then, so the reaping loop does not count it a second time.
+	// the run when the note turn began, or when a fallback model started a
+	// fresh conversation. Their usage was folded into base then, so the
+	// reaping loop does not count it a second time.
 	sessions []provider.Session
 	folded   int
 
@@ -2013,6 +2014,16 @@ func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
+	if spec.Resume == "" {
+		// A fresh conversation: its counters and its cost start at zero,
+		// so what the refused session spent is folded into the base, as
+		// the note turn folds the reply's, and nothing it reports is
+		// offset by the conversation this execute resumed.
+		ex.base = usagePlus(ex.base, ex.seen)
+		ex.seen = store.Usage{}
+		ex.folded = len(ex.sessions)
+		ex.costOffset, ex.rawCost = 0, 0
+	}
 	ex.markTried(next)
 	ex.modelLimit, ex.limitText = "", ""
 	r.noteSwitch(p, log, next, modelLimitReason(limited))

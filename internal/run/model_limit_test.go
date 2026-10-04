@@ -291,3 +291,67 @@ func TestModelLimitDoesNotPauseThePool(t *testing.T) {
 		t.Fatalf("the second run ended %q: %q", outs[1].State.Status, outs[1].State.Reason)
 	}
 }
+
+// handleless is a provider whose resumed sessions never learn a handle, the
+// way a session refused before it reported a session id ends.
+type handleless struct{ *stubProvider }
+
+func (h handleless) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
+	s, err := h.stubProvider.Start(ctx, spec)
+	if err != nil || spec.Resume == "" {
+		return s, err
+	}
+	return noHandle{s}, nil
+}
+
+type noHandle struct{ provider.Session }
+
+func (noHandle) Handle() string { return "" }
+
+// TestFallbackInAFreshSessionCountsItsOwnCost: a steer resumes a run whose
+// conversation had reported $3.00, the resumed session reports $3.20 and is
+// refused before it learns a handle, so the fallback model starts a fresh
+// conversation that reports $0.50. That $0.50 is all new: the run has spent
+// $3.70, and the handle the run now holds is the fresh conversation's, at
+// $0.50.
+func TestFallbackInAFreshSessionCountsItsOwnCost(t *testing.T) {
+	cfg := withFallbacks(t, "claude-opus-5")
+	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		switch {
+		case spec.Model == "claude-opus-5":
+			s.emit(provider.Event{Kind: provider.EvUsage, Turns: 1, CostUSD: 0.5})
+			s.emit(finalEvent(triageDoc))
+		case spec.Resume != "":
+			s.emit(provider.Event{Kind: provider.EvUsage, Turns: 1, CostUSD: 3.2})
+			s.emit(modelLimitEvent())
+			s.emit(emptyFinal())
+		default:
+			s.emit(provider.Event{Kind: provider.EvUsage, Turns: 2, CostUSD: 3})
+			s.emit(finalEvent(triageDoc))
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
+	if err != nil || outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("triage: %v %+v", err, outs)
+	}
+
+	r.Provider = handleless{p}
+	out, err := r.Steer(context.Background(), outs[0].State.RunID, "Check the retry path too.", SteerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if n := p.startCount(); n != 3 || p.spec(2).Resume != "" || p.spec(2).Model != "claude-opus-5" {
+		t.Fatalf("started %d sessions; want the triage, the refused steer and a fresh fallback", n)
+	}
+	if u := out.State.Usage; u.CostUSD < 3.699 || u.CostUSD > 3.701 || u.Turns != 4 {
+		t.Errorf("usage %+v, want $3.70 over 4 turns", u)
+	}
+	if c := out.State.HandleCostUSD; c < 0.499 || c > 0.501 {
+		t.Errorf("handle cost %v, want the fresh conversation's $0.50", c)
+	}
+}
