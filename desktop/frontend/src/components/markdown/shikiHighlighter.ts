@@ -20,7 +20,15 @@ let highlighterPromise: Promise<Highlighter> | null = null
 /** The one highlighter every code block shares, created on first use. */
 function sharedHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then((shiki) => shiki.getSingletonHighlighter({ themes: [...THEMES], langs: [] }))
+    // A failed `import('shiki')` — a flaky chunk load, say — must not wedge
+    // every code block for the rest of the session behind one rejected
+    // promise; clearing it here lets the next block's call try again.
+    highlighterPromise = import('shiki')
+      .then((shiki) => shiki.getSingletonHighlighter({ themes: [...THEMES], langs: [] }))
+      .catch((error) => {
+        highlighterPromise = null
+        throw error
+      })
   }
   return highlighterPromise
 }
