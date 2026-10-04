@@ -6,6 +6,7 @@ import type {
   Quota,
   RunSummary,
   SearchHit,
+  SessionStart,
   SourcesSummary,
   Ticket,
   Transport,
@@ -208,6 +209,8 @@ export interface AppStore {
    * wants the run the job produces watches `lib/jobs` for a run paired with
    * that id, which is how New session opens the session it just started.
    */
+  /** Starts a session: an instruction, with or without a ticket reference. The run id is known at once, so the job and run are paired without waiting for a key match. */
+  startSession(o: SessionStart): Promise<string>
   startTriage(keys: string[], opts?: TriageOptions): Promise<string>
   startRCA(key: string, opts?: RCAOptions): Promise<string>
   startFix(key: string, opts?: FixOptions): Promise<string>
@@ -646,6 +649,31 @@ export function createAppStore(transport: Transport): AppStore {
       if (moved) writeStoredWorkspace(next)
       set({ currentWorkspaceId: next, screen })
       if (moved) void loadWorkspace(next)
+    },
+
+    async startSession(o) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId) {
+        toast('Add a workspace before starting a run.', 'error')
+        return ''
+      }
+      if (!o.instruction.trim()) {
+        toast('Type what you want done.', 'error')
+        return ''
+      }
+      try {
+        const started = await transport.startSession(workspaceId, o)
+        if (disposed) return ''
+        // The run id is known already, so no key claim is needed the way
+        // startTriage's is: the pairing can be made at once.
+        setRunJob(started.runId, started.jobId)
+        toast('Session started.')
+        void loadRuns(workspaceId)
+        return started.jobId
+      } catch (err) {
+        if (!disposed) toast(`Session did not start. ${errorText(err)}`, 'error')
+        throw err
+      }
     },
 
     async startTriage(keys, opts) {

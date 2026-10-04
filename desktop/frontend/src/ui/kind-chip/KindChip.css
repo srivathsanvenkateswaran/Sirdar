@@ -21,6 +21,11 @@
   unicode-bidi: isolate;
 }
 
+.sd-kind[data-kind='session'] {
+  background: var(--sd-accent-soft);
+  color: var(--sd-accent);
+}
+
 .sd-kind[data-kind='rca'] {
   background: color-mix(in srgb, var(--sd-st-triaged) 16%, transparent);
   color: var(--sd-st-triaged);

@@ -22,6 +22,7 @@ import type {
   SearchHit,
   HelpdeskLink,
   Intake,
+  SessionStart,
   Ticket,
   Transport,
   Usage,
@@ -31,6 +32,9 @@ import type { SessionFixture } from './fakeSession'
 
 /** Calls the fake recorded, so a test can assert what the UI asked for. */
 export interface TransportCalls {
+  startSession: { ws: string; o: SessionStart }[]
+  updateNote: { ws: string; runId: string }[]
+  saveNote: { ws: string; runId: string }[]
   startTriage: { ws: string; keys: string[]; opts?: unknown }[]
   startRCA: { ws: string; key: string; opts?: unknown }[]
   startFix: { ws: string; key: string; opts?: unknown }[]
@@ -438,6 +442,12 @@ export function createFakeTransport(seed: {
   models?: Record<string, ModelList>
   /** What `refreshModels()` answers per provider; absent repeats the list with the probe taken. */
   refreshed?: Record<string, ModelList>
+  /** The key `startSession` answers with when the start carries no reference. */
+  sessionKey?: string
+  /** Makes `saveNote()` reject, e.g. with the 409 a live run gives. */
+  saveError?: Error
+  /** Makes `updateNote()` reject, e.g. with the 409 a run that is not reply-first gives. */
+  updateNoteError?: Error
 } = {}): FakeTransport {
   let runList = seed.runs ?? []
   let ticketList = seed.tickets ?? []
@@ -469,6 +479,9 @@ export function createFakeTransport(seed: {
   let dropSeq = 0
   const handlers = new Set<(e: AppEvent) => void>()
   const calls: TransportCalls = {
+    startSession: [],
+    updateNote: [],
+    saveNote: [],
     startTriage: [],
     startRCA: [],
     startFix: [],
@@ -646,6 +659,15 @@ export function createFakeTransport(seed: {
       // the same shape so a preview has something a src can take.
       return `/api/workspaces/ws/runs/${runId}/bundle/${path}`
     },
+    startSession: async (ws, o) => {
+      calls.startSession.push({ ws, o })
+      const n = calls.startSession.length
+      return {
+        jobId: `job-session-${n}`,
+        runId: `run-session-${n}`,
+        key: o.reference ? o.reference.toUpperCase() : seed.sessionKey ?? 'ASK-20261004-session',
+      }
+    },
     startTriage: async (ws, keys, opts) => {
       calls.startTriage.push({ ws, keys, opts })
       return { jobId: `job-${calls.startTriage.length}` }
@@ -753,6 +775,16 @@ export function createFakeTransport(seed: {
       const status = seed.sessions?.[runId]?.detail.status ?? runList.find((r) => r.runId === runId)?.status
       if (status === 'running' || status === 'preparing') return { jobId: '', runId, queued: true }
       return { jobId: `job-steer-${calls.steer.length}`, runId }
+    },
+    updateNote: async (ws, runId) => {
+      calls.updateNote.push({ ws, runId })
+      if (seed.updateNoteError) throw seed.updateNoteError
+      return { jobId: `job-note-${calls.updateNote.length}` }
+    },
+    saveNote: async (ws, runId) => {
+      calls.saveNote.push({ ws, runId })
+      if (seed.saveError) throw seed.saveError
+      return { path: `/notes/Sessions/${runId}.md` }
     },
     runDiff: async (ws, runId) => {
       calls.runDiff.push({ ws, runId })

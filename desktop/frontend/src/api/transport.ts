@@ -23,6 +23,7 @@ import type {
   RunEvent,
   RunSummary,
   SearchHit,
+  SessionStarted,
   SteerStarted,
   Ticket,
   Transport,
@@ -305,6 +306,14 @@ export function createHTTPTransport(): Transport {
     // <img> or the player, so nothing is copied through this process.
     attachmentURL: async (ws, runId, path) =>
       `${API}/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/bundle/${attachmentPath(path)}`,
+    startSession: (ws, o) =>
+      postJSON<SessionStarted>(`/workspaces/${encodeURIComponent(ws)}/sessions`, {
+        instruction: o.instruction,
+        ...(o.reference ? { reference: o.reference } : {}),
+        ...(o.access ? { access: o.access } : {}),
+        ...(o.provider ? { provider: o.provider } : {}),
+        ...(o.model ? { model: o.model } : {}),
+      }),
     startTriage: (ws, keys, o) =>
       postJSON<{ jobId: string }>(`/workspaces/${encodeURIComponent(ws)}/triage`, {
         keys,
@@ -383,6 +392,16 @@ export function createHTTPTransport(): Transport {
       postJSON<SteerStarted>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/steer`,
         { text, ...(model ? { model } : {}) },
+      ),
+    updateNote: (ws, runId) =>
+      postJSON<{ jobId: string }>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/note`,
+        {},
+      ),
+    saveNote: (ws, runId) =>
+      postJSON<{ path: string }>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/save`,
+        {},
       ),
     runDiff: (ws, runId) =>
       getJSON<RunDiff>(
@@ -508,6 +527,23 @@ interface BridgeBindings {
   OpenRunDir(ws: string, runId: string): Promise<void>
 }
 
+/**
+ * Bindings the Go bridge gains in the backend track. They sit outside BridgeBindings until
+ * the tracks merge, because desktop/bridge_test.go checks BridgeBindings against *Bridge in
+ * both directions; task M1 moves them in and deletes this interface.
+ */
+interface PendingBindings {
+  StartSession(ws: string, o: { reference: string; instruction: string; access: string; provider: string; model: string }): Promise<SessionStarted>
+  UpdateNote(ws: string, runId: string): Promise<string>
+  SaveNote(ws: string, runId: string): Promise<string>
+}
+
+function pendingBridge(): PendingBindings {
+  const bound = (window as any).go?.main?.Bridge as PendingBindings | undefined
+  if (!bound) throw new Error('wails bridge not available')
+  return bound
+}
+
 /** The subset of the Wails runtime the transport uses. */
 interface WailsRuntime {
   EventsOn(kind: string, callback: (...data: any[]) => void): () => void
@@ -584,6 +620,14 @@ export function createWailsTransport(): Transport {
     attachments: async (ws, runId) => list(await bridge().Attachments(ws, runId)),
     // No HTTP origin in the desktop shell, so the bytes come back inline.
     attachmentURL: (ws, runId, path) => bridge().AttachmentDataURL(ws, runId, path),
+    startSession: (ws, o) =>
+      pendingBridge().StartSession(ws, {
+        reference: o.reference ?? '',
+        instruction: o.instruction,
+        access: o.access ?? 'read-only',
+        provider: o.provider ?? '',
+        model: o.model ?? '',
+      }),
     startTriage: async (ws, keys, o) => ({
       jobId: await bridge().StartTriage(ws, keys, {
         provider: o?.provider ?? '',
@@ -652,6 +696,8 @@ export function createWailsTransport(): Transport {
       const jobId = await bridge().Steer(ws, runId, text, model ?? '')
       return jobId ? { jobId, runId } : { jobId, runId, queued: true }
     },
+    updateNote: async (ws, runId) => ({ jobId: await pendingBridge().UpdateNote(ws, runId) }),
+    saveNote: async (ws, runId) => ({ path: await pendingBridge().SaveNote(ws, runId) }),
     runDiff: async (ws, runId) => {
       const d = await bridge().RunDiff(ws, runId)
       return { ...d, files: list(d.files) }

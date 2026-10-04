@@ -278,6 +278,46 @@ describe('http transport', () => {
     expect(got).toEqual({ jobId: 'job-9', runId: 'r1' })
   })
 
+  it('posts a session start', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-1', runId: 'run-1', key: 'ASK-20261004-why-is-the-refund-for' })
+
+    const got = await createTransport().startSession('ws1', {
+      instruction: 'Why?',
+      reference: 'OMNI-1',
+      access: 'read-only',
+    })
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/sessions')
+    const init = fetchMock.mock.calls[0]![1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({
+      instruction: 'Why?',
+      reference: 'OMNI-1',
+      access: 'read-only',
+    })
+    expect(got).toEqual({ jobId: 'job-1', runId: 'run-1', key: 'ASK-20261004-why-is-the-refund-for' })
+  })
+
+  it('omits absent session fields', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-2', runId: 'run-2', key: 'ASK-20261004-session' })
+
+    await createTransport().startSession('ws1', { instruction: 'Why?' })
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toEqual({ instruction: 'Why?' })
+  })
+
+  it('posts update note and save', async () => {
+    const noteFetch = mockFetch({ jobId: 'job-note-1' })
+    await expect(createTransport().updateNote('ws1', 'r1')).resolves.toEqual({ jobId: 'job-note-1' })
+    expect(noteFetch.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r1/note')
+    expect(JSON.parse(String(noteFetch.mock.calls[0]![1]?.body))).toEqual({})
+
+    const saveFetch = mockFetch({ path: '/notes/Sessions/r1.md' })
+    await expect(createTransport().saveNote('ws1', 'r1')).resolves.toEqual({ path: '/notes/Sessions/r1.md' })
+    expect(saveFetch.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r1/save')
+    expect(JSON.parse(String(saveFetch.mock.calls[0]![1]?.body))).toEqual({})
+  })
+
   it('reads a run diff from its own route', async () => {
     const d: RunDiff = {
       base: 'main',
@@ -595,6 +635,34 @@ describe('wails transport', () => {
 
   afterEach(() => {
     delete (window as unknown as { go?: unknown }).go
+  })
+
+  it('starts a session over the bridge', async () => {
+    const bridge = stubBridge({
+      StartSession: async () => ({ jobId: 'job-1', runId: 'run-1', key: 'ASK-20261004-session' }),
+      UpdateNote: async () => 'job-note-1',
+      SaveNote: async () => '/notes/Sessions/run-1.md',
+    })
+    const t = createWailsTransport()
+
+    await expect(t.startSession('ws1', { instruction: 'Why?' })).resolves.toEqual({
+      jobId: 'job-1',
+      runId: 'run-1',
+      key: 'ASK-20261004-session',
+    })
+    expect(bridge.StartSession).toHaveBeenCalledWith('ws1', {
+      reference: '',
+      instruction: 'Why?',
+      access: 'read-only',
+      provider: '',
+      model: '',
+    })
+
+    await expect(t.updateNote('ws1', 'run-1')).resolves.toEqual({ jobId: 'job-note-1' })
+    expect(bridge.UpdateNote).toHaveBeenCalledWith('ws1', 'run-1')
+
+    await expect(t.saveNote('ws1', 'run-1')).resolves.toEqual({ path: '/notes/Sessions/run-1.md' })
+    expect(bridge.SaveNote).toHaveBeenCalledWith('ws1', 'run-1')
   })
 
   it('steers through Steer and says the run back', async () => {

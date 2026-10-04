@@ -1,5 +1,5 @@
 export type RunState = 'preparing'|'running'|'completed'|'failed'|'blocked'|'over_budget';
-export type RunKind = 'triage'|'rca'|'fix';
+export type RunKind = 'session'|'triage'|'rca'|'fix';
 /** The providers a one-off override may name; '' is the workspace's own. */
 export const PROVIDERS = ['claude', 'codex', 'openai', 'acp', 'qwen', 'cursor', 'agy'] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -38,7 +38,15 @@ export interface RunSummary { runId: string; key: string; helpdeskKey?: string; 
   /** Every instruction typed while the run worked, and what became of each; absent when there were none. */
   queuedSteers?: QueuedSteer[]
   /** What a blocked run is waiting on, when it is a question; absent on every other run. A run.updated carries it, so a run that blocks while its page is open shows its decision bar at once. */
-  question?: QuestionInfo }
+  question?: QuestionInfo
+  /** `"note"` while a triage or RCA run that has already replied is filing its note; status stays `running` during it. */
+  phase?: '' | 'note'
+  /** Session runs only: `'read-only'` (default) or `'worktree'`. */
+  access?: SessionAccess
+  /** `"note not filed: <reason>"` when the note turn failed; absent otherwise. */
+  noteWarning?: string
+  /** The run answers in chat: every session run, and a triage or RCA run started by anything but eval. */
+  replyFirst?: boolean }
 /**
  * One steer typed on a working run. `queued` waits for the run's next turn
  * boundary; `delivered` reached the live session after turn `turn`; `held`
@@ -112,7 +120,9 @@ export interface FixInfo { branch?: string; base?: string; commit?: string; prUr
  * preceded it rather than following them. A provider that reports a message
  * once sets neither.
  */
-export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string; delta?: boolean; replace?: boolean; ask?: DecisionAsk } }
+export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string; delta?: boolean; replace?: boolean; ask?: DecisionAsk;
+  /** Set on every line written while the run's phase is `'note'`; absent on every other line. */
+  phase?: 'note' } }
 /** One file in a fix run's change. A renamed file is named by the path it now has. */
 export interface DiffFile { path: string; status: 'added'|'modified'|'deleted'|'renamed'; additions: number; deletions: number }
 /**
@@ -449,6 +459,12 @@ export interface RCAStart extends Overrides { prUrl?: string; resolution?: strin
  * in the Review screen. The two are `sirdar fix --no-pr` and `--local`.
  */
 export interface FixStart extends Overrides { dryRun?: boolean; noPr?: boolean; local?: boolean; base?: string; acceptDeviation?: boolean }
+/** A session's read access to the workspace: `'read-only'` (default) or `'worktree'`. */
+export type SessionAccess = 'read-only' | 'worktree'
+/** What starting a session takes: an instruction, with or without a ticket reference. */
+export interface SessionStart { instruction: string; reference?: string; access?: SessionAccess; provider?: string; model?: string }
+/** What starting a session answers with: the run id and key are known before the job runs. */
+export interface SessionStarted { jobId: string; runId: string; key: string }
 /**
  * What a helpdesk number resolved to. `key` empty is an ordinary answer:
  * `reason` then says which of the three it was — the workspace reads no
@@ -552,6 +568,8 @@ export interface Transport {
    * and the pane offers the bundle folder instead.
    */
   attachmentURL(ws: string, runId: string, path: string): Promise<string>;
+  /** Starts a session: an instruction, with or without a ticket reference. */
+  startSession(ws: string, o: SessionStart): Promise<SessionStarted>;
   startTriage(ws: string, keys: string[], o?: TriageStart): Promise<{ jobId: string }>;
   startRCA(ws: string, key: string, o?: RCAStart): Promise<{ jobId: string }>;
   startFix(ws: string, key: string, o?: FixStart): Promise<{ jobId: string }>;
@@ -595,6 +613,10 @@ export interface Transport {
   resume(ws: string, runId: string, answer?: string, model?: string, decision?: PermissionDecision): Promise<{ jobId: string }>; cancel(jobId: string): Promise<void>;
   /** Continues a finished run with a follow-up instruction, on the same run. `model` changes the model it continues on. */
   steer(ws: string, runId: string, text: string, model?: string): Promise<SteerStarted>;
+  /** Runs one note turn on a triage or RCA run that has a reply, and files the note again. */
+  updateNote(ws: string, runId: string): Promise<{ jobId: string }>;
+  /** Writes a session run's reply into the notes directory; answers with the path. */
+  saveNote(ws: string, runId: string): Promise<{ path: string }>;
   /** A fix run's change, file by file, with the unified patch. Starts nothing. */
   runDiff(ws: string, runId: string): Promise<RunDiff>;
   /** Reverts one hunk out of the fix commit and answers with the change as it stands after. */
@@ -656,12 +678,13 @@ export const TRANSPORT_METHODS = [
   'queue', 'resolve', 'resolveHelpdesk', 'composeIntent',
   'runs', 'run', 'deleteRun', 'search', 'events', 'note', 'prompt',
   'attachments', 'attachmentURL',
+  'startSession',
   'startTriage', 'startRCA', 'startFix', 'startEval',
   'evalReports', 'latestRetro', 'golden', 'addGolden',
   'configSummary', 'models', 'refreshModels',
   'playbooks', 'playbook', 'savePlaybook', 'addPlaybook', 'deletePlaybook',
   'scaffoldPlaybooks', 'openPlaybook',
-  'resume', 'cancel', 'steer',
+  'resume', 'cancel', 'steer', 'updateNote', 'saveNote',
   'runDiff', 'dropHunk',
   'mcpServers', 'mcpTools', 'mcpCall',
   'register', 'doctor', 'quota', 'subscribe',

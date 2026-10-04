@@ -151,6 +151,34 @@ describe('createAppStore', () => {
     expect(toast?.text).toContain('provider not configured')
   })
 
+  // A session's run id is known at once, so the job and run are paired
+  // without waiting for a run.updated to say which key it belongs to.
+  it('pairs a started session with its job at once', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startSession({ instruction: 'Why is the refund stuck?' })
+
+    expect(getRunJob('run-session-1')).toBe('job-session-1')
+    expect(transport.calls.startSession).toEqual([
+      { ws: 'ws1', o: { instruction: 'Why is the refund stuck?' } },
+    ])
+  })
+
+  it('refuses a blank instruction', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    const jobId = await store.startSession({ instruction: '   ' })
+
+    expect(jobId).toBe('')
+    expect(transport.calls.startSession).toEqual([])
+  })
+
   // Cancel only works for a job this window started, and the job id comes
   // back before the run it produces exists. The store holds it until a
   // run.updated for one of the job's keys says which run to pair it with.

@@ -20,6 +20,7 @@ import {
   intentRef,
   parseIntent,
   type Intent,
+  type IntentMode,
 } from '../lib/composeIntent'
 import {
   FIX_THEN_NOTE,
@@ -427,7 +428,10 @@ export default function NewSession(props: {
   /** The Slack link to carry into the bundle: only when the key came from its thread. */
   const slackLink = !confirmed && resolved?.input === 'slack' && resolved.key === key ? intent.slack : ''
   const instruction = (confirmed?.instruction ?? intent.instruction).trim()
-  const mode: SessionMode = pinnedMode ?? (confirmed?.mode || intent.mode || 'triage')
+  // A reading never confirms 'session': composeIntent only classifies an
+  // ambiguous line about a ticket, which is always triage, RCA or fix.
+  const confirmedMode = confirmed?.mode !== 'session' ? confirmed?.mode : ''
+  const mode: SessionMode = pinnedMode ?? (confirmedMode || intent.mode || 'triage')
   const fixThen = prefs.fixThen
 
   const triaged = key ? hasTriageNote(runs, key) : true
@@ -582,7 +586,15 @@ export default function NewSession(props: {
     !busy && (wantsReading || (key !== '' && !(needsNote && mode !== 'triage') && !badAsk))
 
   /** The chips, or the one line saying why there is nothing to start yet. */
-  const chips = key !== '' ? withRepoChips(intentChips({ mode, key, instruction, resolution: foundBy }), repoChips) : []
+  // This screen's own ticket modes (MODES in composer/modes.ts) never
+  // include 'session': only a later task's own screen starts one of those.
+  const chips =
+    key !== ''
+      ? withRepoChips(
+          intentChips({ mode: mode as IntentMode, key, instruction, resolution: foundBy }),
+          repoChips,
+        )
+      : []
   /**
    * The one line that stands in place of the chips. A key with no triage
    * note behind it stops an RCA or a fix and nothing else, so on a triage
