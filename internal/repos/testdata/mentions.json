@@ -1,0 +1,55 @@
+{
+  "_comment": "Shared by internal/repos (Go) and desktop/frontend/src/lib/repoMentions.test.ts, so the composer's reading and the service's agree.",
+  "repos": [
+    { "name": "acme-api", "path": "/src/acme-api", "origin": "git@github.com:acme/acme-api.git", "workspace": true },
+    { "name": "Acme.Web", "path": "/src/Acme.Web", "origin": "https://github.com/acme/Acme.Web.git", "about": "web frontend" },
+    { "name": "Acme.Flutter.POS", "path": "/src/Acme.Flutter.POS", "origin": "ssh://git@github.com/acme/Acme.Flutter.POS.git" },
+    { "name": "Acme.Legacy.POS", "path": "/src/Acme.Legacy.POS", "origin": "git@github.com:acme/Acme.Legacy.POS.git" },
+    { "name": "Acme.Flutter.KDS", "path": "/src/Acme.Flutter.KDS", "origin": "git@github.com:acme/Acme.Flutter.KDS.git" },
+    { "name": "reports", "path": "/src/Acme.POS.Report" }
+  ],
+  "mentions": [
+    { "text": "it regressed in https://github.com/acme/Acme.Web/pull/828 last week",
+      "want": [{ "name": "Acme.Web", "slug": "acme/Acme.Web", "ref": "https://github.com/acme/Acme.Web/pull/828", "status": "companion" }] },
+    { "text": "see acme/Acme.Web#828 for the change",
+      "want": [{ "name": "Acme.Web", "slug": "acme/Acme.Web", "ref": "acme/Acme.Web#828", "status": "companion" }] },
+    { "text": "the Acme.Web dashboard shows zero",
+      "want": [{ "name": "Acme.Web", "ref": "Acme.Web", "status": "companion" }] },
+    { "text": "broken since Acme.Web.",
+      "want": [{ "name": "Acme.Web", "ref": "Acme.Web", "status": "companion" }] },
+    { "text": "fixed by other-org/Billing.Service#12, maybe",
+      "want": [{ "name": "Billing.Service", "slug": "other-org/Billing.Service", "ref": "other-org/Billing.Service#12", "status": "unknown" }] },
+    { "text": "https://github.com/ACME/ACME.WEB/issues/3",
+      "want": [{ "name": "Acme.Web", "slug": "ACME/ACME.WEB", "ref": "https://github.com/ACME/ACME.WEB/issues/3", "status": "companion" }] },
+    { "text": "acme/acme-api#5 changed the totals",
+      "want": [{ "name": "acme-api", "slug": "acme/acme-api", "ref": "acme/acme-api#5", "status": "workspace" }] },
+    { "text": "the Acme.Web.Legacy screen and version 3.2",
+      "want": [] },
+    { "text": "Acme.Web is slow, see acme/Acme.Web#1 and other-org/Billing.Service#2",
+      "want": [
+        { "name": "Acme.Web", "ref": "Acme.Web", "status": "companion" },
+        { "name": "Billing.Service", "slug": "other-org/Billing.Service", "ref": "other-org/Billing.Service#2", "status": "unknown" }
+      ] },
+    { "text": "https://github.com/acme/reports-old/pull/4 is unrelated to https://example.slack.com/archives/C0123456/p1791100254656059",
+      "want": [{ "name": "reports-old", "slug": "acme/reports-old", "ref": "https://github.com/acme/reports-old/pull/4", "status": "unknown" }] },
+    { "text": "look at acme/Acme.POS.Report#9",
+      "want": [{ "name": "reports", "slug": "acme/Acme.POS.Report", "ref": "acme/Acme.POS.Report#9", "status": "companion" }] }
+  ],
+  "asks": [
+    { "text": "look in Acme.Web", "want": [{ "phrase": "Acme.Web", "name": "Acme.Web", "status": "companion" }] },
+    { "text": "please check the KDS app for the timeout", "want": [{ "phrase": "KDS", "name": "Acme.Flutter.KDS", "status": "companion" }] },
+    { "text": "check the POS app", "want": [{ "phrase": "POS", "status": "ambiguous", "candidates": ["Acme.Flutter.POS", "Acme.Legacy.POS"] }] },
+    { "text": "look in Billing.Service for the null", "want": [{ "phrase": "Billing.Service", "status": "unknown" }] },
+    { "text": "check the Billing app", "want": [{ "phrase": "Billing", "status": "unknown" }] },
+    { "text": "check the logs for errors", "want": [] },
+    { "text": "check the config.yaml and the 3.2 release", "want": [] },
+    { "text": "look in the reports repo", "want": [{ "phrase": "reports", "name": "reports", "status": "companion" }] },
+    { "text": "look into Acme.POS.Report", "want": [{ "phrase": "Acme.POS.Report", "name": "reports", "status": "companion" }] },
+    { "text": "look at acme/Acme.Web#828", "want": [{ "phrase": "acme/Acme.Web", "name": "Acme.Web", "status": "companion" }] },
+    { "text": "the bug is in the Web repo", "want": [{ "phrase": "Web", "name": "Acme.Web", "status": "companion" }] },
+    { "text": "LOOK IN acme.web and check acme-api", "want": [
+      { "phrase": "acme.web", "name": "Acme.Web", "status": "companion" },
+      { "phrase": "acme-api", "name": "acme-api", "status": "workspace" }
+    ] }
+  ]
+}
