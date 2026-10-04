@@ -6,6 +6,7 @@ import {
   grantLine,
   drawsNothing,
   inputSummary,
+  isDelta,
   isReplace,
   joinText,
   outputFailed,
@@ -369,8 +370,11 @@ class SessionBuilder {
         return
       default:
         // Every other class is a row of its own, so no assistant line
-        // after it continues the message before it.
-        this.message = null
+        // after it continues the message before it. A line that draws
+        // nothing is not a row: Claude Code writes a usage line between a
+        // message's fragments and the finished block that replaces them,
+        // and ending the message there drew it twice.
+        if (!this.streaming() || (event.kind !== 'usage' && !drawsNothing(event))) this.message = null
         this.event(row)
     }
   }
@@ -418,6 +422,14 @@ class SessionBuilder {
     }
     call.permission = row
     this.restep(call)
+  }
+
+  /** True while the open message is still arriving in fragments. */
+  private streaming(): boolean {
+    const open = this.message
+    if (!open || open.sealed) return false
+    const last = open.parts[open.parts.length - 1]
+    return last !== undefined && isDelta(last.event)
   }
 
   private say(row: IndexedEvent): void {

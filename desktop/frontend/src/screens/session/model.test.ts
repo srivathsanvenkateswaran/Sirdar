@@ -114,6 +114,25 @@ describe('the session model', () => {
     expect(m.items.some((i) => i.kind === 'sys' && JSON.stringify(i.parts).includes('control_cancel_request'))).toBe(false)
   })
 
+  // The 2026-10-04 OMNI-3413 rerun drew every assistant message twice:
+  // Claude Code writes a usage line for the message between its streamed
+  // fragments and the finished block that replaces them.
+  it('lets a usage line between the fragments and the finished block leave one message', () => {
+    const t = '2026-09-15T12:15:00Z'
+    const delta = (text: string) => ({ t, kind: 'assistant_text', payload: { text, delta: true } })
+    const events = [
+      ...triageEvents(),
+      delta('Still checking '),
+      delta('the barcode data.'),
+      { t, kind: 'usage', payload: { turns: 9, raw: { type: 'assistant' } } },
+      { t, kind: 'assistant_text', payload: { text: 'Still checking the barcode data.', replace: true } },
+    ] as ReturnType<typeof triageEvents>
+    const m = buildSessionModel(indexed(events), TRIAGE_DETAIL)
+    const says = m.items.filter((i) => i.kind === 'say' && i.text.startsWith('Still checking'))
+    expect(says).toHaveLength(1)
+    expect(says[0]).toMatchObject({ text: 'Still checking the barcode data.' })
+  })
+
   it('keeps the provider’s bookkeeping out of the flow', () => {
     expect(triage.items.some((i) => i.kind === 'sys' && i.parts.join('').includes('stream_event'))).toBe(false)
     expect(triage.items.filter((i) => i.kind === 'sys')).toHaveLength(1)
