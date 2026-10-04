@@ -47,11 +47,13 @@ export function accessOf(mode: SessionMode, access?: Access): Access {
 /**
  * What the posture reads as inside the Mode chip, after the mode's own word.
  *
- * Access is derived from Mode and was never a control of its own, so on the
- * session composer it is the Mode chip's secondary text — "Triage ·
- * read-only", "Fix · writes in worktree" — rather than a second chip that
- * pushed the row onto a second line. `ACCESS`'s own `note` is still what the
- * chip's tooltip and its popover say; only the chip's word is shortened.
+ * A run already under way has a fixed mode, and with it a fixed posture —
+ * `accessOf` needs no pick for one of those, only for a session still being
+ * composed — so here Access is a fact about Mode rather than a choice, and
+ * it is the Mode chip's secondary text — "Triage · read-only", "Fix ·
+ * writes in worktree" — rather than a second chip that pushed the row onto
+ * a second line. `ACCESS`'s own `note` is still what the chip's tooltip and
+ * its popover say; only the chip's word is shortened.
  */
 export const ACCESS_PHRASE: Record<Access, string> = {
   'read-only': 'read-only',

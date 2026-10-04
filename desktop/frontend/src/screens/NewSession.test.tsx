@@ -311,7 +311,11 @@ describe('NewSession', () => {
       expect(onStart).toHaveBeenCalledWith(
         'session',
         '',
-        expect.objectContaining({ instruction: 'Why is the refund stuck?', access: 'read-only' }),
+        expect.objectContaining({
+          instruction: 'Why is the refund stuck?',
+          access: 'read-only',
+          reference: undefined,
+        }),
       ),
     )
     // Never read as a triage: this line names no ticket at all.
@@ -362,6 +366,43 @@ describe('NewSession', () => {
     fireEvent.change(bar(), { target: { value: '/fix OMNI-1' } })
     expect(accessChip()).toBeDisabled()
     expect(accessChip()).toHaveAccessibleName('Access: Worktree. Fixed by the mode')
+  })
+
+  it('drops a pinned access once the start it was for has gone out', async () => {
+    const { onStart } = mount({ onStart: vi.fn(async () => '') })
+    fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
+    fireEvent.click(accessChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Worktree/ }))
+    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
+
+    fireEvent.click(sendButton())
+    await waitFor(() => expect(onStart).toHaveBeenCalled())
+    expect(accessChip()).toHaveAccessibleName('Access: Read-only')
+  })
+
+  it('drops a pinned access when the workspace changes', () => {
+    const transport = createFakeTransport({ tickets: [] })
+    const onStart = vi.fn(async () => 'job-1')
+    const tree = (ws: Workspace) => (
+      <PrimaryActionProvider>
+        <NewSession
+          transport={transport}
+          workspaceId={ws.id}
+          workspace={ws}
+          runs={[]}
+          onStart={onStart}
+          onOpenRun={() => {}}
+        />
+      </PrimaryActionProvider>
+    )
+    const view = render(tree(workspace({ id: 'ws1' })))
+    fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
+    fireEvent.click(accessChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Worktree/ }))
+    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
+
+    view.rerender(tree(workspace({ id: 'ws2' })))
+    expect(accessChip()).toHaveAccessibleName('Access: Read-only')
   })
 
   it('opens the session once its run appears', async () => {
@@ -968,6 +1009,27 @@ describe('NewSession', () => {
           'fix',
           'OMNI-3233',
           expect.objectContaining({ instruction: 'the rounding' }),
+        ),
+      )
+    })
+
+    it('starts a session about the confirmed key, not the parser’s first guess', async () => {
+      const transport = createFakeTransport({
+        tickets: [],
+        composed: { key: 'OMNI-2', mode: '', instruction: 'what changed?', confidence: 0.7 },
+      })
+      const { onStart } = mount({ transport })
+      fireEvent.change(bar(), { target: { value: 'is OMNI-1 the same bug as OMNI-2' } })
+      fireEvent.click(sendButton())
+      expect(await screen.findByText('Confirm')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent('Session · OMNI-2 · read-only')
+
+      fireEvent.click(sendButton())
+      await waitFor(() =>
+        expect(onStart).toHaveBeenCalledWith(
+          'session',
+          '',
+          expect.objectContaining({ instruction: 'what changed?', reference: 'OMNI-2' }),
         ),
       )
     })

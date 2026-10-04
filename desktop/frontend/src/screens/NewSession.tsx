@@ -344,10 +344,14 @@ export default function NewSession(props: {
   const [model, setModel] = useState('')
   // A pick is an override of this workspace's provider and model. Switching
   // workspace drops it: carried over, the chip went on naming a model the
-  // new workspace never chose, and a start there quietly used it.
+  // new workspace never chose, and a start there quietly used it. A pinned
+  // access is the same kind of pick, for the same reason: it is this box's
+  // own session, in this workspace, and not a posture to carry to the next
+  // one typed after switching.
   useEffect(() => {
     setProvider('')
     setModel('')
+    setPinnedAccess(null)
   }, [workspaceId])
   const [dryRun, setDryRun] = useState(false)
   /** RCA's own two inputs. */
@@ -503,10 +507,11 @@ export default function NewSession(props: {
     ) => {
       if (busy) return
       setError('')
-      // A session names no key, so there is nothing for `starting` to carry
-      // while its own start is in flight; `busy` still reads `awaiting`
-      // once the job answers, which is the window that matters for the
-      // Start button and the Landed rows this state also guards.
+      // A session names no key, so `starting` carries the mode instead
+      // while its own start is in flight: `busy` reads `starting !== ''`,
+      // and a session's own window — the request itself, before any job
+      // id comes back to set `awaiting` — needs a non-empty value there
+      // too, same as every other mode's key does.
       setStarting(forKey || what)
       try {
         const jobId = await onStart(what, forKey, {
@@ -526,6 +531,10 @@ export default function NewSession(props: {
           awaitingRef.current = jobId
           setAwaiting(jobId)
         }
+        // A pinned access belonged to the session that just started; a
+        // failed start leaves it as it was, so a retry does not have to be
+        // picked again.
+        setPinnedAccess(null)
       } catch (err) {
         setError(reasonOf(err))
       } finally {
@@ -673,12 +682,30 @@ export default function NewSession(props: {
       return
     }
     if (mode === 'session') {
-      void begin('session', '', instruction, '', { reference: intentRef(intent) || undefined, access })
+      // A confirmed reading's own key is the ticket it settled on; the
+      // parser's first key (`intentRef`) is only the fallback for a line
+      // nobody has had to disambiguate.
+      const reference = confirmed?.key || intentRef(intent)
+      void begin('session', '', instruction, '', { reference: reference || undefined, access })
       return
     }
     if (!key) return
     void begin(mode, key, instruction, slackLink)
-  }, [canStart, wantsReading, text, transport, workspaceId, mode, intent, key, instruction, slackLink, access, begin])
+  }, [
+    canStart,
+    wantsReading,
+    text,
+    transport,
+    workspaceId,
+    mode,
+    intent,
+    confirmed,
+    key,
+    instruction,
+    slackLink,
+    access,
+    begin,
+  ])
 
   useProvidePrimaryAction({
     label: busy ? 'Starting…' : wantsReading ? 'Read this' : 'Start',
@@ -706,7 +733,7 @@ export default function NewSession(props: {
       : `${chips.join(' · ')} (↵)`
     : busy
       ? undefined
-      : needsNote
+      : needsNote && mode !== 'session'
         ? noteReason
         : blocked
 
