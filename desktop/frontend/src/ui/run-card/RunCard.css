@@ -101,6 +101,26 @@ a.sd-run-card:hover {
   gap: var(--sd-space-2);
 }
 
+/* A Slack-only run's key (SLACK-<channel>-<ts>) is long: beside its mark the
+   number gives way to the state and is cut with an ellipsis, the whole key
+   in its tooltip. */
+.sd-run-card__who[data-source] {
+  flex-shrink: 1;
+  min-inline-size: 0;
+}
+
+.sd-run-card__who[data-source] .sd-run-card__key {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-inline-size: 0;
+}
+
+/* …and the state word keeps its room: it is the one thing on the foot that
+   is read, and the key is a lookup the tooltip completes. */
+.sd-run-card__foot:has(> .sd-run-card__who[data-source]) > .sd-run-card__state {
+  flex-shrink: 0;
+}
+
 .sd-run-card__key {
   font-family: var(--sd-font-mono);
   font-size: var(--sd-text-micro);

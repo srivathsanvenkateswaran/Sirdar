@@ -1,5 +1,6 @@
 import KindChip from '../kind-chip'
 import ProviderMark from '../provider-mark'
+import SourceMark from '../source-mark'
 import StateGlyph, { type GlyphState } from '../state-glyph'
 import { STATE_WORDS } from '../status-badge'
 import Avatar from './Avatar'
@@ -56,6 +57,12 @@ export interface RunCardProps {
    * not say what the click does.
    */
   label?: string
+  /**
+   * Where the ticket came from, drawn as a source mark before the number:
+   * `slack` for a run triaged straight from a Slack thread with no ticket.
+   * Absent for an ordinary tracker or helpdesk ticket.
+   */
+  source?: { adapter: string; name?: string }
   /** Opens the session. The card is a button while this is given. */
   onOpen?: () => void
   /**
@@ -100,6 +107,7 @@ export default function RunCard({
   clockTitle,
   detail,
   label,
+  source,
   onOpen,
   href,
 }: RunCardProps): JSX.Element {
@@ -126,7 +134,8 @@ export default function RunCard({
         <span className="sd-run-card__state" title={showClock ? clockTitle : undefined}>
           <StateGlyph state={status} word={word} clock={showClock ? clock : undefined} />
         </span>
-        <span className="sd-run-card__who">
+        <span className="sd-run-card__who" data-source={source ? source.adapter : undefined}>
+          {source && <SourceMark adapter={source.adapter} name={source.name} size="xs" />}
           {title && (
             <span className="sd-run-card__key" dir="ltr" title={keyTitle}>
               {runKey}

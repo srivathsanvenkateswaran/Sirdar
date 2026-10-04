@@ -71,11 +71,16 @@ export default function RunCard(props: {
       : askingDetail(run.reason) || undefined
     : undefined
   const shown = shownNumber(run, show, sources)
+  // A thread triaged with no ticket has its synthetic key and no other
+  // number; the Slack mark says where it came from, and the tooltip carries
+  // the whole key the foot may cut short.
+  const fromSlack = run.source === 'slack'
 
   return (
     <SdRunCard
       runKey={shown.text}
-      keyTitle={shown.other || undefined}
+      keyTitle={fromSlack ? `Slack thread ${run.key}` : shown.other || undefined}
+      source={fromSlack ? { adapter: 'slack', name: 'Slack' } : undefined}
       kind={run.kind}
       status={status}
       title={title}
