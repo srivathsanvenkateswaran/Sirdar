@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
   type SVGProps,
 } from 'react'
-import type { ComposedIntent, Intake, RunSummary, Ticket, Transport, Workspace } from '../api/types'
+import type { ComposedIntent, Intake, RepoSummary, RunSummary, Ticket, Transport, Workspace } from '../api/types'
 import ChipMenu, { type ChipMenuItem } from '../components/composer/ChipMenu'
 import ComposerCard from '../components/composer/ComposerCard'
 import { ACCESS, MODES, accessOf, type SessionMode } from '../components/composer/modes'
@@ -31,6 +31,7 @@ import {
 } from '../lib/composerPrefs'
 import { parseTime, reasonOf, relativeTime } from '../lib/format'
 import { getRunJob, subscribeRunJobs } from '../lib/jobs'
+import { askReason, mentionPhrase, repoAsks, repoMentions } from '../lib/repoMentions'
 import { useDebounced } from '../lib/useDebounced'
 import { isQueueUnsupported } from '../store/appStore'
 import Button from '../ui/button'
@@ -73,6 +74,18 @@ export const LANDED_LIMIT = 5
 /** True when the key has a completed triage behind it, which is what RCA and Fix start from. */
 export function hasTriageNote(runs: RunSummary[], key: string): boolean {
   return runs.some((r) => r.key === key && r.kind === 'triage' && r.status === 'completed')
+}
+
+/** The repository list before the config summary has been read. */
+const NO_REPOS: RepoSummary[] = []
+
+/**
+ * The intent chips with the repository words after the ticket: "Triage ·
+ * SBX-1 · mentions Acme.Web (companion repo) · with your note".
+ */
+function withRepoChips(chips: string[], repoChips: string[]): string[] {
+  if (repoChips.length === 0) return chips
+  return [...chips.slice(0, 2), ...repoChips, ...chips.slice(2)]
 }
 
 function stamp(value: string | undefined): number {
@@ -290,6 +303,12 @@ export default function NewSession(props: {
   /** The workspace's runs, live from the store: what RCA and Fix are gated on. */
   runs: RunSummary[]
   /**
+   * The repositories a session here may read, from the config summary:
+   * "look in Acme.Web" in the line resolves against them. Absent until the
+   * summary has been read, which reads as the workspace alone.
+   */
+  repos?: RepoSummary[]
+  /**
    * Starts a session and answers with the job id, or '' when nothing was
    * started. The store's own `startTriage` / `startRCA` / `startFix`.
    */
@@ -304,6 +323,7 @@ export default function NewSession(props: {
     onSelectWorkspace = () => {},
     onAddWorkspace = () => {},
     runs,
+    repos = NO_REPOS,
     onStart,
     onOpenRun,
   } = props
@@ -526,11 +546,43 @@ export default function NewSession(props: {
    * a call and a confirmation.
    */
   const wantsReading = prefs.intentAssist && intent.ambiguity !== '' && !confirmed
+
+  // --- the repositories the line names ------------------------------------
+
+  /**
+   * What the instruction asks the session to look in, read the way the
+   * service reads it into the prompt. A name that resolves to no repository,
+   * or to several, stops the start with the reason rather than being passed
+   * over: the session would be told to look somewhere it cannot read.
+   */
+  const asks = useMemo(() => repoAsks(instruction, repos), [instruction, repos])
+  const badAsk = asks.find((a) => a.status === 'unknown' || a.status === 'ambiguous')
+  /**
+   * The chip's repository words: what the ticket or thread mentions (the
+   * service's summary already says those), then what the line itself
+   * mentions, then where it asked to look. A repository asked for is not
+   * also listed as mentioned.
+   */
+  const repoChips = useMemo(() => {
+    const asked = asks.filter((a) => a.name).map((a) => a.name!.toLowerCase())
+    const said = new Set((foundBy ? (resolved?.repos ?? []) : []).map((m) => m.name.toLowerCase()))
+    const out: string[] = []
+    for (const m of repoMentions(instruction, repos)) {
+      const k = m.name.toLowerCase()
+      if (said.has(k) || asked.includes(k)) continue
+      const phrase = mentionPhrase(m)
+      if (phrase) out.push(phrase)
+      said.add(k)
+    }
+    for (const a of asks) if (a.name && a.status !== 'workspace') out.push(`look in ${a.name}`)
+    return out
+  }, [asks, instruction, repos, foundBy, resolved])
+
   const canStart =
-    !busy && (wantsReading || (key !== '' && !(needsNote && mode !== 'triage')))
+    !busy && (wantsReading || (key !== '' && !(needsNote && mode !== 'triage') && !badAsk))
 
   /** The chips, or the one line saying why there is nothing to start yet. */
-  const chips = key !== '' ? intentChips({ mode, key, instruction, resolution: foundBy }) : []
+  const chips = key !== '' ? withRepoChips(intentChips({ mode, key, instruction, resolution: foundBy }), repoChips) : []
   /**
    * The one line that stands in place of the chips. A key with no triage
    * note behind it stops an RCA or a fix and nothing else, so on a triage
@@ -544,13 +596,15 @@ export default function NewSession(props: {
       ? AMBIGUOUS_REASON[intent.ambiguity]
       : needsNote && mode !== 'triage'
         ? `RCA and Fix need a triage note for ${key} first. Start a triage.`
-        : key !== ''
-          ? ''
-          : ref !== '' && (resolving || !resolved)
-            ? lookingUp(intent)
-            : resolved?.reason
-              ? resolved.reason
-              : NO_KEY_REASON
+        : key !== '' && badAsk
+          ? askReason(badAsk)
+          : key !== ''
+            ? ''
+            : ref !== '' && (resolving || !resolved)
+              ? lookingUp(intent)
+              : resolved?.reason
+                ? resolved.reason
+                : NO_KEY_REASON
 
   const start = useCallback(() => {
     if (!canStart) return
