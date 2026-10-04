@@ -700,6 +700,39 @@ describe('NewSession', () => {
       )
     })
 
+    it('triages a thread that names no ticket under its Slack key, and says when its PR is in another repository', async () => {
+      const DM = 'https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059'
+      const summary =
+        'Slack thread · no ticket yet · will triage the thread · mentions acme-co/Billing.Service (not this workspace)'
+      const transport = createFakeTransport({
+        tickets: [],
+        intake: {
+          [DM]: {
+            input: 'slack',
+            key: 'SLACK-D0FAKEDM01-1791100254',
+            via: [{ from: 'Slack thread', to: 'SLACK-D0FAKEDM01-1791100254', how: 'no ticket yet', source: 'slack' }],
+            summary,
+            subject: 'Coupon totals are wrong on the receipt',
+            slack: { url: DM, messages: 2, thread: true },
+            slackOnly: true,
+            otherRepos: ['acme-co/Billing.Service'],
+          },
+        },
+      })
+      const { onStart } = mount({ transport })
+      fireEvent.change(bar(), { target: { value: DM } })
+      expect(await screen.findByText(`Triage · ${summary}`)).toBeInTheDocument()
+      expect(sendButton()).toBeEnabled()
+      fireEvent.click(sendButton())
+      await waitFor(() =>
+        expect(onStart).toHaveBeenCalledWith(
+          'triage',
+          'SLACK-D0FAKEDM01-1791100254',
+          expect.objectContaining({ slack: DM }),
+        ),
+      )
+    })
+
     it('says what to configure when the workspace has no Slack token', async () => {
       const reason =
         'Slack is not configured: set sources.slack.token (a Slack user token with channels:history, groups:history) in config.yaml'

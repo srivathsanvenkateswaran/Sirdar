@@ -213,4 +213,27 @@ describe('the assignee avatar', () => {
     expect(screen.getByLabelText('Start triage of OMNI-2510')).toBeInTheDocument()
     expect(container.querySelector('.sd-avatar')).toHaveTextContent('SV')
   })
+
+  it('draws the source mark before the key when the card is given one', () => {
+    const { container, rerender } = render(
+      <RunCard
+        {...BASE}
+        runKey="SLACK-D0FAKEDM01-1791100254"
+        keyTitle="Slack thread SLACK-D0FAKEDM01-1791100254"
+        status="completed"
+        title="Coupon totals are wrong on the receipt"
+        source={{ adapter: 'slack', name: 'Slack' }}
+      />,
+    )
+    const who = container.querySelector('.sd-run-card__who') as HTMLElement
+    expect(who).toHaveAttribute('data-source', 'slack')
+    expect(who.firstElementChild).toHaveAttribute('aria-label', 'Slack')
+    expect(container.querySelector('.sd-run-card__key')).toHaveAttribute(
+      'title',
+      'Slack thread SLACK-D0FAKEDM01-1791100254',
+    )
+    rerender(<RunCard {...BASE} status="completed" title="Login loop" />)
+    expect(container.querySelector('.sd-source-mark')).toBeNull()
+    expect(container.querySelector('.sd-run-card__who')).not.toHaveAttribute('data-source')
+  })
 })

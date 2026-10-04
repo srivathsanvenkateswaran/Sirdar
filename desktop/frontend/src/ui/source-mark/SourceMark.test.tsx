@@ -37,6 +37,14 @@ describe('SourceMark', () => {
     expect(screen.getByRole('img', { name: 'Janus' })).toHaveTextContent('JA')
   })
 
+  it('marks a run triaged straight from a Slack thread', () => {
+    const { container } = render(<SourceMark adapter="slack" size="xs" />)
+    expect(screen.getByRole('img', { name: 'Slack' })).toBeInTheDocument()
+    const tile = container.querySelector('.sd-source-mark') as HTMLElement
+    expect(tile).toHaveAttribute('data-branded', 'true')
+    expect(tile.style.getPropertyValue('--sd-source-tile')).toBe('#4A154B')
+  })
+
   it('cuts two letters from a name', () => {
     expect(sourceInitials('Azure DevOps')).toBe('AD')
     expect(sourceInitials('ServiceNow')).toBe('SN')
@@ -87,6 +95,7 @@ describe('SourceMark', () => {
       'intercom',
       'jira',
       'linear',
+      'slack',
       'zendesk',
       'zohodesk',
     ])

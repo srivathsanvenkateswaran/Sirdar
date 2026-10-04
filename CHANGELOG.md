@@ -32,6 +32,24 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
 - A Slack link is read through the operator's Slack MCP server when there is no
   `sources.slack.token` and `slack` is in `mcp.userServers`: one short read-only session,
   the chip says `Slack (via MCP)`, and the thread is kept for half an hour.
+- The Slack MCP reading works on a real thread. It used to close the CLI's input as soon as
+  it started, and every Slack tool call's permission prompt travels over that input, so each
+  call failed with `AbortError: Stream closed` and the reading reported "found no message at
+  that link". Input now stays open until the answer. The prompt calls `slack_read_thread`
+  first (a DM's `D…` id included) and `slack_read_channel` only on an error, with a window
+  one microsecond either side of the ts; `--max-turns` is 6; a reading with no messages
+  fails with the model's own words; each reading leaves a JSON-lines transcript under
+  `~/.sirdar/intake/` for seven days; `SIRDAR_DEBUG=1` prints the `claude` command line.
+- A Slack thread with no ticket in it starts a session anyway. The chip reads `Slack thread ·
+  no ticket yet · will triage the thread`, and the triage runs under
+  `SLACK-<channel>-<ts seconds>` from a bundle built out of the thread: title, description,
+  `Name: value` fields, links, the conversation, and its files (downloaded with a token,
+  named as unread through MCP). No tracker or helpdesk is called, the manifest says so, the
+  prompt says who reported it in Slack, and the Board card carries Slack's mark.
+  `sirdar triage <link>` and `sirdar rca <link>` do the same.
+- When a thread or a tracker record names a GitHub repository that is not the workspace's
+  `origin`, the chip adds `· mentions owner/repo (not this workspace)` and the prompt says the
+  code may live there.
 
 Sirdar as it stands today, before the first tagged release:
 

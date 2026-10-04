@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/ghrepo"
+	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
@@ -71,6 +73,14 @@ type Intake struct {
 	Subject string       `json:"subject,omitempty"`
 	Slack   *SlackIntake `json:"slack,omitempty"`
 
+	// SlackOnly is set when a Slack link was read and named no ticket: Key
+	// is then the synthetic SLACK-<channel>-<ts seconds> key, and starting
+	// a session triages the thread itself, with no tracker or helpdesk.
+	SlackOnly bool `json:"slackOnly,omitempty"`
+	// OtherRepos are the GitHub repositories the thread or the ticket names
+	// that are not this workspace's origin.
+	OtherRepos []string `json:"otherRepos,omitempty"`
+
 	// Mode, Instruction and Confidence are set only when nothing in the
 	// text was recognised and the model read it instead.
 	Mode        string  `json:"mode,omitempty"`
@@ -78,15 +88,47 @@ type Intake struct {
 	Confidence  float64 `json:"confidence,omitempty"`
 
 	thread *slack.Thread
+	reader SlackReader
+	// mentions is text read on the way that is not the thread — a tracker
+	// record's title and description — scanned for other repositories.
+	mentions string
 }
 
 // SlackMarkdown is the Slack thread this intake read, rendered for the
-// bundle's slack.md; empty when it read none.
+// bundle's slack.md; empty when it read none, and empty for a Slack-only
+// intake, whose thread is the bundle's conversation rather than an extra.
 func (in Intake) SlackMarkdown() string {
-	if in.thread == nil {
+	if in.thread == nil || in.SlackOnly {
 		return ""
 	}
 	return slack.Markdown(*in.thread)
+}
+
+// Reported is the bundle a Slack-only intake triages from, or nil for any
+// other intake.
+func (in Intake) Reported() *runner.ReportedBundle {
+	if !in.SlackOnly || in.thread == nil {
+		return nil
+	}
+	return reportedFor(*in.thread, in.Key, in.reader)
+}
+
+// slackOnlyUnread is why a file in a thread read through the Slack MCP is
+// not in the bundle.
+const slackOnlyUnread = "the thread was read through the Slack MCP, which gives no file access; set sources.slack.token to download it"
+
+// reportedFor builds the bundle a thread with no ticket is triaged from.
+// A Web API reader holds a token and downloads the files; any other reader
+// names them as unread.
+func reportedFor(th slack.Thread, key string, sr SlackReader) *runner.ReportedBundle {
+	rb := &runner.ReportedBundle{Bundle: th.Bundle(key), UnreadReason: slackOnlyUnread}
+	for _, f := range th.Files() {
+		rb.Files = append(rb.Files, runner.ReportedFile{Name: f.Name, URL: f.URL})
+	}
+	if c, ok := sr.(*slack.Client); ok {
+		rb.Download = c.Download
+	}
+	return rb
 }
 
 // SlackNotConfigured is the reason a Slack link gets in a workspace with no
@@ -211,6 +253,9 @@ type intakeResolver struct {
 	slackErr     error
 	cache        *intakeCache
 	fallback     func(ctx context.Context, text string) (ComposedIntent, error)
+	// origin is the workspace's GitHub origin as owner/repo, "" when it
+	// has none; nil asks nobody, and no repository is called foreign.
+	origin func(ctx context.Context) string
 }
 
 // recentLimit is how many of the tracker's newest tickets the last-resort
@@ -228,6 +273,14 @@ func (r *intakeResolver) resolve(ctx context.Context, text string) (Intake, erro
 	if len(text) > ComposeIntentMax {
 		text = text[:ComposeIntentMax]
 	}
+	// A Slack-only run's key typed outright is that run's key, not a
+	// tracker key hiding inside it (D0B81PGPWA0-1791100254 would read as
+	// one).
+	if slack.IsKey(text) {
+		in := Intake{Input: InputKey, Key: text}
+		in.Summary = intakeSummary(in)
+		return in, nil
+	}
 	refs := recognise(text)
 	if len(refs) == 0 {
 		return r.fromText(ctx, text)
@@ -236,8 +289,25 @@ func (r *intakeResolver) resolve(ctx context.Context, text string) (Intake, erro
 	if err != nil {
 		return in, err
 	}
+	in.OtherRepos = r.otherRepos(ctx, in)
 	in.Summary = intakeSummary(in)
 	return in, nil
+}
+
+// otherRepos is every GitHub repository the thread and the ticket read on
+// the way name that is not the workspace's origin.
+func (r *intakeResolver) otherRepos(ctx context.Context, in Intake) []string {
+	if r.origin == nil {
+		return nil
+	}
+	text := in.mentions
+	if in.thread != nil {
+		text += "\n" + strings.Join(in.thread.Texts(), "\n")
+	}
+	if !strings.Contains(strings.ToLower(text), "github.com") {
+		return nil
+	}
+	return ghrepo.Foreign(text, r.origin(ctx))
 }
 
 func (r *intakeResolver) fromRef(ctx context.Context, ref intakeRef) (Intake, error) {
@@ -267,6 +337,7 @@ func (r *intakeResolver) fromKey(ctx context.Context, kind, key string) Intake {
 		return in
 	}
 	in.Subject = tt.Title
+	in.mentions = tt.Title + "\n" + tt.Description
 	in.HelpdeskID = tt.HelpdeskRef
 	if m := titleNumber.FindStringSubmatch(tt.Title); m != nil {
 		in.HelpdeskNumber = m[1]
@@ -437,12 +508,13 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 		return in
 	}
 	in.thread = &th
+	in.reader = r.slack
 	in.Slack = &SlackIntake{URL: l.URL, Messages: len(th.Messages), Thread: th.IsThread}
 	label := "Slack message"
 	if th.IsThread {
 		label = "Slack thread"
 	}
-	reason := "the " + label + " names no ticket key, helpdesk number or helpdesk link"
+	plain := label
 	if v, ok := r.slack.(interface{ ViaMCP() bool }); ok && v.ViaMCP() {
 		label = "Slack (via MCP)"
 	}
@@ -456,7 +528,17 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 		}
 	}
 	if found == nil {
-		in.Reason = reason
+		// No ticket anywhere in it: the thread is the ticket. The run is
+		// filed under a key made from the channel and the thread's ts,
+		// and its bundle is built from the messages.
+		if len(th.Messages) == 0 {
+			in.Reason = "the " + plain + " has no messages to triage"
+			return in
+		}
+		in.Key = slack.KeyFor(l)
+		in.SlackOnly = true
+		in.Subject = slack.Title(th.Messages[0].Text)
+		in.Via = []IntakeStep{{From: plain, To: in.Key, How: "no ticket yet", Source: "slack"}}
 		return in
 	}
 	inner, err := r.fromRef(ctx, *found)
@@ -467,6 +549,7 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 	inner.Input = InputSlack
 	inner.Slack = in.Slack
 	inner.thread = in.thread
+	inner.reader = in.reader
 	first := IntakeStep{From: label, Source: "slack"}
 	switch found.kind {
 	case InputKey, InputTrackerURL:
@@ -510,6 +593,16 @@ func intakeSummary(in Intake) string {
 		return ""
 	}
 	var b strings.Builder
+	if in.SlackOnly && len(in.Via) > 0 {
+		// "Slack thread · no ticket yet · will triage the thread"
+		what := "the thread"
+		if in.Slack != nil && !in.Slack.Thread {
+			what = "the message"
+		}
+		b.WriteString(in.Via[0].From + " · no ticket yet · will triage " + what)
+		b.WriteString(reposNote(in.OtherRepos))
+		return b.String()
+	}
 	if len(in.Via) == 0 {
 		b.WriteString(in.Key)
 	} else {
@@ -528,7 +621,17 @@ func intakeSummary(in Intake) string {
 		b.WriteString(" · ")
 		b.WriteString(helpdeskLabel(in.HelpdeskNumber, in.HelpdeskID))
 	}
+	b.WriteString(reposNote(in.OtherRepos))
 	return b.String()
+}
+
+// reposNote is the chip's warning that the ticket's code may be elsewhere:
+// " · mentions acme-co/Billing.Service (not this workspace)".
+func reposNote(repos []string) string {
+	if len(repos) == 0 {
+		return ""
+	}
+	return " · mentions " + strings.Join(repos, ", ") + " (not this workspace)"
 }
 
 // helpdeskLabel is how a helpdesk ticket is named in a chip: its number

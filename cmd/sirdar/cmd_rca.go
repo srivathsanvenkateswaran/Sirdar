@@ -55,7 +55,7 @@ func cmdRCA(args []string, stdout, stderr io.Writer) int {
 
 	r := &runner.Runner{Deps: deps}
 	out, err := r.RCA(ctx, key, runner.RCAOptions{
-		Options:    runner.Options{Model: *model, NoNotify: *noNotify, At: *at, KeepWorktree: *keepWorktree, Slack: resolved.slack},
+		Options:    runner.Options{Model: *model, NoNotify: *noNotify, At: *at, KeepWorktree: *keepWorktree, Slack: resolved.slack, Reported: resolved.reported},
 		PRURL:      *prURL,
 		Resolution: text,
 	})

@@ -121,6 +121,16 @@ type Message struct {
 	// Titles are the titles of the message's attachments and files, which
 	// is where an unfurled helpdesk or tracker link puts the ticket's name.
 	Titles []string
+	// Files are the files posted with the message: a name, and the
+	// url_private a token can download it from when the reader was given
+	// one.
+	Files []File
+}
+
+// File is one file a message carries.
+type File struct {
+	Name string
+	URL  string
 }
 
 // Thread is what one read returns: the message the link points at and, when
@@ -276,8 +286,9 @@ type apiMessage struct {
 		Fallback string `json:"fallback"`
 	} `json:"attachments"`
 	Files []struct {
-		Title string `json:"title"`
-		Name  string `json:"name"`
+		Title      string `json:"title"`
+		Name       string `json:"name"`
+		URLPrivate string `json:"url_private"`
 	} `json:"files"`
 }
 
@@ -291,10 +302,17 @@ func (m apiMessage) message() Message {
 		}
 	}
 	for _, f := range m.Files {
+		name := strings.TrimSpace(f.Name)
 		if t := strings.TrimSpace(f.Title); t != "" {
 			out.Titles = append(out.Titles, t)
-		} else if n := strings.TrimSpace(f.Name); n != "" {
-			out.Titles = append(out.Titles, n)
+		} else if name != "" {
+			out.Titles = append(out.Titles, name)
+		}
+		if name == "" {
+			name = strings.TrimSpace(f.Title)
+		}
+		if name != "" {
+			out.Files = append(out.Files, File{Name: name, URL: f.URLPrivate})
 		}
 	}
 	return out
@@ -343,6 +361,45 @@ var trust = func() *httpx.Trust {
 	}
 	return t
 }()
+
+// fileTrust is where a message's url_private lives: files.slack.com, with
+// the token, and nowhere else.
+var fileTrust = func() *httpx.Trust {
+	t, err := httpx.NewTrust("https://files.slack.com")
+	if err != nil {
+		panic(err)
+	}
+	return t
+}()
+
+// Download saves one file a message carries — its url_private, which only a
+// token can read — to dest, refusing anything past max bytes. The token is
+// sent to files.slack.com only; a URL anywhere else is refused before a
+// request is made, and so is a redirect off that host.
+func (c *Client) Download(ctx context.Context, rawURL, dest string, max int64) error {
+	if strings.TrimSpace(c.Token) == "" {
+		return &source.Error{Code: source.Auth, Message: "slack: no token"}
+	}
+	if fetch, cred, reason := fileTrust.CheckRaw(rawURL); !fetch || !cred {
+		if reason == "" {
+			reason = "not a Slack file URL"
+		}
+		return &source.Error{Code: source.Internal, Message: "slack: refusing to download from " + httpx.HostOf(rawURL) + ": " + reason}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return &source.Error{Code: source.Internal, Message: "slack: download: " + err.Error()}
+	}
+	req.Header.Set("Authorization", "Bearer "+c.Token)
+	base := c.HTTP
+	if base == nil {
+		base = &http.Client{Timeout: 60 * time.Second}
+	}
+	if _, err := httpx.Download(ctx, httpx.Client(base, fileTrust, 0), req, dest, httpx.DownloadOptions{Max: max, RefuseHTML: true}); err != nil {
+		return &source.Error{Code: source.Internal, Message: "slack: download: " + err.Error()}
+	}
+	return nil
+}
 
 // call issues one Web API GET and decodes it into out, which must embed
 // envelope. A response with ok:false is an error carrying Slack's own error

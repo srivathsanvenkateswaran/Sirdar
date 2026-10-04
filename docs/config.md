@@ -472,8 +472,14 @@ sources:
 With no `sources.slack` but `slack` in `mcp.userServers` and `provider: claude`, a Slack
 link is read through the Slack MCP server the operator already has in Claude Code, and no
 token is needed. One short session does it: it sees that server and nothing else, may call
-only `mcp__slack__slack_read_*`, has four turns, and answers with the messages exactly as
-written and the ticket references in them. Those go the same way as the Web API path's:
+only `mcp__slack__slack_read_*`, has six turns, and answers with the messages exactly as
+written, the files they list, and the ticket references in them. It calls
+`slack_read_thread` first, with the channel id from the link (a direct message's `D…` id
+is a channel id like any other) and the dotted ts, and falls back to `slack_read_channel`
+only when that call errors, with `oldest` and `latest` one microsecond either side of the
+ts because that tool's bounds are exclusive. A reading that comes back with no messages
+fails with what the model said, or the last tool result, cut to 200 characters, rather
+than a bare "no message". Those go the same way as the Web API path's:
 the references are resolved onward, the messages become `slack.md`, and the chip says
 `Slack (via MCP) → #28310 → SBX-1 · matched by title`. The thread is kept in memory for
 half an hour, so resolving a link and then starting the run on it is one reading, not two.
@@ -488,6 +494,54 @@ configured: set sources.slack.token (a Slack user token with channels:history,
 groups:history) in config.yaml, or add `slack` to mcp.userServers". `sirdar doctor` has a
 `sources.slack` row that checks the token with `auth.test`, or says the MCP server reads
 Slack links.
+
+Every reading writes a transcript to `~/.sirdar/intake/<time>.jsonl` (on Linux,
+`$XDG_DATA_HOME/sirdar/intake/` when that is where Sirdar keeps its state): the request
+and its prompt, each tool call and result, and
+the outcome. It holds the message text the operator can already read in Slack and no
+credential. Files older than seven days are removed the next time a reading runs. With
+`SIRDAR_DEBUG=1` set, the exact `claude` command line a session starts with is printed to
+stderr, so a reading can be repeated by hand.
+
+### A Slack thread with no ticket
+
+A Slack thread that names no tracker key, helpdesk number or helpdesk link is a ticket of
+its own. The resolver gives it a synthetic key, `SLACK-<channel>-<seconds of the thread's
+ts>` (`SLACK-D0FAKEDM01-1791100254`), the chip reads `Slack thread · no ticket yet · will
+triage the thread`, and Enter, or `sirdar triage <link>`, starts a triage whose bundle is
+built from the thread with no tracker or helpdesk call:
+
+- the title is the first line of the first message, Slack markup removed, at most 80
+  characters;
+- the description is the first message as written, and its author is the reporter;
+- every message is the conversation (`thread.md`), with its author and time;
+- `Name: value` lines in the first message (`CompanyID: 4417`, `Domain: …`, `Expected: …`)
+  are listed as fields, and every URL in the thread as a link;
+- files posted in the thread are downloaded from `files.slack.com` with
+  `sources.slack.token` when there is one, under the same `attachments.maxBytes` and type
+  rules as a helpdesk's; read through the MCP server, which gives no file access, each is
+  named in the bundle as unread.
+
+`bundle/manifest.json` says `"source": "slack"` with the tracker and helpdesk `absent`, and
+the prompt's ticket section says the problem was reported in Slack, by whom, and that there
+is no ticket yet. The run, its note and its register row are filed under the synthetic key,
+and the Board card shows Slack's mark before it. `sirdar rca` takes the same link; a
+synthetic key typed on its own is passed through as a key, but a triage or RCA on it needs
+the link, since the thread is all there is to read.
+
+Moving such a run onto a tracker key once an issue is opened (`sirdar runs link RUN KEY`)
+is not built yet: the run directory, the filed notes' names and frontmatter, and the
+register row all carry the key. Until it is, start a fresh triage on the new key.
+
+### Another repository named in the ticket
+
+When a Slack thread or a tracker record names a GitHub repository that is not the
+workspace's `origin` — a pull request link into a sibling service, say — the chip adds
+`· mentions acme-co/Billing.Service (not this workspace)`, the run records a warning, and
+the triage and RCA prompts tell the session that the code it needs may live in that
+repository, that it cannot read it from here, and that a conclusion resting on it is an
+open question rather than a finding. Nothing reads the other repository. With no GitHub
+`origin` there is nothing to compare against and nothing is said.
 
 ## Built-in helpdesks
 

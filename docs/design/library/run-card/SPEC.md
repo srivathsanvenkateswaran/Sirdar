@@ -48,7 +48,12 @@ session's.
   or the helpdesk's `#25312` — is the caller's choice (`runKey`), made on
   Settings › General's "Sessions show"; `keyTitle` puts the other number,
   with its product's name, in the number's tooltip (on the title when the
-  number is the title).
+  number is the title). With `source` given — `slack` for a run triaged
+  straight from a Slack thread that named no ticket — a `xs` source mark
+  (`src/ui/source-mark`) comes first, `__who` carries `data-source`, and it
+  may shrink after all: such a key (`SLACK-<channel>-<ts>`) is long, so it is
+  the one cut with an ellipsis there, the whole key in its tooltip, and the
+  state word keeps its width (`:has()` on the foot).
 - `span.sd-avatar` — the assignee, as a 22px circle of their initials:
   `--sd-sunk` fill, 11px at weight 600 in `--sd-ink-2`, `dir="ltr"`, the whole
   name in `title`. One letter for a one-word name, two when the name has two
@@ -124,6 +129,11 @@ Contrast: title `--sd-ink` **17.44:1** on the sheet, key `--sd-ink-3`
 hover border transitions.
 
 ## Changelog
+
+### 2026-10-04 (slack-intake-2)
+`source`: an optional `{ adapter, name }` drawn as a source mark before the
+key. The board passes `slack` for a run whose ticket is a Slack thread with
+no tracker or helpdesk behind it; every other card is unchanged.
 
 ### 2026-09-17 (density)
 The card's padding goes to 10/12, the title to

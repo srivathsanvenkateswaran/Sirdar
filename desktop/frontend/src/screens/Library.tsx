@@ -683,6 +683,19 @@ export default function Library(): JSX.Element {
                 onOpen={() => {}}
               />
             </State>
+            <State label="From a Slack thread with no ticket">
+              <RunCard
+                runKey="SLACK-D0FAKEDM01-1791100254"
+                keyTitle="Slack thread SLACK-D0FAKEDM01-1791100254"
+                kind="triage"
+                status="completed"
+                title="Coupon totals are wrong on the receipt for one merchant"
+                provider="claude"
+                assignee="Sam Engineer"
+                source={{ adapter: 'slack', name: 'Slack' }}
+                onOpen={() => {}}
+              />
+            </State>
             <State label="No title from the tracker">
               <RunCard runKey="OMNI-2513" kind="eval" status="queued" provider="acp" onOpen={() => {}} />
             </State>

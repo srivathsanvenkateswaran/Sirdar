@@ -30,10 +30,19 @@ func TestMain(m *testing.M) {
 	testbin.Dispatch(map[string]func() int{
 		"probeadapter":  probeAdapterMain,
 		"intakeadapter": intakeAdapterMain,
-		"fake-whisper": fakeWhisperMain,
-		"fakemcp":      testbin.FakeMCP,
+		"fake-whisper":  fakeWhisperMain,
+		"fakemcp":       testbin.FakeMCP,
 	})
-	os.Exit(m.Run())
+	// A Slack MCP reading writes its transcript under the user dir; the
+	// tests' readings go to a directory of their own.
+	logs, err := os.MkdirTemp("", "sirdar-intake-logs")
+	if err != nil {
+		os.Exit(1)
+	}
+	intakeLogDir = func() (string, error) { return logs, nil }
+	code := m.Run()
+	os.RemoveAll(logs)
+	os.Exit(code)
 }
 
 // The workspace, the stub sources and the stub provider below are the
