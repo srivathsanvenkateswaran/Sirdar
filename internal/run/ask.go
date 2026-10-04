@@ -126,13 +126,26 @@ func decisionPrompt(ask provider.PermissionAsk, g provider.Grant, answer string)
 // freeAnswerPrompt is what the resumed session is told when the operator
 // answered a permission question in words rather than with a decision: the
 // call was not made, and here is what they said instead. No grant is
-// recorded, so the session may ask again.
+// recorded, so the session may ask again — but only by repeating the very
+// call, and only when the reply asks for it. Without that line a session
+// read "you can view" as leave to try `gh pr view` after `gh pr list`, then
+// `gh pr diff`, each one a new question that stopped the run, while the
+// operator kept typing replies that allowed nothing.
 func freeAnswerPrompt(ask *store.PermissionAsk, answer string) string {
 	call := ask.Summary
 	if ask.Kind == provider.AskMCP || call == "" {
 		call = ask.Tool
 	}
-	return "Your call `" + call + "` was not run. The operator answered instead: " + answer
+	var b strings.Builder
+	b.WriteString("Your call `" + call + "` was not run: the operator replied in words instead of allowing it, and only an allow lets it through. ")
+	b.WriteString("The operator's reply: " + answer + "\n\n")
+	b.WriteString("Do not retry it")
+	if len(ask.Patterns) > 0 {
+		b.WriteString(", or anything matching `" + strings.Join(ask.Patterns, "`, `") + "`,")
+	}
+	b.WriteString(" on your own: each attempt stops the run and asks the operator again. ")
+	b.WriteString("If the reply asks for that call, make exactly that call once more so the operator can allow it; otherwise carry on without it.")
+	return b.String()
 }
 
 // readDecision puts a permission question to the operator on the terminal

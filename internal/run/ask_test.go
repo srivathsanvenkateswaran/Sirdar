@@ -190,8 +190,11 @@ func TestResumeFreeAnswerToAPermission(t *testing.T) {
 	if len(out.State.Grants) != 0 {
 		t.Errorf("a free answer left a grant: %+v", out.State.Grants)
 	}
-	if spec.Prompt != "Your call `rg -n refund src` was not run. The operator answered instead: grep the logs instead" {
-		t.Errorf("prompt %q", spec.Prompt)
+	want := "Your call `rg -n refund src` was not run: the operator replied in words instead of allowing it, and only an allow lets it through. The operator's reply: grep the logs instead\n\n" +
+		"Do not retry it, or anything matching `rg *`, on your own: each attempt stops the run and asks the operator again. " +
+		"If the reply asks for that call, make exactly that call once more so the operator can allow it; otherwise carry on without it."
+	if spec.Prompt != want {
+		t.Errorf("prompt %q\nwant   %q", spec.Prompt, want)
 	}
 }
 
