@@ -161,6 +161,16 @@ const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
     text: 'العميل يقول SBX-1 لا يعمل',
     want: { key: 'SBX-1', instruction: 'العميل يقول لا يعمل', ambiguity: '' },
   },
+  {
+    name: 'a GitHub link stays in the instruction and sets no mode',
+    text: 'SBX-1 broke after https://github.com/acme/web/pull/828-fix',
+    want: { key: 'SBX-1', mode: '', instruction: 'broke after https://github.com/acme/web/pull/828-fix', ambiguity: '' },
+  },
+  {
+    name: 'a GitHub reference is not a helpdesk number',
+    text: 'SBX-1 since acme/Acme.Web#12345',
+    want: { key: 'SBX-1', helpdesk: '', instruction: 'since acme/Acme.Web#12345', ambiguity: '' },
+  },
 ]
 
 describe('parseIntent', () => {
