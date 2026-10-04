@@ -222,6 +222,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		Slack:               slackMD,
 		NotesLanguage:       cfg.NotesLanguage(),
 		CustomerLanguage:    cfg.CustomerLanguage(),
+		Repositories:        repositories(cfg, bundle, slackMD, p.state.Instruction),
 	}
 
 	switch kind {
