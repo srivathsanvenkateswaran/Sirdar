@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { QueuedSteer, RunKind } from '../../api/types'
+import type { QueuedSteer, RunKind, SessionAccess } from '../../api/types'
 import ChipMenu from '../composer/ChipMenu'
 import ComposerCard from '../composer/ComposerCard'
-import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder, steerable } from '../composer/modes'
+import { runningPlaceholder, steerable } from '../composer/modes'
+import { runModeItems, runModeTitle } from '../../lib/runMode'
 import ModelPicker from '../../ui/model-picker'
 import type { ModelCatalog } from '../../lib/modelCatalog'
 import QueuedSteers, { visibleQueuedSteers } from './QueuedSteers'
@@ -40,6 +41,8 @@ export interface ComposerProps {
   model: string
   /** The run's kind: the Mode chip's word, and what decides the Access chip's. */
   kind?: RunKind
+  /** A session's recorded access, so the Mode chip says the posture it ran under. */
+  access?: SessionAccess
   /** Clears the text once a send succeeded. Bump it. */
   sentCount: number
   /** Takes focus on mount: a blocked run's composer is already waiting to be typed into. */
@@ -109,6 +112,7 @@ export default function Composer({
   provider,
   model,
   kind,
+  access,
   sentCount,
   autoFocus = false,
   placeholder: ownPlaceholder,
@@ -212,7 +216,7 @@ export default function Composer({
             />
             {/* Access is what the mode does to the tree, so it is the mode
                 chip's second word rather than a chip of its own. */}
-            {kind ? <ChipMenu label="Mode" value={kind} items={MODES_WITH_ACCESS} readOnly={modeChipTitle(kind)} /> : null}
+            {kind ? <ChipMenu label="Mode" value={kind} items={runModeItems(kind, access)} readOnly={runModeTitle(kind, access)} /> : null}
           </>
         }
         aside={mode.kind === 'disabled' ? mode.reason : undefined}

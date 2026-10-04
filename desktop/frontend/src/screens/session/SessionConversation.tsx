@@ -18,6 +18,7 @@ import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
 import { LIVE, TERMINAL, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
+import FiledNoteRow, { SaveNoteRow } from '../../components/session/FiledNoteRow'
 import LiveActivity from '../../components/session/LiveActivity'
 import ModelLimitBanner from '../../components/session/ModelLimitBanner'
 import { askedQuestion, modelLimited, notePathFor } from '../../lib/events'
@@ -26,6 +27,7 @@ import { evidenceOf } from '../../components/session/model'
 import { reasonOf, tokens, usd } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
 import { probeRender } from '../../lib/renderProbe'
+import { isReplyRun } from '../../lib/replyRun'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import PanelToggle from '../../ui/panel-toggle'
 import ProviderMark from '../../ui/provider-mark'
@@ -149,6 +151,9 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const [paneOpen, setPaneOpen] = useState(() => !readStoredFlag(PANE_COLLAPSED_KEY))
   const [pending, setPending] = useState('')
   const [actionError, setActionError] = useState('')
+  /** Update note's own state: it answers in the filed-note row, not the composer. */
+  const [noteUpdating, setNoteUpdating] = useState(false)
+  const [noteError, setNoteError] = useState('')
   const [steerRefusal, setSteerRefusal] = useState('')
   /** Steers this window queued on the working run, until the run's record carries them. */
   const [localQueued, setLocalQueued] = useState<QueuedSteer[]>([])
@@ -190,9 +195,12 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const terminal = TERMINAL.has(status)
   const blocked = status === 'blocked'
   const isFix = detail?.kind === 'fix'
+  const replyRun = isReplyRun(detail)
 
   useEffect(() => {
     setActionError('')
+    setNoteUpdating(false)
+    setNoteError('')
     setSteerRefusal('')
     setTab(null)
     setChanged(null)
@@ -421,6 +429,25 @@ export default function SessionConversation(props: SessionConversationProps): JS
     }
   }, [jobId, transport, runId])
 
+  /** Files a reply run's note again: one note turn, under a job the shell tracks. */
+  const updateNote = useCallback(async () => {
+    setNoteUpdating(true)
+    setNoteError('')
+    try {
+      const started = await transport.updateNote(workspaceId, runId)
+      if (started?.jobId) setRunJob(runId, started.jobId)
+    } catch (err: unknown) {
+      setNoteError(withoutCode(err))
+    } finally {
+      setNoteUpdating(false)
+    }
+  }, [transport, workspaceId, runId])
+
+  const openNote = useCallback(() => {
+    setTab('note')
+    setPane(true)
+  }, [setPane])
+
   const question = detail?.question?.text ?? askedQuestion(detail?.reason)
   /** The permission question, when that is what the run is waiting on. */
   const ask = blocked ? detail?.question?.decision : undefined
@@ -557,6 +584,13 @@ export default function SessionConversation(props: SessionConversationProps): JS
           <div key={item.index} className="sc-agent" data-item={item.index} data-testid="assistant-message">
             <ProviderMark provider={detail.provider} size="sm" />
             <ChatMarkdown className="sc-agent__say">{item.text}</ChatMarkdown>
+          </div>
+        )
+      case 'reply':
+        return (
+          <div key={item.index} className="sc-agent sc-reply" data-item={item.index} data-testid="assistant-reply">
+            <ProviderMark provider={detail.provider} size="sm" />
+            <ChatMarkdown className="sc-agent__say sc-reply__md">{item.text}</ChatMarkdown>
           </div>
         )
       case 'answer':
@@ -723,6 +757,20 @@ export default function SessionConversation(props: SessionConversationProps): JS
     )
   }
 
+  /*
+   * The line under a reply run's replies: where a triage or RCA note went,
+   * or, for a session, the offer to keep the reply as a note. Neither is
+   * drawn while the run works; the activity line speaks for it then.
+   */
+  const noteRow = (): JSX.Element | null => {
+    if (detail.kind === 'session') {
+      if (status !== 'completed') return null
+      return <SaveNoteRow key={runId} onSave={() => transport.saveNote(workspaceId, runId)} />
+    }
+    if (detail.kind !== 'triage' && detail.kind !== 'rca') return null
+    return <FiledNoteRow run={detail} onOpenNote={openNote} onUpdateNote={updateNote} updating={noteUpdating} error={noteError} />
+  }
+
   return (
     <div className="sc" data-layout="conversation">
       <span className="visually-hidden" aria-live="polite">
@@ -757,6 +805,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               ) : (
                 rows
               )}
+              {replyRun && !live ? noteRow() : null}
               {blocked ? (
                 <AskCard
                   question={question}
@@ -788,7 +837,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                 }}
               />
             ) : null}
-            <LiveActivity events={events} working={status === 'running'} />
+            <LiveActivity events={events} working={status === 'running'} phase={detail.phase} />
             <Composer
               mode={mode}
               busy={sendBusy}
@@ -797,6 +846,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               provider={detail.provider}
               model={detail.model || model.start?.model || ''}
               kind={detail.kind}
+              access={detail.access}
               sentCount={sent}
               autoFocus={mode.kind === 'answer'}
               placeholder={placeholder}

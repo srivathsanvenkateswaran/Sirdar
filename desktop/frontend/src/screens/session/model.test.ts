@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { IndexedEvent } from '../../lib/events'
-import { FIX_DETAIL, TRIAGE_DETAIL, fixEvents, triageEvents } from './fixtures'
+import type { RunDetail, RunEvent } from '../../api/types'
+import { FIX_DETAIL, ROOT, TRIAGE_DETAIL, call, fixEvents, init, triageEvents } from './fixtures'
 import { buildSessionModel, callForRef, relativeTo, shortenPaths } from './model'
 import { clock, exitCodeOf, formatBytes, formatMs, shapeOutput, sizeOf } from './shape'
 
@@ -172,6 +173,85 @@ describe('the session model', () => {
 
   it('is empty for nothing', () => {
     expect(buildSessionModel([], null).items).toEqual([])
+  })
+})
+
+describe('a reply run', () => {
+  const START = '2026-10-04T10:15:00Z'
+  const t = (s: number) => new Date(Date.parse(START) + s * 1000).toISOString()
+  const SESSION: RunDetail = {
+    ...TRIAGE_DETAIL,
+    runId: '20261004T101500Z-ab12',
+    key: 'ASK-20261004-why-is-the-refund-for',
+    kind: 'session',
+    access: 'read-only',
+    replyFirst: true,
+    startedAt: START,
+    updatedAt: t(60),
+    notes: [],
+  }
+  const text = (s: number, body: string, extra: Record<string, unknown> = {}): RunEvent => ({ t: t(s), kind: 'assistant_text', payload: { text: body, ...extra } })
+  const final = (s: number, body: string, phase?: 'note'): RunEvent => ({ t: t(s), kind: 'final', payload: { text: body, ...(phase ? { phase } : {}) } })
+  const REPLY = '**The refund is stuck.**\n\n- ledger.go:33'
+
+  it('draws a reply run’s final as a reply', () => {
+    const m = buildSessionModel(indexed([init(t(1), ROOT), final(30, REPLY)]), SESSION)
+    const replies = m.items.filter((i) => i.kind === 'reply')
+    expect(replies).toHaveLength(1)
+    expect(replies[0]).toMatchObject({ kind: 'reply', text: REPLY, at: '00:30' })
+    expect(m.items.some((i) => i.kind === 'answer')).toBe(false)
+    expect(m.answerIndex).toBe(replies[0].index)
+  })
+
+  it('says the session’s access on the start line', () => {
+    const m = buildSessionModel(indexed([init(t(1), ROOT), final(30, REPLY)]), { ...SESSION, access: 'worktree' })
+    const first = m.items[0]
+    const words = first.kind === 'sys' ? first.parts.map((p) => (typeof p === 'string' ? p : p.b)).join('') : ''
+    expect(words).toContain(' · session · worktree')
+  })
+
+  it('folds the streamed message into the reply', () => {
+    const m = buildSessionModel(indexed([init(t(1), ROOT), text(29, REPLY, { replace: true }), final(30, `${REPLY}\n`)]), SESSION)
+    const said = m.items.filter((i) => i.kind === 'say' || i.kind === 'reply')
+    expect(said).toHaveLength(1)
+    expect(said[0]).toMatchObject({ kind: 'reply', text: REPLY })
+  })
+
+  it('keeps every reply', () => {
+    const events = [
+      init(t(1), ROOT),
+      final(30, 'The refund is stuck on the ledger lock.'),
+      { t: t(40), kind: 'steer', payload: { text: 'Was it the PR?', continuation: 'resume' } },
+      final(50, 'No: the lock predates the PR.'),
+    ]
+    const m = buildSessionModel(indexed(events), SESSION)
+    const replies = m.items.filter((i) => i.kind === 'reply')
+    expect(replies.map((r) => r.kind === 'reply' && r.text)).toEqual(['The refund is stuck on the ledger lock.', 'No: the lock predates the PR.'])
+    expect(m.answerIndex).toBe(replies[1].index)
+  })
+
+  it('skips note-phase events', () => {
+    const triage: RunDetail = { ...TRIAGE_DETAIL, replyFirst: true }
+    const reply = buildSessionModel(indexed([init(t(1), ROOT), final(30, REPLY)]), triage)
+    const withNote = buildSessionModel(
+      indexed([
+        init(t(1), ROOT),
+        final(30, REPLY),
+        { t: t(31), kind: 'system', payload: { text: 'Filing the note', phase: 'note' } },
+        ...call(t(32), 'Read', { file_path: `${ROOT}/answer.md` }, { t: t(40), text: 'ok' }).map((e) => ({ ...e, payload: { ...e.payload, phase: 'note' as const } })),
+        final(41, '{"summary":"x"}', 'note'),
+      ]),
+      triage,
+    )
+    expect(withNote.items.map((i) => i.kind)).toEqual(reply.items.map((i) => i.kind))
+    expect(withNote.calls).toHaveLength(0)
+    expect(withNote.answerIndex).toBe(reply.answerIndex)
+  })
+
+  it('keeps structured answers on older runs', () => {
+    const m = buildSessionModel(indexed(triageEvents()), TRIAGE_DETAIL)
+    expect(m.items.some((i) => i.kind === 'reply')).toBe(false)
+    expect(m.items.filter((i) => i.kind === 'answer')).toHaveLength(2)
   })
 })
 

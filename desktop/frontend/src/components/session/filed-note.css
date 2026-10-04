@@ -1,0 +1,52 @@
+/*
+ * The filed-note row under a reply, and the Save as note row under a
+ * session's: one meta-sized line in the second ink, the actions as the
+ * quiet text buttons the transcript already uses. It sits under the reply
+ * it belongs to, so its inline start lines up with the reply's text, past
+ * the provider mark.
+ */
+
+.sd-filed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  padding-inline-start: calc(22px + var(--sd-space-3));
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+}
+
+.sd-filed__btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 500;
+  color: var(--sd-accent);
+  cursor: pointer;
+  unicode-bidi: isolate;
+}
+
+.sd-filed__btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.sd-filed__btn:disabled {
+  cursor: default;
+  color: var(--sd-ink-3);
+}
+
+.sd-filed__btn--quiet {
+  font-weight: 400;
+  color: var(--sd-ink-3);
+}
+
+.sd-filed__btn--quiet:hover:not(:disabled) {
+  color: var(--sd-accent);
+}
+
+.sd-filed__error {
+  color: var(--sd-st-failed);
+}

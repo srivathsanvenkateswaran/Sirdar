@@ -233,6 +233,14 @@
   margin-block-end: 0;
 }
 
+/*
+ * The filed-note row belongs to the reply above it, so it sits closer to
+ * that reply than the flow's own gap puts one row to the next.
+ */
+.sc-reply + .sd-filed {
+  margin-block-start: calc(-1 * var(--sd-space-2));
+}
+
 /* A stamp with no card: thinking, writing the answer. */
 .sc-think {
   display: flex;

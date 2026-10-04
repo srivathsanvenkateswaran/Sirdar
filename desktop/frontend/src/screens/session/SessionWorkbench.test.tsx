@@ -670,4 +670,21 @@ describe('SessionWorkbench', () => {
       expect(await screen.findByTestId('session-workbench')).toBeInTheDocument()
     })
   })
+
+  describe('a reply run', () => {
+    it('shows the newest reply as markdown in the Answer tab', async () => {
+      const detail: RunDetail = { ...TRIAGE_RUN, kind: 'session', replyFirst: true, access: 'worktree', notes: [] }
+      const events: RunEvent[] = [
+        { t: '2026-10-04T10:15:30Z', kind: 'final', payload: { text: 'An older reply.' } },
+        { t: '2026-10-04T10:16:30Z', kind: 'final', payload: { text: '**The refund is stuck.**' } },
+      ]
+      const f = fake({ detail, events, note: '' })
+      renderWorkbench(f, detail)
+      await screen.findByTestId('session-workbench')
+      const tab = await screen.findByRole('tabpanel', { name: 'Answer' })
+      await waitFor(() => expect(tab.querySelector('strong')).toHaveTextContent('The refund is stuck.'))
+      expect(tab).not.toHaveTextContent('An older reply.')
+      expect(within(commandBar()).getByText(/session · writes in worktree/i)).toBeInTheDocument()
+    })
+  })
 })

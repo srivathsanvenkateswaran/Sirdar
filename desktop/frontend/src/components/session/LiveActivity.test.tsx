@@ -82,6 +82,34 @@ describe('LiveActivity', () => {
     expect(screen.getByTestId('live-activity')).toHaveTextContent(/No output for 2:0\d/)
   })
 
+  it('says the note is being filed during the note phase', () => {
+    vi.setSystemTime(at('31:00'))
+    const events = [
+      stream('30:40', { type: 'message_start' }),
+      blockStart('30:40', 0, { type: 'tool_use', name: 'StructuredOutput' }),
+      json('30:50', 0, '{"summary":"x"}'),
+    ]
+    render(<LiveActivity events={events} working={true} phase="note" />)
+    const line = screen.getByRole('status')
+    expect(line).toHaveAttribute('data-what', 'note')
+    expect(line).toHaveTextContent('Filing the note…')
+    expect(line).not.toHaveTextContent('Writing the answer')
+    expect(line).toHaveTextContent('0:20')
+  })
+
+  it('says the note is being filed before the note turn has written a line', () => {
+    vi.setSystemTime(at('31:00'))
+    render(<LiveActivity events={[]} working={true} phase="note" />)
+    const line = screen.getByRole('status')
+    expect(line).toHaveAttribute('data-what', 'note')
+    expect(line).toHaveTextContent(/^Filing the note…$/)
+  })
+
+  it('says nothing of the note once the run stops working', () => {
+    render(<LiveActivity events={[]} working={false} phase="note" />)
+    expect(screen.queryByTestId('live-activity')).toBeNull()
+  })
+
   it('updates the label when a new event arrives', () => {
     vi.setSystemTime(at('28:50'))
     const base = [blockStart('28:20', 0, { type: 'tool_use', name: 'mcp__metabase__run_query' })]

@@ -11,7 +11,9 @@ import {
   TRIAGE_DETAIL,
   TRIAGE_NOTE,
   TRIAGE_PROMPT,
+  ROOT,
   fixEvents,
+  init,
   triageEvents,
 } from './fixtures'
 import Session from '../Session'
@@ -884,6 +886,89 @@ describe('SessionConversation', () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
       })
       expect(onBack).toHaveBeenCalled()
+    })
+  })
+
+  describe('a reply run', () => {
+    const START = '2026-10-04T10:15:00Z'
+    const t = (sec: number) => new Date(Date.parse(START) + sec * 1000).toISOString()
+    const REPLY = '**The refund is stuck.**\n\n- ledger.go:33'
+    const replyEvents = (): RunEvent[] => [init(t(1), ROOT), { t: t(30), kind: 'final', payload: { text: REPLY } }]
+    const SESSION: RunDetail = {
+      ...TRIAGE_DETAIL,
+      runId: 'run-session-1',
+      key: 'ASK-20261004-why-is-the-refund-for',
+      title: 'Why is the refund for order 1234 stuck in pending?',
+      kind: 'session',
+      access: 'read-only',
+      replyFirst: true,
+      startedAt: START,
+      updatedAt: t(31),
+      notes: [],
+    }
+    const TRIAGE: RunDetail = {
+      ...TRIAGE_DETAIL,
+      runId: '20261004T101500Z-ab12',
+      key: 'OMNI-1',
+      replyFirst: true,
+      status: 'completed',
+      startedAt: START,
+      updatedAt: t(60),
+      notes: ['/run/note.md', '/notes/OMNI-1 refund-stuck.md'],
+    }
+
+    it('renders a session reply as markdown', async () => {
+      const f = fake({ detail: SESSION, events: replyEvents() })
+      renderScene(f, { runId: SESSION.runId })
+      const reply = await screen.findByTestId('assistant-reply')
+      expect(reply.querySelector('strong')).toHaveTextContent('The refund is stuck.')
+      expect(within(reply).getByText('ledger.go:33')).toBeInTheDocument()
+      expect(screen.queryByTestId('answer-card')).toBeNull()
+    })
+
+    it('shows the filed note under a triage reply', async () => {
+      const f = fake({ detail: TRIAGE, events: replyEvents() })
+      renderScene(f, { runId: TRIAGE.runId })
+      const row = await screen.findByTestId('filed-note')
+      expect(row).toHaveTextContent('Filed as a note →')
+      expect(within(row).getByRole('button', { name: 'OMNI-1 refund-stuck' })).toBeInTheDocument()
+      fireEvent.click(within(row).getByRole('button', { name: 'OMNI-1 refund-stuck' }))
+      expect(screen.getByRole('tab', { name: 'Note' })).toHaveAttribute('aria-selected', 'true')
+    })
+
+    it('offers Update note when the note did not file', async () => {
+      const f = fake({ detail: { ...TRIAGE, notes: ['/run/note.md'], noteWarning: 'note not filed: schema validation failed twice: x' }, events: replyEvents() })
+      renderScene(f, { runId: TRIAGE.runId })
+      const row = await screen.findByTestId('filed-note')
+      expect(row).toHaveTextContent('Note not filed: schema validation failed twice: x')
+      fireEvent.click(within(row).getByRole('button', { name: 'Update note' }))
+      await waitFor(() => expect(f.transport.calls.updateNote).toEqual([{ ws: 'ws1', runId: TRIAGE.runId }]))
+    })
+
+    it('saves a session reply as a note', async () => {
+      const f = fake({ detail: SESSION, events: replyEvents() })
+      renderScene(f, { runId: SESSION.runId })
+      fireEvent.click(await screen.findByRole('button', { name: 'Save as note' }))
+      await waitFor(() => expect(screen.getByTestId('save-note')).toHaveTextContent('Saved → run-session-1'))
+      expect(f.transport.calls.saveNote).toEqual([{ ws: 'ws1', runId: 'run-session-1' }])
+      expect(screen.getByRole('button', { name: 'Save again' })).toBeInTheDocument()
+    })
+
+    it('labels a worktree session’s Mode chip with the access it ran under', async () => {
+      const f = fake({ detail: { ...SESSION, access: 'worktree' }, events: replyEvents() })
+      renderScene(f, { runId: SESSION.runId })
+      await screen.findByTestId('assistant-reply')
+      expect(within(screen.getByRole('form')).getByText(/Session · writes in worktree/)).toBeInTheDocument()
+    })
+
+    it('says the note is being filed', async () => {
+      const f = fake({ detail: { ...TRIAGE, status: 'running', phase: 'note' }, events: replyEvents() })
+      renderScene(f, { runId: TRIAGE.runId })
+      await screen.findByTestId('assistant-reply')
+      const line = screen.getAllByRole('status').find((el) => el.textContent?.includes('Filing the note…'))
+      expect(line).toBeDefined()
+      expect(line).toHaveAttribute('data-what', 'note')
+      expect(screen.queryByTestId('filed-note')).toBeNull()
     })
   })
 })

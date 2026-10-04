@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import ChatMarkdown from '../../components/markdown/ChatMarkdown'
 import AnswerCard from '../../components/session/AnswerCard'
 import BundlePane from '../../components/session/BundlePane'
 import ChangesView from '../../components/session/ChangesView'
@@ -12,6 +13,7 @@ import { rowsOf } from '../../components/session/toolRows'
 import { PathList } from '../../components/session/TurnGroup'
 import { markersForStep, parseRefs } from '../../lib/evidence'
 import { costOrUnknown } from '../../lib/format'
+import { isReplyRun, latestReply } from '../../lib/replyRun'
 import { noteName } from '../../lib/review'
 import Button from '../../ui/button'
 import Drawer from '../../ui/drawer'
@@ -55,6 +57,8 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
   const pathRef = useRef<HTMLDivElement | null>(null)
   const docRef = useRef<HTMLDivElement | null>(null)
   const isFix = detail.kind === 'fix'
+  const replyRun = isReplyRun(detail)
+  const reply = useMemo(() => (replyRun ? latestReply(events.map((e) => e.event)) : ''), [replyRun, events])
   const toolRows = useMemo(() => rowsOf(model.steps), [model.steps])
   // Only the desktop shell can reveal a folder, so a browser gets no item
   // at all and the pane never shows a path it cannot act on.
@@ -188,6 +192,14 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
         contact={contact}
       />
     )
+  } else if (replyRun && reply) {
+    // A reply run answers in markdown: its newest reply is the document
+    // until a note is filed, and a session never files one.
+    document = (
+      <article className="sn-note" data-testid="document-reply">
+        <ChatMarkdown>{reply}</ChatMarkdown>
+      </article>
+    )
   } else if (model.answer) {
     // The answer arrived but the note has not been filed (or could not be read): the answer is the document.
     document = (
@@ -307,7 +319,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
           <div className="sn-doc__scroll sn-scroll" ref={docRef}>
             {document}
           </div>
-          <LiveActivity events={events} working={detail.status === 'running'} />
+          <LiveActivity events={events} working={detail.status === 'running'} phase={detail.phase} />
           <ComposerStrip
             state={composerState}
             detail={named}

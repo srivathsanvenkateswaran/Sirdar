@@ -10,12 +10,14 @@ import {
 } from 'react'
 import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport, Verdict } from '../../api/types'
 import type { ComposerMode } from '../../components/run/Composer'
+import ChatMarkdown from '../../components/markdown/ChatMarkdown'
 import DecisionBar from '../../components/session/DecisionBar'
 import LiveActivity from '../../components/session/LiveActivity'
 import { LIVE, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { parseTime, reasonOf } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
+import { isReplyRun, latestReply } from '../../lib/replyRun'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import { stateWord } from '../../ui/status-badge'
 import ActivityRail from './workbench/ActivityRail'
@@ -233,6 +235,9 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     return ''
   }, [runEvents])
   const answer = isFix ? undefined : session.answer
+  // A reply run answers in markdown; the Answer tab shows its newest reply.
+  const replyRun = isReplyRun(detail)
+  const replyText = useMemo(() => (replyRun ? latestReply(runEvents) : ''), [replyRun, runEvents])
   // E1…En off the answer's evidence, on the calls that produced each item.
   const markers = useMemo(
     () => deriveEvidenceMarkers(evidenceOf(answer), rows.filter((r) => r.call).map((r) => stepLikeOf(r.index, r.call!.started.event))),
@@ -271,7 +276,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     [rail],
   )
 
-  const shownTab: Tab = tab ?? (isFix ? 'diff' : answer ? 'answer' : 'note')
+  const shownTab: Tab = tab ?? (isFix ? 'diff' : answer || replyText ? 'answer' : 'note')
   // state.json records the model only when the config names one; the
   // provider names it on its init line and on every assistant line.
   const model = detail?.model || session.start?.model || modelOf(events)
@@ -461,7 +466,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
       : `Follow up — the run resumes from turn ${turns}${isFix ? ' in the same worktree' : ' with the note in context'}`
 
   const tabs: { id: Tab; label: string; n?: string; off?: boolean }[] = [
-    { id: 'answer', label: 'Answer', off: !answer && !report && !answerText },
+    { id: 'answer', label: 'Answer', off: replyRun ? !replyText : !answer && !report && !answerText },
     { id: 'note', label: 'Note', n: noteCount === null ? (isFix ? undefined : noteKinds[0]) : noteCount === 0 ? 'none' : noteCount > 1 ? String(noteCount) : noteKinds[0] || undefined },
     { id: 'diff', label: 'Diff', n: diffFiles !== null ? String(diffFiles) : undefined, off: !isFix },
     { id: 'bundle', label: 'Bundle', n: bundle ? `ticket · ${bundle.thread.length}` : undefined },
@@ -550,7 +555,13 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
 
           {maximised ? null : (
             <div className="wb-docarea" role="tabpanel" aria-label={tabs[tabIndex].label}>
-              {shownTab === 'answer' ? <AnswerCard variant="document" answer={answer} text={answerText} report={report} onRef={findInConsole} /> : null}
+              {shownTab === 'answer' ? (
+                replyRun ? (
+                  <ChatMarkdown className="wb-reply">{replyText}</ChatMarkdown>
+                ) : (
+                  <AnswerCard variant="document" answer={answer} text={answerText} report={report} onRef={findInConsole} />
+                )
+              ) : null}
               {shownTab === 'note' ? (
                 <NoteDocument
                   transport={transport}
@@ -628,7 +639,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
             onVisibleTurns={setVisibleTurns}
           />
 
-          <LiveActivity events={events} working={status === 'running'} />
+          <LiveActivity events={events} working={status === 'running'} phase={detail.phase} />
           {ask ? (
             <div className="wb-decide">
               <DecisionBar ask={ask} busy={sendBusy} onDecide={(verdict, reason) => void decide(verdict, reason)} />
@@ -645,6 +656,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
             provider={detail.provider}
             model={model}
             kind={detail.kind}
+            access={detail.access}
             sentCount={sent}
             placeholder={placeholder}
             prefill={prefill}

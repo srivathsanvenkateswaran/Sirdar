@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { PermissionDecision, RunDetail } from '../../api/types'
 import ChipMenu from '../composer/ChipMenu'
 import ComposerCard from '../composer/ComposerCard'
-import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder } from '../composer/modes'
+import { runningPlaceholder } from '../composer/modes'
+import { runModeItems, runModeTitle } from '../../lib/runMode'
 import ProviderMark from '../../ui/provider-mark'
 import DecisionBar from './DecisionBar'
 import { QuestionIcon } from './icons'
@@ -175,7 +176,7 @@ export default function ComposerStrip({
                 </span>
                 {/* Access is what the mode does to the tree, so it rides in
                     the Mode chip rather than taking a chip of its own. */}
-                <ChipMenu label="Mode" value={detail.kind} items={MODES_WITH_ACCESS} readOnly={modeChipTitle(detail.kind)} />
+                <ChipMenu label="Mode" value={detail.kind} items={runModeItems(detail.kind, detail.access)} readOnly={runModeTitle(detail.kind, detail.access)} />
               </>
             ) : null}
           </>

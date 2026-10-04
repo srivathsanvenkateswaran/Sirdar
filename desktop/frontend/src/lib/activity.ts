@@ -18,6 +18,9 @@ export const STALL_MS = 120_000
  * - `tool`: a call started and has not returned.
  * - `waiting`: none of those; the last line was the run's, and the model
  *   has not answered yet.
+ * - `note`: a reply-first run has replied and is filing its note. The log
+ *   cannot say this — the run's summary does — so `duringNote` lays it over
+ *   whatever the tail read.
  *
  * `since` is when that began, for the line's timer — it can be a minute or
  * more into a long answer stream. `silentSince` is the last event's own
@@ -26,7 +29,7 @@ export const STALL_MS = 120_000
  * silence that follows it, and the two must not be conflated.
  */
 export interface Activity {
-  what: 'answer' | 'thinking' | 'preparing' | 'tool' | 'waiting'
+  what: 'answer' | 'thinking' | 'preparing' | 'tool' | 'waiting' | 'note'
   label: string
   since: number
   silentSince: number
@@ -138,4 +141,17 @@ export function currentActivity(events: IndexedEvent[], now: number): Activity |
   const parsed = readActivity(events)
   if (!parsed) return undefined
   return { ...parsed, stalled: now - parsed.silentSince > STALL_MS }
+}
+
+/** What the activity line says while a reply-first run files its note. */
+export const NOTE_LABEL = 'Filing the note…'
+
+/**
+ * The tail's reading, said as the note being filed. The chat already holds
+ * the reply, so "Writing the answer" over the note's JSON would read as a
+ * second answer on its way; the timer and the size still come from the
+ * tail, since how long the note has been streaming is worth knowing.
+ */
+export function duringNote(parsed: ParsedActivity): ParsedActivity {
+  return { ...parsed, what: 'note', label: NOTE_LABEL }
 }

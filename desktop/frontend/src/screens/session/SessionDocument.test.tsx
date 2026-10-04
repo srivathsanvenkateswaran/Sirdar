@@ -14,6 +14,7 @@ import {
   FIX_START,
   fixFixture,
   TRIAGE_RUN_ID,
+  TRIAGE_START,
   triageFixture,
   type SessionFixture,
 } from '../../store/fakeSession'
@@ -420,5 +421,17 @@ describe('the frame', () => {
     expect(onBack).toHaveBeenCalledTimes(1)
     fireEvent.click(within(head()).getByRole('radio', { name: 'Workbench' }))
     expect(localStorage.getItem('sirdar.sessionLayout')).toBe('workbench')
+  })
+})
+
+describe('a reply run', () => {
+  it('makes the newest reply the document', async () => {
+    const fixture = triageFixture({ kind: 'session', replyFirst: true, notes: [] })
+    fixture.note = ''
+    fixture.events = [{ t: at(TRIAGE_START, 30), kind: 'final', payload: { text: '**The refund is stuck.**\n\n- ledger.go:33' } }]
+    mount([fixture], TRIAGE_RUN_ID)
+    const doc = await screen.findByTestId('document-reply')
+    expect(doc.querySelector('strong')).toHaveTextContent('The refund is stuck.')
+    expect(screen.queryByTestId('answer-card')).toBeNull()
   })
 })

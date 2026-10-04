@@ -18,6 +18,7 @@ import {
   type ToolCall,
 } from '../../lib/events'
 import { parseTime } from '../../lib/format'
+import { isReplyRun } from '../../lib/replyRun'
 import { checksFromEvents, fixReport, type FixReport, type RunCheck } from '../../lib/review'
 import { clock, exitCodeOf, sizeOf, type Size } from './shape'
 
@@ -93,6 +94,11 @@ export type ChatItem =
   | { kind: 'you'; index: number; text: string; at: string; continuation?: string; turn?: number }
   /** The model's prose. */
   | { kind: 'say'; index: number; text: string; at: string }
+  /**
+   * A reply run's answer in chat: markdown, verdict first. Every reply
+   * stays as it was written; a later one does not supersede it.
+   */
+  | { kind: 'reply'; index: number; text: string; at: string }
   /** A `final` event. Every one but the last is `superseded`. */
   | { kind: 'answer'; index: number; event: RunEvent; at: string; superseded: boolean; revised: boolean; seconds?: number }
   | { kind: 'error'; index: number; text: string; at: string }
@@ -287,6 +293,8 @@ class SessionBuilder {
 
   private readonly detail: RunDetail | null
   private readonly startedAt: string | undefined
+  /** The run answers in chat: its finals are replies, and its note turn is not drawn. */
+  private readonly replies: boolean
 
   private items: ChatItem[] = []
   private calls: StepCall[] = []
@@ -321,6 +329,8 @@ class SessionBuilder {
   private lastT = ''
   /** Where each answer item sits, so the answers a steer superseded are marked. */
   private answers: number[] = []
+  /** Where the newest reply item sits, on a reply run. */
+  private lastReply = -1
 
   // --- what the snapshot hands back, rebuilt only when it has to
   private itemsOut: ChatItem[] = []
@@ -336,12 +346,18 @@ class SessionBuilder {
   constructor(detail: RunDetail | null) {
     this.detail = detail
     this.startedAt = detail?.startedAt
+    this.replies = isReplyRun(detail)
   }
 
   /** Consumes one event, updating whichever rows it changes. */
   push(row: IndexedEvent): void {
     this.count += 1
     const event = row.event
+    // The note turn files the note in the background; the chat already has
+    // the reply, and the filed-note row under it is drawn off the summary.
+    // So none of its lines is a row, a call or a stamp, and none of them
+    // feeds the answer the whole-log reads parse.
+    if (this.replies && event.payload?.phase === 'note') return
     this.runEvents.push(event)
     this.lastT = event.t
     if (DERIVED_FROM.has(event.kind)) this.derived = null
@@ -525,6 +541,10 @@ class SessionBuilder {
         return
       case 'final': {
         this.flush(event.t)
+        if (this.replies) {
+          this.reply(row)
+          return
+        }
         // A session that stopped without answering — a resume that blocked
         // on a permission question, an interrupt — ends with an empty
         // result. Once the run has an answer, that is not a revision of it.
@@ -604,7 +624,8 @@ class SessionBuilder {
           const words: (string | { b: string })[] = ['Run started ', { b: this.start.at || '00:00' }]
           if (detail?.provider) words.push(` · ${detail.provider}`)
           if (this.start.model) words.push(` · ${this.start.model}`)
-          if (detail?.kind) words.push(` · ${detail.kind}`, detail.kind === 'fix' ? ' · worktree' : ' · read-only')
+          if (detail?.kind === 'session') words.push(' · session', ` · ${detail.access || 'read-only'}`)
+          else if (detail?.kind) words.push(` · ${detail.kind}`, detail.kind === 'fix' ? ' · worktree' : ' · read-only')
           if (detail?.budget) {
             words.push(` · budget ${detail.budget.maxTurns} turns / ${detail.budget.maxMinutes} min / $${detail.budget.maxUsd}`)
           }
@@ -620,6 +641,33 @@ class SessionBuilder {
         }
       }
     }
+  }
+
+  /**
+   * A reply run's `final`: the reply, as markdown. The provider streams the
+   * same words as an assistant message first, so when the message just
+   * drawn is the reply, it becomes the reply rather than sitting above it
+   * a second time.
+   */
+  private reply(row: IndexedEvent): void {
+    const event = row.event
+    const text = str(event.payload?.text).trim()
+    if (!text) {
+      this.mark(event.t, null)
+      return
+    }
+    const item: ChatItem = { kind: 'reply', index: row.index, text, at: clock(event.t, this.startedAt) }
+    const at = this.items.length - 1
+    const prev = this.items[at]
+    if (prev?.kind === 'say' && prev.text.trim() === text) {
+      this.replace(at, item)
+      this.lastReply = at
+    } else {
+      this.lastReply = this.items.length
+      this.add(item)
+    }
+    this.message = null
+    this.mark(event.t, null)
   }
 
   // ------------------------------------------------------------ plumbing
@@ -749,9 +797,10 @@ class SessionBuilder {
     }
 
     // Only the last answer is not superseded, so it is the one the
-    // finished run opens on.
+    // finished run opens on; a reply run opens on its newest reply.
     const last = this.answers[this.answers.length - 1]
     const answerItem = last === undefined ? undefined : items[last]
+    const replyItem = this.lastReply === -1 ? undefined : items[this.lastReply]
     let pendingCall: StepCall | undefined
     for (let i = calls.length - 1; i >= 0; i -= 1) {
       if (calls[i].pending) {
@@ -765,7 +814,13 @@ class SessionBuilder {
       calls,
       answer: this.derived.answer,
       report: this.derived.report,
-      answerIndex: answerItem?.kind === 'answer' && !answerItem.superseded ? answerItem.index : -1,
+      answerIndex: this.replies
+        ? replyItem?.kind === 'reply'
+          ? replyItem.index
+          : -1
+        : answerItem?.kind === 'answer' && !answerItem.superseded
+          ? answerItem.index
+          : -1,
       checks: this.derived.checks,
       start: this.start,
       root: this.root,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { IndexedEvent } from './events'
-import { currentActivity, readActivity, STALL_MS } from './activity'
+import { currentActivity, duringNote, NOTE_LABEL, readActivity, STALL_MS } from './activity'
 
 // Event shapes from the 2026-10-04 OMNI-3413 rerun's events.jsonl.
 let n = 0
@@ -87,5 +87,18 @@ describe('readActivity', () => {
   it('parses the same shape as currentActivity, minus `stalled`', () => {
     const events = [stream('29:13', { type: 'message_start' }), blockStart('29:13', 0, { type: 'thinking' })]
     expect(readActivity(events)).toEqual({ what: 'thinking', label: 'Thinking', since: at('29:13'), silentSince: at('29:13') })
+  })
+})
+
+describe('duringNote', () => {
+  it('says the note is being filed and keeps the tail’s timer and size', () => {
+    const events = [
+      stream('30:40', { type: 'message_start' }),
+      blockStart('30:40', 0, { type: 'tool_use', name: 'StructuredOutput' }),
+      json('30:50', 0, '{"summary":"x"}'),
+    ]
+    const parsed = readActivity(events)!
+    expect(duringNote(parsed)).toEqual({ ...parsed, what: 'note', label: NOTE_LABEL })
+    expect(NOTE_LABEL).toBe('Filing the note…')
   })
 })

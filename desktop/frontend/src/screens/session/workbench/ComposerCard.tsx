@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type JSX, type KeyboardEvent } from 'react'
-import type { RunKind } from '../../../api/types'
+import type { RunKind, SessionAccess } from '../../../api/types'
 import type { ComposerMode } from '../../../components/run/Composer'
 import { ACCESS, ACCESS_PHRASE, accessOf, runningPlaceholder } from '../../../components/composer/modes'
 import Button from '../../../ui/button'
@@ -37,6 +37,8 @@ export interface ComposerStripProps {
   provider: string
   model: string
   kind?: RunKind
+  /** A session's recorded access: the posture it ran under, not the default. */
+  access?: SessionAccess
   /** Clears the text once a send succeeded. Bump it. */
   sentCount: number
   /** What the placeholder says when nothing has been typed. */
@@ -65,6 +67,7 @@ export default function ComposerCard({
   provider,
   model,
   kind,
+  access: recorded,
   sentCount,
   placeholder,
   prefill,
@@ -128,7 +131,7 @@ export default function ComposerCard({
     }
   }
 
-  const access = kind ? accessOf(kind) : undefined
+  const access = kind ? accessOf(kind, recorded) : undefined
   const accessNote = ACCESS.find((a) => a.id === access)?.note
 
   return (
