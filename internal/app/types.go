@@ -88,6 +88,11 @@ type RunSummary struct {
 	Usage       Usage    `json:"usage"`
 	Notes       []string `json:"notes"`
 
+	// Source is where the run's ticket came from when it was not a
+	// tracker or helpdesk: "slack" for a thread triaged with no ticket,
+	// which the Board marks with a Slack glyph. Empty otherwise.
+	Source string `json:"source,omitempty"`
+
 	// QueuedSteers is every instruction typed while the run worked, and
 	// what became of each. It rides on the summary rather than the detail
 	// because run.updated carries the summary, and the composer's chips
@@ -583,6 +588,9 @@ func SummaryFor(dir string, s store.State, self config.Identity) RunSummary {
 	out.HelpdeskKey = helpdeskKeyOf(b)
 	out.Assignee = assigneeOf(b)
 	out.Mine = self.Matches(out.Assignee)
+	if b != nil && b.Reported != nil && b.Tracker == nil && b.Helpdesk == nil {
+		out.Source = b.Reported.Source
+	}
 	return out
 }
 
@@ -652,6 +660,9 @@ func titleOf(b *ticket.Bundle, notes []string) string {
 		}
 		if b.Helpdesk != nil && strings.TrimSpace(b.Helpdesk.Subject) != "" {
 			return strings.TrimSpace(b.Helpdesk.Subject)
+		}
+		if b.Reported != nil && strings.TrimSpace(b.Reported.Title) != "" {
+			return strings.TrimSpace(b.Reported.Title)
 		}
 	}
 	for _, path := range notes {

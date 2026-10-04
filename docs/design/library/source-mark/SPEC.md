@@ -90,6 +90,12 @@ motion.
 
 ## Changelog
 
+### 2026-10-04 (slack-intake-2)
+`slack` joins the marks: Slack's own mark from Simple Icons
+(`marks/sources/slack.svg`, fetched 2026-10-04) in white on `#4A154B`. It is
+not a tracker or a helpdesk; it marks a run triaged straight from a Slack
+thread that named no ticket, on the board card's foot.
+
 ### 2026-09-16
 Added, for the picker-sources round. The sessions list, the board card footer
 and the session topbar now show a ticket number under its own product's mark,

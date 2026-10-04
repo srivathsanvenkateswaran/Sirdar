@@ -32,9 +32,34 @@ func bundleText(b ticket.Bundle, slackMD, instruction string) string {
 	if b.Helpdesk != nil {
 		parts = append(parts, b.Helpdesk.Subject)
 	}
+	if b.Reported != nil {
+		parts = append(parts, b.Reported.Description, strings.Join(b.Reported.Links, "\n"))
+	}
 	for _, m := range b.Thread {
 		parts = append(parts, m.Text)
 	}
 	parts = append(parts, slackMD)
 	return strings.Join(parts, "\n")
+}
+
+// unconfigured drops from others (owner/name slugs on github.com) the
+// repositories configured under repos:, which the prompt's # Repositories
+// section already lists as readable; what is left is code the session
+// cannot read from here.
+func unconfigured(others []string, list []repos.Repo) []string {
+	var out []string
+	for _, o := range others {
+		slug := repos.Slug("https://github.com/" + o)
+		known := false
+		for _, r := range list {
+			if r.Slug() != "" && r.Slug() == slug {
+				known = true
+				break
+			}
+		}
+		if !known {
+			out = append(out, o)
+		}
+	}
+	return out
 }

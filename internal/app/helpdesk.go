@@ -8,6 +8,7 @@ import (
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
 )
@@ -124,26 +125,68 @@ func checkSlackLink(raw string) error {
 
 // slackMarkdown reads the Slack link a start carries and renders the thread
 // for the bundle's slack.md. Empty when the start carries none.
-func (s *Service) slackMarkdown(ctx context.Context, cfg *config.Config, prov provider.Provider, raw string) (string, error) {
+// slackThread reads the Slack link a start carries: the thread, and the
+// reader that read it. Nil with no error when the start carries none.
+func (s *Service) slackThread(ctx context.Context, cfg *config.Config, prov provider.Provider, raw string) (*slack.Thread, SlackReader, error) {
 	if strings.TrimSpace(raw) == "" {
-		return "", nil
+		return nil, nil, nil
 	}
 	l, ok := slack.FindLink(raw)
 	if !ok {
-		return "", fmt.Errorf("%w: %q is not a Slack message link", ErrInvalidArgument, raw)
+		return nil, nil, fmt.Errorf("%w: %q is not a Slack message link", ErrInvalidArgument, raw)
 	}
 	sr, err := s.slackFor(cfg, prov)
 	if err != nil {
-		return "", fmt.Errorf("the Slack reader could not be set up: %w", err)
+		return nil, nil, fmt.Errorf("the Slack reader could not be set up: %w", err)
 	}
 	if sr == nil {
-		return "", fmt.Errorf("%s", SlackNotConfigured)
+		return nil, nil, fmt.Errorf("%s", SlackNotConfigured)
 	}
 	th, err := sr.Read(ctx, l)
 	if err != nil {
-		return "", fmt.Errorf("the Slack link could not be read: %w", err)
+		return nil, nil, fmt.Errorf("the Slack link could not be read: %w", err)
 	}
-	return slack.Markdown(th), nil
+	return &th, sr, nil
+}
+
+// checkSlackOnly refuses, before any job exists, a start on a Slack-only
+// key that is not the one key of the start or does not carry the link the
+// key was made from: the thread is the ticket, and there is nothing else to
+// build the bundle from.
+func checkSlackOnly(keys []string, link string) error {
+	for _, key := range keys {
+		if !slack.IsKey(key) {
+			continue
+		}
+		if len(keys) != 1 {
+			return fmt.Errorf("%w: %s is triaged from its Slack thread alone, not beside other keys", ErrInvalidArgument, key)
+		}
+		l, ok := slack.FindLink(link)
+		if !ok {
+			return fmt.Errorf("%w: %s needs the Slack link it was made from", ErrInvalidArgument, key)
+		}
+		if got := slack.KeyFor(l); got != key {
+			return fmt.Errorf("%w: the Slack link is for %s, not %s", ErrInvalidArgument, got, key)
+		}
+	}
+	return nil
+}
+
+// slackStart reads a start's Slack link into what the runner takes: the
+// thread as slack.md beside a ticket, or, for a Slack-only key, the bundle
+// the thread is triaged from.
+func (s *Service) slackStart(ctx context.Context, deps runner.Deps, key, link string) (string, *runner.ReportedBundle, error) {
+	th, sr, err := s.slackThread(ctx, deps.Config, deps.Provider, link)
+	if err != nil || th == nil {
+		return "", nil, err
+	}
+	if slack.IsKey(key) {
+		if len(th.Messages) == 0 {
+			return "", nil, fmt.Errorf("the Slack thread for %s has no messages", key)
+		}
+		return "", reportedFor(*th, key, sr), nil
+	}
+	return slack.Markdown(*th), nil, nil
 }
 
 func (s *Service) slackFor(cfg *config.Config, prov provider.Provider) (SlackReader, error) {

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/repos"
 )
 
 // TestTriageNamesCompanionRepositories pins what repos: does to a triage:
@@ -45,5 +47,16 @@ repos:
 	defer p.mu.Unlock()
 	if len(p.specs) == 0 || !slices.Contains(p.specs[0].Policy.ReadAlso, filepath.Clean(web)) {
 		t.Errorf("the session's read scope does not name the companion: %+v", p.specs)
+	}
+}
+
+// TestACompanionIsNotCodeInAnotherRepository: a repository configured under
+// repos: is readable, so the prompt's "Code in another repository" warning
+// leaves it out and keeps only the ones nobody configured.
+func TestACompanionIsNotCodeInAnotherRepository(t *testing.T) {
+	list := []repos.Repo{{Name: "Acme.Web", Path: "/src/Acme.Web", Origin: "git@github.com:acme/Acme.Web.git"}}
+	got := unconfigured([]string{"acme/acme.web", "acme-co/Billing.Service"}, list)
+	if !slices.Equal(got, []string{"acme-co/Billing.Service"}) {
+		t.Fatalf("unconfigured = %v", got)
 	}
 }

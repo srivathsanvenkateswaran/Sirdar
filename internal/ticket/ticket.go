@@ -123,15 +123,48 @@ type Bundle struct {
 	// rather than as the ticket stands today: it says what ApplyAsOf
 	// removed. Nil on an ordinary live bundle.
 	Cutoff *Cutoff `json:",omitempty"`
+
+	// Reported is set when there is no tracker or helpdesk ticket at all
+	// and the bundle was built from where the problem was reported: a
+	// Slack thread, today. Tracker and Helpdesk are nil beside it.
+	Reported *ReportedTicket `json:",omitempty"`
 }
 
-// Key returns Tracker.Key if present else Helpdesk.ID.
+// ReportedTicket is a ticket that exists only where it was reported. Key is
+// a synthetic key (SLACK-<channel>-<ts seconds>) the run, its notes and the
+// register are filed under until a tracker issue is opened for it.
+type ReportedTicket struct {
+	Source      string // "slack"
+	Key         string
+	Title       string // the first line of the first message, at most 80 characters
+	Description string // the first message as written
+	Author      string // who posted the first message
+	URL         string // the permalink
+	At          time.Time
+	// Fields are the "Name: value" lines the first message carries —
+	// CompanyID, Domain, Expected, Actual — in the order written.
+	Fields []Field `json:",omitempty"`
+	// Links are the URLs the messages carry, first seen first.
+	Links []string `json:",omitempty"`
+}
+
+// Field is one "Name: value" line.
+type Field struct {
+	Name  string
+	Value string
+}
+
+// Key returns Tracker.Key if present, else Helpdesk.ID, else the reported
+// ticket's synthetic key.
 func (b Bundle) Key() string {
 	if b.Tracker != nil {
 		return b.Tracker.Key
 	}
 	if b.Helpdesk != nil {
 		return b.Helpdesk.ID
+	}
+	if b.Reported != nil {
+		return b.Reported.Key
 	}
 	return ""
 }

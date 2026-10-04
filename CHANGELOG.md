@@ -44,6 +44,25 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
   whose proposed fix names a companion's files. `sirdar doctor` has a `repos` row (branch,
   commits behind the last fetch, when that was; nothing fetches), and Settings › General
   lists the repositories.
+- The Slack MCP reading works on a real thread. It used to close the CLI's input as soon as
+  it started, and every Slack tool call's permission prompt travels over that input, so each
+  call failed with `AbortError: Stream closed` and the reading reported "found no message at
+  that link". Input now stays open until the answer. The prompt calls `slack_read_thread`
+  first (a DM's `D…` id included) and `slack_read_channel` only on an error, with a window
+  one microsecond either side of the ts; `--max-turns` is 6; a reading with no messages
+  fails with the model's own words; each reading leaves a JSON-lines transcript under
+  `~/.sirdar/intake/` for seven days; `SIRDAR_DEBUG=1` prints the `claude` command line.
+- A Slack thread with no ticket in it starts a session anyway. The chip reads `Slack thread ·
+  no ticket yet · will triage the thread`, and the triage runs under
+  `SLACK-<channel>-<ts seconds>` from a bundle built out of the thread: title, description,
+  `Name: value` fields, links, the conversation, and its files (downloaded with a token,
+  named as unread through MCP). No tracker or helpdesk is called, the manifest says so, the
+  prompt says who reported it in Slack, and the Board card carries Slack's mark.
+  `sirdar triage <link>` and `sirdar rca <link>` do the same.
+- When a thread or a tracker record names a GitHub repository that is not the workspace's
+  `origin`, the chip adds `· mentions Acme.Web (companion repo)` or `· mentions name (not
+  configured — add it under repos:)`, through the same `repos:` matching, and the prompt says
+  the code may live there.
 
 Sirdar as it stands today, before the first tagged release:
 

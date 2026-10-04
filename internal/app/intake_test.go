@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/repos"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
@@ -375,8 +377,79 @@ func TestSlackThreadWithNoReference(t *testing.T) {
 	r := newTestResolver(t, nil, nil)
 	r.slack = &fakeSlack{thread: slack.Thread{Messages: []slack.Message{{TS: "1712345678.901234", Text: "anyone around?"}}}}
 	in := resolveOK(t, r, "https://acme.slack.com/archives/C0123ABCD/p1712345678901234")
-	if in.Key != "" || in.Reason != "the Slack message names no ticket key, helpdesk number or helpdesk link" {
+	if in.Key != "SLACK-C0123ABCD-1712345678" || !in.SlackOnly || in.Reason != "" || in.Summary != "Slack message · no ticket yet · will triage the message" {
 		t.Fatalf("intake %+v", in)
+	}
+}
+
+// TestSlackThreadWithNoTicketTriagesTheThread is the DM support request: a
+// thread with a CompanyID, a domain and a PR link but no tracker key or
+// helpdesk number. The chip says the thread will be triaged, and that the
+// PR's repository is not one the workspace has configured.
+func TestSlackThreadWithNoTicketTriagesTheThread(t *testing.T) {
+	r := newTestResolver(t, nil, nil)
+	r.repos = []repos.Repo{{Name: "web-app", Path: "/src/web-app", Origin: "git@github.com:acme-co/web-app.git", Workspace: true}}
+	r.slack = &fakeSlack{thread: slack.Thread{IsThread: true, Messages: []slack.Message{
+		{TS: "1791100254.656059", Author: "Rana Example", Text: "*Coupon totals are wrong on the receipt*\n*CompanyID:* 4417\n*Domain:* shop.example.test\nPR: <https://github.com/acme-co/Billing.Service/pull/412|#412>",
+			Files: []slack.File{{Name: "receipt.png"}}},
+		{TS: "1791100300.000100", Author: "Sam Engineer", Text: "looking"},
+	}}}
+	in := resolveOK(t, r, "https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059")
+	want := "Slack thread · no ticket yet · will triage the thread · mentions Billing.Service (not configured — add it under repos:)"
+	if in.Key != "SLACK-D0FAKEDM01-1791100254" || !in.SlackOnly || in.Summary != want || in.Subject != "Coupon totals are wrong on the receipt" {
+		t.Fatalf("intake %+v", in)
+	}
+	if in.SlackMarkdown() != "" {
+		t.Error("a Slack-only intake's thread is its conversation, not an extra slack.md")
+	}
+	rb := in.Reported()
+	if rb == nil || rb.Bundle.Key() != in.Key || rb.Bundle.Tracker != nil || len(rb.Files) != 1 || rb.Download != nil || rb.UnreadReason == "" {
+		t.Fatalf("reported %+v", rb)
+	}
+}
+
+// TestRepoMismatchOnATicket: a tracker record naming another repository
+// says so in the chip too, and the workspace's own is not worth a word.
+func TestRepoMismatchOnATicket(t *testing.T) {
+	r := newTestResolver(t, nil, nil)
+	r.repos = []repos.Repo{{Name: "web-app", Path: "/src/web-app", Origin: "git@github.com:acme-co/web-app.git", Workspace: true}}
+	got := r.mentions([]string{"see https://github.com/acme-co/web-app/pull/3 and https://github.com/acme-co/Billing.Service/pull/412"})
+	if len(got) != 1 || got[0].Slug != "acme-co/Billing.Service" || got[0].Status != repos.StatusUnknown {
+		t.Fatalf("mentions = %+v", got)
+	}
+	in := Intake{Key: "SBX-1", Repos: got}
+	if s := intakeSummary(in); s != "SBX-1 · mentions Billing.Service (not configured — add it under repos:)" {
+		t.Fatalf("summary %q", s)
+	}
+}
+
+// TestSlackOnlyKeyTypedOutright is the key of a Slack-only run, which holds
+// a tracker-key-shaped piece (D0FAKEDM01-1791100254) that must not be
+// resolved on its own.
+func TestSlackOnlyKeyTypedOutright(t *testing.T) {
+	r := newTestResolver(t, nil, nil)
+	in := resolveOK(t, r, "SLACK-D0FAKEDM01-1791100254")
+	if in.Key != "SLACK-D0FAKEDM01-1791100254" || in.Input != InputKey {
+		t.Fatalf("intake %+v", in)
+	}
+}
+
+func TestCheckSlackOnly(t *testing.T) {
+	link := "https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059"
+	for _, c := range []struct {
+		keys []string
+		link string
+		ok   bool
+	}{
+		{[]string{"SLACK-D0FAKEDM01-1791100254"}, link, true},
+		{[]string{"SBX-1"}, "", true},
+		{[]string{"SLACK-D0FAKEDM01-1791100254"}, "", false},
+		{[]string{"SLACK-D0FAKEDM01-1791100999"}, link, false},
+		{[]string{"SLACK-D0FAKEDM01-1791100254", "SBX-1"}, link, false},
+	} {
+		if err := checkSlackOnly(c.keys, c.link); (err == nil) != c.ok {
+			t.Errorf("checkSlackOnly(%v, %q) = %v", c.keys, c.link, err)
+		}
 	}
 }
 
@@ -426,6 +499,73 @@ func TestServiceResolveUsesTheWorkspaceSources(t *testing.T) {
 	if _, err := svc.Resolve(context.Background(), wsID, "   "); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("empty text: %v", err)
 	}
+}
+
+// TestStartTriageFromASlackOnlyThread: Enter on a "no ticket yet" chip
+// starts a triage under the synthetic key, built from the thread with no
+// tracker or helpdesk call, and the run's card says it came from Slack.
+func TestStartTriageFromASlackOnlyThread(t *testing.T) {
+	root := newWorkspace(t)
+	wsID := WorkspaceID(root)
+	link := "https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059"
+	key := "SLACK-D0FAKEDM01-1791100254"
+	fs := &fakeSlack{thread: slack.Thread{IsThread: true, Messages: []slack.Message{
+		{TS: "1791100254.656059", Author: "Rana Example", Text: "Coupon totals are wrong on the receipt\nCompanyID: 4417"},
+		{TS: "1791100300.000100", Author: "Sam Engineer", Text: "looking"},
+	}}}
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	tracker := &countingTracker{}
+	svc := New(newRegistry(t, root), stubBuilder(p, tracker, nil), Options{
+		Interval: 20 * time.Millisecond,
+		Slack:    func(*config.Config) (SlackReader, error) { return fs, nil },
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	svc.Start(ctx)
+	t.Cleanup(svc.Stop)
+	events, unsubscribe := svc.Subscribe()
+	defer unsubscribe()
+
+	if _, err := svc.StartTriage(context.Background(), wsID, []string{key}, TriageOptions{}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("a Slack-only key with no link: %v", err)
+	}
+	if _, err := svc.StartTriage(context.Background(), wsID, []string{key}, TriageOptions{Slack: link}); err != nil {
+		t.Fatal(err)
+	}
+	done := waitFor(t, events, "job.finished", func(e Event) bool { return e.Kind == KindJobFinished })
+	if len(done.Outcomes) != 1 || done.Outcomes[0].RunID == "" || done.Outcomes[0].Key != key {
+		t.Fatalf("outcomes %+v", done.Outcomes)
+	}
+	if tracker.calls() != 0 {
+		t.Errorf("the tracker was called %d times for a Slack-only run", tracker.calls())
+	}
+	detail, err := svc.Run(wsID, done.Outcomes[0].RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Source != "slack" || detail.Title != "Coupon totals are wrong on the receipt" {
+		t.Fatalf("summary %+v", detail.RunSummary)
+	}
+	if _, err := os.Stat(detail.BundleDir + "/slack.md"); !os.IsNotExist(err) {
+		t.Error("the thread is the conversation; no slack.md beside it")
+	}
+}
+
+// countingTracker fails every call and counts them.
+type countingTracker struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (c *countingTracker) calls() int { c.mu.Lock(); defer c.mu.Unlock(); return c.n }
+func (c *countingTracker) bump()      { c.mu.Lock(); c.n++; c.mu.Unlock() }
+func (c *countingTracker) Get(context.Context, string) (ticket.TrackerTicket, error) {
+	c.bump()
+	return ticket.TrackerTicket{}, errors.New("no tracker here")
+}
+func (c *countingTracker) List(context.Context, source.ListFilter) ([]ticket.TrackerTicket, error) {
+	c.bump()
+	return nil, errors.New("no tracker here")
 }
 
 // TestStartTriageCarriesTheSlackThread is the start half: a triage started

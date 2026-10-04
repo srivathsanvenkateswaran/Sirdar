@@ -48,6 +48,11 @@ type TriageInput struct {
 	// Slack is the bundle's slack.md — the Slack thread the session was
 	// started from — or empty when it was started from anything else.
 	Slack string
+	// OtherRepos are the GitHub repositories the ticket or the thread
+	// names that are not the workspace's origin, which is Origin
+	// (owner/repo). The prompt says the code may live there; nothing more.
+	OtherRepos []string
+	Origin     string
 	// NotesLanguage is the language code the note itself is written in
 	// (config language.notes); empty means "en".
 	NotesLanguage string
@@ -157,6 +162,9 @@ func Triage(in TriageInput) string {
 	if s := slackSection(in.Slack); s != "" {
 		sections = append(sections, s)
 	}
+	if s := otherReposSection(in.OtherRepos, in.Origin); s != "" {
+		sections = append(sections, s)
+	}
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
@@ -184,6 +192,9 @@ func RCA(in RCAInput) string {
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
 	)
 	if s := slackSection(in.Slack); s != "" {
+		sections = append(sections, s)
+	}
+	if s := otherReposSection(in.OtherRepos, in.Origin); s != "" {
 		sections = append(sections, s)
 	}
 	if len(in.Bundle.Warnings) > 0 {
@@ -264,6 +275,9 @@ func playbooksSection(playbooks []Playbook) string {
 }
 
 func ticketSection(bundle ticket.Bundle, bundleDir string) string {
+	if bundle.Reported != nil && bundle.Tracker == nil && bundle.Helpdesk == nil {
+		return reportedSection(bundle, bundleDir)
+	}
 	var b strings.Builder
 	b.WriteString("# Ticket\n\n")
 	b.WriteString("Key: " + bundle.Key() + "\n")
@@ -294,6 +308,86 @@ func ticketSection(bundle ticket.Bundle, bundleDir string) string {
 	if s := transcriptsNote(bundle); s != "" {
 		b.WriteString("\n\n" + s)
 	}
+	return b.String()
+}
+
+// reportedSection is the ticket section of a bundle with no tracker or
+// helpdesk ticket: who reported it where, the synthetic key it is filed
+// under, the labelled fields and links the report carries, and the files
+// it listed. The conversation section below is the thread itself.
+func reportedSection(bundle ticket.Bundle, bundleDir string) string {
+	r := bundle.Reported
+	where := "in " + reportedSource(r.Source)
+	var b strings.Builder
+	b.WriteString("# Ticket\n\n")
+	fmt.Fprintf(&b, "This was reported %s by %s. There is no tracker or helpdesk ticket for it yet: the report is the whole ticket, and %s is a key Sirdar made up to file this run under.\n\n", where, orUnknown(r.Author), r.Key)
+	b.WriteString("Key: " + r.Key + "\n")
+	b.WriteString("Title: " + r.Title + "\n")
+	b.WriteString("Reported: " + where + " by " + orUnknown(r.Author))
+	if !r.At.IsZero() {
+		b.WriteString(" at " + r.At.UTC().Format("2006-01-02T15:04:05Z"))
+	}
+	b.WriteString("\n")
+	b.WriteString("Link: " + r.URL + "\n")
+	b.WriteString("Tracker URL: (none)\nHelpdesk URL: (none)\nCustomer: \n")
+	b.WriteString("Bundle directory: " + bundleDir + "\n")
+	if len(r.Fields) > 0 {
+		b.WriteString("\nFields the report labels:\n")
+		for _, f := range r.Fields {
+			b.WriteString("- " + f.Name + ": " + f.Value + "\n")
+		}
+	}
+	if len(r.Links) > 0 {
+		b.WriteString("\nLinks in the thread:\n")
+		for _, l := range r.Links {
+			b.WriteString("- " + l + "\n")
+		}
+	}
+	b.WriteString("\nFiles:")
+	if len(bundle.Attachments) == 0 {
+		b.WriteString("\n(none)")
+	}
+	for _, a := range bundle.Attachments {
+		path := a.Path
+		if path == "" {
+			path = a.Name
+		}
+		b.WriteString("\n- " + path)
+	}
+	for _, s := range bundle.SkippedAttachments {
+		b.WriteString("\n- " + s.Name + " (not in the bundle: " + s.Reason + ")")
+	}
+	b.WriteString("\n\nThe customer is whoever the report names (a company id or domain among the fields, say); copy it into ticket.customer and ticket.customerIds as written, or null when it names none. ticket.trackerUrl and ticket.helpdeskUrl are null.")
+	return b.String()
+}
+
+func reportedSource(s string) string {
+	if s == "slack" {
+		return "Slack"
+	}
+	return s
+}
+
+func orUnknown(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "an unknown author"
+	}
+	return s
+}
+
+// otherReposSection tells the session the ticket names GitHub repositories
+// that are not the workspace's own. It changes nothing about what the
+// session may read; it is so the note can say the code may live elsewhere
+// rather than reaching a root cause out of the wrong repository.
+func otherReposSection(repos []string, origin string) string {
+	if len(repos) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## Code in another repository\n\n")
+	fmt.Fprintf(&b, "The ticket names %s, and this workspace is %s. ", strings.Join(repos, ", "), origin)
+	b.WriteString("The code this issue needs may live in that repository rather than this one, and you cannot read it from here. ")
+	b.WriteString("Investigate what this repository does hold, say plainly in rootCause and openQuestions when the answer depends on the other repository, and do not present a guess about its code as a finding.")
 	return b.String()
 }
 

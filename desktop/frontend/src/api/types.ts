@@ -33,6 +33,8 @@ export interface Usage { turns: number; inputTokens: number; outputTokens: numbe
  * "Sessions show" preference says.
  */
 export interface RunSummary { runId: string; key: string; helpdeskKey?: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[];
+  /** Where the ticket came from when it was not a tracker or helpdesk: `slack` for a thread triaged with no ticket (key `SLACK-<channel>-<ts>`). */
+  source?: 'slack'
   /** Every instruction typed while the run worked, and what became of each; absent when there were none. */
   queuedSteers?: QueuedSteer[] }
 /**
@@ -473,6 +475,12 @@ export interface Intake {
   summary?: string; reason?: string; subject?: string
   slack?: { url: string; messages: number; thread: boolean }
   mode?: string; instruction?: string; confidence?: number
+  /**
+   * A Slack link whose thread names no ticket: `key` is the synthetic
+   * `SLACK-<channel>-<ts>` and starting triages the thread itself. The
+   * summary reads "Slack thread · no ticket yet · will triage the thread".
+   */
+  slackOnly?: boolean
   /**
    * The repositories other than the workspace's own that the text read on
    * the way mentions — the tracker record, the helpdesk subject, the Slack
