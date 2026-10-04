@@ -737,8 +737,11 @@ func (s *Service) startTriage(ctx context.Context, wsID string, keys []string, o
 	if err := checkSlackLink(o.Slack); err != nil {
 		return "", err
 	}
+	if err := checkSlackOnly(keys, o.Slack); err != nil {
+		return "", err
+	}
 	return s.startJob(ctx, wsID, o.Provider, o.Model, done, func(jctx context.Context, deps runner.Deps) []JobOutcome {
-		slackMD, err := s.slackMarkdown(jctx, deps.Config, deps.Provider, o.Slack)
+		slackMD, reported, err := s.slackStart(jctx, deps, keys[0], o.Slack)
 		if err != nil {
 			return s.failed(keys, err)
 		}
@@ -751,6 +754,7 @@ func (s *Service) startTriage(ctx context.Context, wsID string, keys []string, o
 			KeepWorktree: o.KeepWorktree,
 			Instruction:  o.Instruction,
 			Slack:        slackMD,
+			Reported:     reported,
 		})
 		if err != nil {
 			return s.failed(keys, err)
@@ -767,14 +771,17 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 	if err := checkSlackLink(o.Slack); err != nil {
 		return "", err
 	}
+	if err := checkSlackOnly([]string{key}, o.Slack); err != nil {
+		return "", err
+	}
 	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
-		slackMD, err := s.slackMarkdown(jctx, deps.Config, deps.Provider, o.Slack)
+		slackMD, reported, err := s.slackStart(jctx, deps, key, o.Slack)
 		if err != nil {
 			return s.failed([]string{key}, err)
 		}
 		r := &runner.Runner{Deps: deps}
 		out, err := r.RCA(jctx, key, runner.RCAOptions{
-			Options:    runner.Options{Model: o.Model, At: o.At, KeepWorktree: o.KeepWorktree, Instruction: o.Instruction, Slack: slackMD},
+			Options:    runner.Options{Model: o.Model, At: o.At, KeepWorktree: o.KeepWorktree, Instruction: o.Instruction, Slack: slackMD, Reported: reported},
 			PRURL:      o.PRURL,
 			Resolution: o.Resolution,
 		})
