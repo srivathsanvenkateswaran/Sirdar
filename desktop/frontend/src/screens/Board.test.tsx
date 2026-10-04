@@ -328,6 +328,41 @@ describe('Board', () => {
     expect(screen.queryByRole('radiogroup', { name: 'Kind' })).toBeNull()
   })
 
+  it('filters by Session', async () => {
+    const runs = [
+      run({ runId: 's1', key: 'ASK-20261004-why', kind: 'session', status: 'running', title: 'Why is it stuck?' }),
+      run({ runId: 't1', key: 'OMNI-1', kind: 'triage', status: 'completed' }),
+      run({ runId: 'f1', key: 'OMNI-3', kind: 'fix', status: 'blocked' }),
+    ]
+    const { container } = mount({ runs })
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quick filters' }))
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Kind' })).getByRole('radio', { name: 'Session' }))
+
+    expect(within(lane(container, 'gathering')).getByRole('button', { name: /Why is it stuck\?/ })).toBeInTheDocument()
+    expect(within(lane(container, 'triaged')).queryByRole('button')).toBeNull()
+    expect(within(lane(container, 'blocked')).queryByRole('button')).toBeNull()
+  })
+
+  it('titles a session card with its instruction', async () => {
+    const runs = [
+      run({
+        runId: 's1',
+        key: 'ASK-20261004-why-is-the-refund-for',
+        kind: 'session',
+        status: 'running',
+        title: 'Why is the refund for order 1234 stuck?',
+      }),
+    ]
+    const { container } = mount({ runs })
+    await screen.findByRole('region', { name: 'Queue (2)' })
+
+    expect(
+      within(lane(container, 'gathering')).getByText('Why is the refund for order 1234 stuck?'),
+    ).toBeInTheDocument()
+  })
+
   it('builds the Queue lane from the reader’s own untouched keys, and says so in the head', async () => {
     const asked: unknown[] = []
     const transport = createFakeTransport({ tickets: TICKETS })
@@ -625,6 +660,16 @@ describe('buildColumns', () => {
     )
     const gathering = columns.find((c) => c.id === 'gathering')
     expect(gathering?.cards.map((c) => c.key)).toEqual(['OMNI-2', 'OMNI-1'])
+  })
+
+  it('puts a finished session in Done', () => {
+    const columns = buildColumns(
+      [],
+      [run({ runId: 'a', key: 'ASK-20261004-why', kind: 'session', status: 'completed' })],
+    )
+    const byId = Object.fromEntries(columns.map((c) => [c.id, c.cards.map((card) => card.key)]))
+    expect(byId.done).toEqual(['ASK-20261004-why'])
+    expect(byId.triaged).toEqual([])
   })
 })
 

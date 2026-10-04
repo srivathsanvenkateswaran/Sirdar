@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourcesSummary } from '../api/types'
 import {
   helpdeskNumber,
+  isAskKey,
   resetSessionsShow,
   sessionsShow,
   setSessionsShow,
@@ -86,5 +87,29 @@ describe('shownNumber', () => {
   it('does not double a hash the helpdesk already wrote', () => {
     expect(helpdeskNumber('#25312')).toBe('#25312')
     expect(helpdeskNumber(' 25312 ')).toBe('#25312')
+  })
+
+  it('shows a session minted with no reference bare, under the tracker role, whatever the preference', () => {
+    const ask = { key: 'ASK-20261004-why-is-the-refund-for', helpdeskKey: '' }
+    expect(shownNumber(ask, 'tracker', SOURCES)).toEqual({
+      text: 'ASK-20261004-why-is-the-refund-for',
+      role: 'tracker',
+      other: '',
+    })
+    expect(shownNumber(ask, 'helpdesk', SOURCES)).toEqual({
+      text: 'ASK-20261004-why-is-the-refund-for',
+      role: 'tracker',
+      other: '',
+    })
+  })
+})
+
+describe('isAskKey', () => {
+  it('is true for a key the server minted with no reference', () => {
+    expect(isAskKey('ASK-20261004-x')).toBe(true)
+  })
+
+  it('is false for a tracker key', () => {
+    expect(isAskKey('OMNI-1')).toBe(false)
   })
 })

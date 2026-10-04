@@ -21,6 +21,17 @@ export const DEFAULT_SESSIONS_SHOW: SessionsShow = 'tracker'
 
 const KEY = 'sirdar.sessionsShow'
 
+const ASK_KEY = /^ASK-\d{8}-/
+
+/**
+ * A session run with no reference: the server minted `ASK-<date>-<slug>`
+ * rather than reading a key off a ticket, so there is no tracker or helpdesk
+ * behind it to mark.
+ */
+export function isAskKey(key: string): boolean {
+  return ASK_KEY.test(key)
+}
+
 const watchers = new Set<() => void>()
 
 function isSessionsShow(value: unknown): value is SessionsShow {
@@ -101,6 +112,12 @@ export function shownNumber(
 ): ShownNumber {
   const helpdesk = run.helpdeskKey?.trim() ?? ''
   const tracker = run.key
+  // A key the server minted has no tracker or helpdesk behind it, so it is
+  // shown bare, whatever the preference says: a mark for a source that does
+  // not exist would be a lie.
+  if (isAskKey(tracker)) {
+    return { text: tracker, role: 'tracker', other: '' }
+  }
   if (show === 'helpdesk' && helpdesk) {
     return {
       text: helpdeskNumber(helpdesk),

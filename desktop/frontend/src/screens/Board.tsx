@@ -96,7 +96,7 @@ export function queueEmptyText(queueTypes: string[] | undefined, unfiltered: str
 }
 
 /** What a card is. Who it belongs to is the assignee menu's question. */
-type KindFilter = 'all' | 'triage' | 'rca' | 'fix'
+type KindFilter = 'all' | 'session' | 'triage' | 'rca' | 'fix'
 
 /** Why Me cannot be picked, when the workspace can name nobody. */
 export const NO_IDENTITY =
@@ -104,6 +104,7 @@ export const NO_IDENTITY =
 
 const KIND_OPTIONS = [
   { id: 'all', label: 'All' },
+  { id: 'session', label: 'Session' },
   { id: 'triage', label: 'Triage' },
   { id: 'rca', label: 'RCA' },
   { id: 'fix', label: 'Fix' },
@@ -179,7 +180,10 @@ export function buildColumns(
         lanes.failed.push(card)
         break
       case 'completed':
-        if (run.kind === 'rca') lanes.done.push(card)
+        // A session run answers in chat and never files a root cause, so a
+        // finished one has nothing left to triage: it goes straight to Done,
+        // the same lane an RCA's own completion lands in.
+        if (run.kind === 'rca' || run.kind === 'session') lanes.done.push(card)
         else if (!rcaDone.has(run.key)) lanes.triaged.push(card)
         break
     }

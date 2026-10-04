@@ -43,6 +43,7 @@ import { matchRun, splitMatch, splitText, type RunMatch } from '../../lib/sessio
 import Age from '../Age'
 import {
   helpdeskNumber,
+  isAskKey,
   sessionsShow,
   shownNumber,
   subscribeSessionsShow,
@@ -342,7 +343,11 @@ const SessionRow = memo(function SessionRow({
   const running = run.status === 'preparing' || run.status === 'running'
   const blocked = run.status === 'blocked'
   const word = running || blocked ? `, ${stateWord(run.status)}` : ''
-  const label = alias ?? shown.text
+  // A session with no reference has no tracker key to read: its row is
+  // labelled by what was asked, the server's own title, and falls back to
+  // the key only when a run predates having one.
+  const isAsk = isAskKey(run.key)
+  const label = alias ?? (isAsk ? run.title || shown.text : shown.text)
   const name = `${label}, ${run.kind}${word}${unread ? ', unread' : ''}`
   const stamp = run.updatedAt || run.startedAt
   const id = run.runId
@@ -390,7 +395,9 @@ const SessionRow = memo(function SessionRow({
         onBlur={pinned ? undefined : () => hover.blurRow(id)}
       >
         <span className="sd-session-row__tile">
-          <SourceMark adapter={shown.source?.adapter ?? shown.role} name={shown.source?.name} size="xs" />
+          {isAsk ? null : (
+            <SourceMark adapter={shown.source?.adapter ?? shown.role} name={shown.source?.name} size="xs" />
+          )}
           {running || blocked ? (
             <span
               className="sd-session-row__dot"
@@ -401,7 +408,7 @@ const SessionRow = memo(function SessionRow({
           ) : null}
         </span>
         <span className="sd-session-row__text">
-          <span className="sd-session-row__number" dir={alias ? 'auto' : 'ltr'}>
+          <span className="sd-session-row__number" dir={alias || isAsk ? 'auto' : 'ltr'}>
             {labelParts ? (
               <>
                 {labelParts[0]}
@@ -977,14 +984,21 @@ function SessionsList({
   function renderCard(run: RunSummary): JSX.Element {
     const shown = shownNumber(run, show, sources)
     const alias = prefs.aliases[run.runId]
+    const isAsk = isAskKey(run.key)
     // The other number with its product's name; a run with one number names
     // that one, so the card always says where the ticket lives. In the rail
     // the row shows no number at all, so the card carries the row's own too.
     const otherRole: SessionsShow = shown.role === 'tracker' ? 'helpdesk' : 'tracker'
     const hasOther = shown.other !== ''
-    const numbers: { role: SessionsShow; text: string }[] = []
-    if (rail || !hasOther || alias) numbers.push({ role: shown.role, text: withSource(shown.text, shown.source) })
-    if (hasOther) numbers.push({ role: otherRole, text: shown.other })
+    const numbers: { role: SessionsShow; text: string; noMark?: boolean }[] = []
+    if (isAsk) {
+      // No reference means no tracker and no helpdesk behind the key: the
+      // card still names it, under the title, but with no source to mark.
+      numbers.push({ role: shown.role, text: shown.text, noMark: true })
+    } else {
+      if (rail || !hasOther || alias) numbers.push({ role: shown.role, text: withSource(shown.text, shown.source) })
+      if (hasOther) numbers.push({ role: otherRole, text: shown.other })
+    }
     return (
       <div
         id={cardId}
@@ -1006,11 +1020,13 @@ function SessionsList({
         <ul className="sd-session-card__rows">
           {numbers.map((number) => (
             <li key={number.role} className="sd-session-card__row">
-              <SourceMark
-                adapter={sources?.[number.role]?.adapter ?? number.role}
-                name={sources?.[number.role]?.name}
-                size="xs"
-              />
+              {number.noMark ? null : (
+                <SourceMark
+                  adapter={sources?.[number.role]?.adapter ?? number.role}
+                  name={sources?.[number.role]?.name}
+                  size="xs"
+                />
+              )}
               <span className="sd-session-card__mono" dir="ltr">
                 {number.text}
               </span>

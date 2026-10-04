@@ -489,6 +489,44 @@ function actions(over: Partial<SessionActions> = {}): Required<SessionActions> &
 /** Waits for the promises a menu opening fans out. */
 const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)))
 
+describe('a session run', () => {
+  it('labels a session row with its instruction', () => {
+    const runs = [
+      run({
+        runId: 's1',
+        key: 'ASK-20261004-why-is-the-refund-for',
+        kind: 'session',
+        status: 'running',
+        title: 'Why is the refund for order 1234 stuck?',
+      }),
+    ]
+    mount({ runs })
+    const row = screen.getByRole('button', { name: /^Why is the refund for order 1234 stuck\?/ })
+    expect(row.querySelector('.sd-session-row__number')).toHaveTextContent(
+      'Why is the refund for order 1234 stuck?',
+    )
+    // No reference, no tracker: the tile carries no source mark.
+    expect(row.querySelector('.sd-session-row__tile [role="img"]')).toBeNull()
+  })
+
+  it('keeps the ticket number for a session about a ticket', () => {
+    const runs = [
+      run({
+        runId: 's2',
+        key: 'OMNI-2815',
+        helpdeskKey: '25312',
+        kind: 'session',
+        status: 'running',
+        title: 'Why is the refund for order 1234 stuck?',
+      }),
+    ]
+    mount({ runs })
+    const row = screen.getByRole('button', { name: /^OMNI-2815/ })
+    expect(row.querySelector('.sd-session-row__number')).toHaveTextContent('OMNI-2815')
+    expect(within(row).getByRole('img', { name: 'Janus' })).toBeInTheDocument()
+  })
+})
+
 describe('the session menu', () => {
   it('opens on right-click at the pointer, closes the hover card, and lists the actions in order', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
