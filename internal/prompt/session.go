@@ -88,14 +88,24 @@ func Session(in SessionInput) string {
 	return strings.Join(sections, "\n\n") + "\n"
 }
 
-// TriageReply assembles the prompt for a triage run's reply turn: the same
-// ticket context Triage uses, but answered in chat instead of filed as a
-// note. The note turn that follows, when it does, is TriageNoteTurn.
-func TriageReply(in TriageInput) string {
+// replyLead is the task section's lead line TriageReply and RCAReply
+// share: what the turn is for, with " They asked:" appended only when the
+// operator gave an instruction for the task section to quote.
+func replyLead(instruction string) string {
 	lead := "Investigate this ticket and answer the operator."
-	if strings.TrimSpace(in.Instruction) != "" {
+	if strings.TrimSpace(instruction) != "" {
 		lead += " They asked:"
 	}
+	return lead
+}
+
+// replySections is the section assembly TriageReply and RCAReply share:
+// the preamble, read-only access, language, repositories and workspace
+// knowledge, then the ticket's own context (ticket, conversation, Slack,
+// other repos, warnings). RCAReply appends its triage-note, resolution
+// and pull-request sections after calling this, and both append the task
+// section last.
+func replySections(in TriageInput) []string {
 	sections := []string{
 		strings.TrimRight(sessionPreambleMD, "\n"),
 		accessSection(""),
@@ -120,7 +130,14 @@ func TriageReply(in TriageInput) string {
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
-	sections = append(sections, taskSection(lead, in.Instruction))
+	return sections
+}
+
+// TriageReply assembles the prompt for a triage run's reply turn: the same
+// ticket context Triage uses, but answered in chat instead of filed as a
+// note. The note turn that follows, when it does, is TriageNoteTurn.
+func TriageReply(in TriageInput) string {
+	sections := append(replySections(in), taskSection(replyLead(in.Instruction), in.Instruction))
 	return strings.Join(sections, "\n\n") + "\n"
 }
 
@@ -129,34 +146,7 @@ func TriageReply(in TriageInput) string {
 // resolution and the merged pull request when there is one, answered in
 // chat instead of filed as a note.
 func RCAReply(in RCAInput) string {
-	lead := "Investigate this ticket and answer the operator."
-	if strings.TrimSpace(in.Instruction) != "" {
-		lead += " They asked:"
-	}
-	sections := []string{
-		strings.TrimRight(sessionPreambleMD, "\n"),
-		accessSection(""),
-		replyLanguageSection(in.NotesLanguage, in.CustomerLanguage),
-	}
-	if s := repositoriesSection(in.Repositories); s != "" {
-		sections = append(sections, s)
-	}
-	if s := knowledgeSection(in.Playbooks); s != "" {
-		sections = append(sections, s)
-	}
-	sections = append(sections,
-		ticketSection(in.Bundle, in.BundleDir),
-		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
-	)
-	if s := slackSection(in.Slack); s != "" {
-		sections = append(sections, s)
-	}
-	if s := otherReposSection(in.OtherRepos, in.Origin); s != "" {
-		sections = append(sections, s)
-	}
-	if len(in.Bundle.Warnings) > 0 {
-		sections = append(sections, warningsSection(in.Bundle.Warnings))
-	}
+	sections := replySections(in.TriageInput)
 	sections = append(sections,
 		triageNoteSection(in.TriageNote),
 		resolutionSection(in.Resolution),
@@ -164,7 +154,7 @@ func RCAReply(in RCAInput) string {
 	if pr := pullRequestSection(in.PRTitle, in.PRURL, in.PRBody, in.PRDiff); pr != "" {
 		sections = append(sections, pr)
 	}
-	sections = append(sections, taskSection(lead, in.Instruction))
+	sections = append(sections, taskSection(replyLead(in.Instruction), in.Instruction))
 	return strings.Join(sections, "\n\n") + "\n"
 }
 
