@@ -11,6 +11,7 @@ import {
 import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport, Verdict } from '../../api/types'
 import type { ComposerMode } from '../../components/run/Composer'
 import DecisionBar from '../../components/session/DecisionBar'
+import LiveActivity from '../../components/session/LiveActivity'
 import { LIVE, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { parseTime, reasonOf } from '../../lib/format'
@@ -627,6 +628,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
             onVisibleTurns={setVisibleTurns}
           />
 
+          <LiveActivity events={events} working={status === 'running'} />
           {ask ? (
             <div className="wb-decide">
               <DecisionBar ask={ask} busy={sendBusy} onDecide={(verdict, reason) => void decide(verdict, reason)} />

@@ -837,6 +837,22 @@ describe('SessionConversation', () => {
       renderScene(f)
       expect(await screen.findByText('not_found: no such run')).toBeInTheDocument()
     })
+
+    it('shows the live activity line above the composer while running, and not once finished', async () => {
+      const running: RunDetail = { ...TRIAGE_DETAIL, status: 'running' }
+      const f = fake({ detail: running, events: triageEvents().slice(0, 12) })
+      const scene = renderScene(f)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+      const composer = document.querySelector('.sc-composer') as HTMLElement
+      expect(within(composer).getByTestId('live-activity')).toBeInTheDocument()
+      scene.unmount()
+
+      const f2 = fake({ detail: TRIAGE_DETAIL })
+      renderScene(f2)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+      const composer2 = document.querySelector('.sc-composer') as HTMLElement
+      expect(within(composer2).queryByTestId('live-activity')).toBeNull()
+    })
   })
 
   describe('the pane', () => {

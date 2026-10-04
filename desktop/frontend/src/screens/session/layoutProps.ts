@@ -1,5 +1,6 @@
 import type { FixInfo, PermissionDecision, RunDetail, SourcesSummary, Transport } from '../../api/types'
 import type { SessionData } from '../../components/session/useSessionModel'
+import type { IndexedEvent } from '../../lib/events'
 import type { SessionLayout } from '../../lib/sessionLayout'
 
 /**
@@ -16,6 +17,8 @@ export interface SessionLayoutProps {
   runId: string
   detail: RunDetail
   data: SessionData
+  /** The run's log, for the live activity line above the composer — the same list the Document layout's model is built from. */
+  events: IndexedEvent[]
   /** The ticket's title, when the tracker's queue lists it. */
   title?: string
   /** The workspace's notes directory, so a filed note is named as the vault names it. */
