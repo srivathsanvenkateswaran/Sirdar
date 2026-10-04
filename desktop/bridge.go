@@ -62,6 +62,20 @@ func (b *Bridge) Queue(ws string, f app.QueueFilter) ([]app.Ticket, error) {
 	return b.svc.Queue(ctx, ws, f)
 }
 
+// Resolve answers what pasted text points at — a tracker key or URL, a
+// helpdesk number or link, a Slack link — and the tracker key it leads to.
+// It starts nothing; text with no key behind it comes back with the reason
+// rather than as an error.
+func (b *Bridge) Resolve(ws, text string) (app.Intake, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	in, err := b.svc.Resolve(ctx, ws, text)
+	if in.Via == nil {
+		in.Via = []app.IntakeStep{}
+	}
+	return in, err
+}
+
 // ResolveHelpdesk answers which tracker issue a helpdesk number belongs
 // to. It reads one helpdesk record and starts nothing; a number with no
 // tracker issue behind it comes back with the reason on it rather than as

@@ -9,6 +9,7 @@ import type {
   EvalReport,
   GoldenEntry,
   HelpdeskLink,
+  Intake,
   MCPCallResult,
   MCPInventory,
   MCPToolList,
@@ -259,6 +260,10 @@ export function createHTTPTransport(): Transport {
           limit: f?.limit,
         })}`,
       ),
+    resolve: async (ws, text) => {
+      const got = await postJSON<Intake>(`/workspaces/${encodeURIComponent(ws)}/resolve`, { text })
+      return { ...got, via: got.via ?? [] }
+    },
     resolveHelpdesk: (ws, number) =>
       getJSON<HelpdeskLink>(
         `/workspaces/${encodeURIComponent(ws)}/helpdesk/${encodeURIComponent(number)}`,
@@ -423,6 +428,7 @@ interface BridgeBindings {
   AddWorkspace(root: string): Promise<Workspace>
   RemoveWorkspace(id: string): Promise<void>
   Queue(ws: string, f: { assignee: string; status: string; limit: number }): Promise<Ticket[] | null>
+  Resolve(ws: string, text: string): Promise<Intake>
   ResolveHelpdesk(ws: string, number: string): Promise<HelpdeskLink>
   ComposeIntent(ws: string, text: string): Promise<ComposedIntent>
   Runs(ws: string, key: string): Promise<RunSummary[] | null>
@@ -438,12 +444,12 @@ interface BridgeBindings {
   StartTriage(
     ws: string,
     keys: string[],
-    o: { provider: string; model: string; dryRun: boolean; instruction: string },
+    o: { provider: string; model: string; dryRun: boolean; instruction: string; slack: string },
   ): Promise<string>
   StartRCA(
     ws: string,
     key: string,
-    o: { prUrl: string; resolution: string; provider: string; model: string; instruction: string },
+    o: { prUrl: string; resolution: string; provider: string; model: string; instruction: string; slack: string },
   ): Promise<string>
   StartFix(
     ws: string,
@@ -557,6 +563,10 @@ export function createWailsTransport(): Transport {
           limit: f?.limit ?? 0,
         }),
       ),
+    resolve: async (ws, text) => {
+      const got = await bridge().Resolve(ws, text)
+      return { ...got, via: list(got.via) }
+    },
     resolveHelpdesk: (ws, number) => bridge().ResolveHelpdesk(ws, number),
     composeIntent: (ws, text) => bridge().ComposeIntent(ws, text),
     runs: async (ws, key) => list(await bridge().Runs(ws, key ?? '')),
@@ -580,6 +590,7 @@ export function createWailsTransport(): Transport {
         model: o?.model ?? '',
         dryRun: o?.dryRun ?? false,
         instruction: o?.instruction ?? '',
+        slack: o?.slack ?? '',
       }),
     }),
     startRCA: async (ws, key, o) => ({
@@ -589,6 +600,7 @@ export function createWailsTransport(): Transport {
         provider: o?.provider ?? '',
         model: o?.model ?? '',
         instruction: o?.instruction ?? '',
+        slack: o?.slack ?? '',
       }),
     }),
     startFix: async (ws, key, o) => ({

@@ -1712,3 +1712,34 @@ providers:
 		t.Fatalf("fallback models %q", got)
 	}
 }
+
+// TestSlackAndTrackerField covers the two intake settings: sources.slack
+// takes a credential ref and nothing literal, and a Zoho Desk helpdesk
+// reads the tracker link from cf_jira_ticket_id unless told otherwise.
+func TestSlackAndTrackerField(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal+"  slack:\n    token: env:SLACK_TOKEN\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Sources.Slack == nil || c.Sources.Slack.Token != "env:SLACK_TOKEN" {
+		t.Fatalf("slack %+v", c.Sources.Slack)
+	}
+	if c.Sources.Helpdesk.TrackerField != DefaultZohoTrackerField {
+		t.Fatalf("trackerField default %q", c.Sources.Helpdesk.TrackerField)
+	}
+
+	pinned, err := Load(writeCfg(t, minimal+"    trackerField: cf_tracker_key\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pinned.Sources.Helpdesk.TrackerField != "cf_tracker_key" {
+		t.Fatalf("pinned trackerField %q", pinned.Sources.Helpdesk.TrackerField)
+	}
+
+	if _, err := Load(writeCfg(t, minimal+"  slack:\n    token: xoxp-literal\n")); err == nil || !strings.Contains(err.Error(), "sources.slack.token") {
+		t.Fatalf("a literal Slack token should be refused, got %v", err)
+	}
+	if _, err := Load(writeCfg(t, minimal+"  slack: {}\n")); err == nil || !strings.Contains(err.Error(), "sources.slack.token") {
+		t.Fatalf("a Slack block without a token should be refused, got %v", err)
+	}
+}

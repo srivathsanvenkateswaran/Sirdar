@@ -94,6 +94,8 @@ type fake struct {
 	gotFilter    QueueFilter
 	gotHelpdesk  string
 	helpdeskLink HelpdeskLink
+	gotResolve   string
+	intake       Intake
 	gotCompose   string
 	composed     ComposedIntent
 	gotKey       string
@@ -252,6 +254,17 @@ func (f *fake) RemoveWorkspace(id string) error {
 	f.gotRemoved = id
 	f.mu.Unlock()
 	return nil
+}
+
+func (f *fake) Resolve(_ context.Context, wsID, text string) (Intake, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return Intake{}, err
+	}
+	f.mu.Lock()
+	f.gotResolve = text
+	out := f.intake
+	f.mu.Unlock()
+	return out, nil
 }
 
 func (f *fake) ResolveHelpdesk(_ context.Context, wsID, number string) (HelpdeskLink, error) {

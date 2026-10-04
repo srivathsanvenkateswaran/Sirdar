@@ -7,7 +7,7 @@ import {
   useSyncExternalStore,
   type SVGProps,
 } from 'react'
-import type { ComposedIntent, HelpdeskLink, RunSummary, Ticket, Transport, Workspace } from '../api/types'
+import type { ComposedIntent, Intake, RunSummary, Ticket, Transport, Workspace } from '../api/types'
 import ChipMenu, { type ChipMenuItem } from '../components/composer/ChipMenu'
 import ComposerCard from '../components/composer/ComposerCard'
 import { ACCESS, MODES, accessOf, type SessionMode } from '../components/composer/modes'
@@ -17,7 +17,9 @@ import {
   COMPOSER_PLACEHOLDER,
   NO_KEY_REASON,
   intentChips,
+  intentRef,
   parseIntent,
+  type Intent,
 } from '../lib/composeIntent'
 import {
   FIX_THEN_NOTE,
@@ -61,6 +63,8 @@ export interface StartOverrides {
   prUrl?: string
   /** RCA only: the engineer's own account of what was done. */
   resolution?: string
+  /** Triage and RCA: the Slack link the ticket was found through, whose thread goes into the bundle. */
+  slack?: string
 }
 
 /** How many of the tickets that landed are listed. */
@@ -191,8 +195,16 @@ function HelpdeskIcon(): JSX.Element {
   )
 }
 
-/** How long a helpdesk number waits after a keystroke before it is looked up. */
+/** How long a reference waits after a keystroke before it is looked up. */
 export const HELPDESK_DEBOUNCE_MS = 250
+
+/** What the status line says while the workspace is resolving the reference. */
+export function lookingUp(intent: Intent): string {
+  if (intent.helpdesk) return `Looking up helpdesk #${intent.helpdesk}…`
+  if (intent.helpdeskUrl) return 'Looking up the helpdesk ticket…'
+  if (intent.slack) return 'Reading the Slack thread…'
+  return 'Looking it up…'
+}
 
 /** Why a line cannot be settled here, in the words the status line uses. */
 export const AMBIGUOUS_REASON: Record<string, string> = {
@@ -335,28 +347,33 @@ export default function NewSession(props: {
 
   const intent = useMemo(() => parseIntent(text), [text])
 
-  // --- the helpdesk number, resolved --------------------------------------
+  // --- the reference, resolved --------------------------------------------
 
-  /** What the helpdesk said about the number in the box, when there is one. */
-  const [link, setLink] = useState<HelpdeskLink | null>(null)
+  /**
+   * What the workspace made of the reference in the box — a key and its
+   * helpdesk ticket, a helpdesk number or link and its key, a Slack link and
+   * the ticket its thread names — and the reference it was asked about.
+   */
+  const ref = intentRef(intent)
+  const [intake, setIntake] = useState<{ of: string; got: Intake } | null>(null)
   const [resolving, setResolving] = useState(false)
-  const number = useDebounced(intent.helpdesk, HELPDESK_DEBOUNCE_MS)
+  const asked = useDebounced(ref, HELPDESK_DEBOUNCE_MS)
 
   useEffect(() => {
-    if (!number || !workspaceId) {
-      setLink(null)
+    if (!asked || !workspaceId) {
+      setIntake(null)
       setResolving(false)
       return
     }
     let live = true
     setResolving(true)
     void transport
-      .resolveHelpdesk(workspaceId, number)
+      .resolve(workspaceId, asked)
       .then((got) => {
-        if (live) setLink(got)
+        if (live) setIntake({ of: asked, got })
       })
       .catch((err: unknown) => {
-        if (live) setLink({ number, key: '', reason: reasonOf(err) })
+        if (live) setIntake({ of: asked, got: { input: 'text', key: '', via: [], reason: reasonOf(err) } })
       })
       .finally(() => {
         if (live) setResolving(false)
@@ -364,7 +381,10 @@ export default function NewSession(props: {
     return () => {
       live = false
     }
-  }, [transport, workspaceId, number])
+  }, [transport, workspaceId, asked])
+
+  /** The resolution, when it is about what the box says now. */
+  const resolved = intake && intake.of === ref ? intake.got : null
 
   // --- what the model made of an ambiguous line ---------------------------
 
@@ -379,7 +399,13 @@ export default function NewSession(props: {
   }, [text])
 
   const confirmed = confirming?.read
-  const key = confirmed?.key || intent.key || (number === intent.helpdesk ? link?.key ?? '' : '')
+  // A key typed outright is the key whatever the lookup says; anything
+  // else — a number, a link — has a key only once the workspace answers.
+  const key = confirmed?.key || intent.key || resolved?.key || ''
+  /** The chip in the key's place: how the key was found, when it was. */
+  const foundBy = !confirmed && resolved?.key === key ? resolved.summary ?? '' : ''
+  /** The Slack link to carry into the bundle: only when the key came from its thread. */
+  const slackLink = !confirmed && resolved?.input === 'slack' && resolved.key === key ? intent.slack : ''
   const instruction = (confirmed?.instruction ?? intent.instruction).trim()
   const mode: SessionMode = pinnedMode ?? (confirmed?.mode || intent.mode || 'triage')
   const fixThen = prefs.fixThen
@@ -436,7 +462,7 @@ export default function NewSession(props: {
   // --- starting -----------------------------------------------------------
 
   const begin = useCallback(
-    async (what: SessionMode, forKey: string, note: string) => {
+    async (what: SessionMode, forKey: string, note: string, slack = '') => {
       if (busy) return
       setError('')
       setStarting(forKey)
@@ -450,6 +476,7 @@ export default function NewSession(props: {
           local: what === 'fix' && fixThen === 'local' ? true : undefined,
           prUrl: what === 'rca' ? prUrl.trim() || undefined : undefined,
           resolution: what === 'rca' ? resolution.trim() || undefined : undefined,
+          slack: what !== 'fix' && slack ? slack : undefined,
         })
         if (jobId) {
           awaitingRef.current = jobId
@@ -503,7 +530,7 @@ export default function NewSession(props: {
     !busy && (wantsReading || (key !== '' && !(needsNote && mode !== 'triage')))
 
   /** The chips, or the one line saying why there is nothing to start yet. */
-  const chips = key !== '' ? intentChips({ mode, key, instruction }) : []
+  const chips = key !== '' ? intentChips({ mode, key, instruction, resolution: foundBy }) : []
   /**
    * The one line that stands in place of the chips. A key with no triage
    * note behind it stops an RCA or a fix and nothing else, so on a triage
@@ -519,10 +546,10 @@ export default function NewSession(props: {
         ? `RCA and Fix need a triage note for ${key} first. Start a triage.`
         : key !== ''
           ? ''
-          : resolving
-            ? `Looking up helpdesk ${intent.helpdesk}…`
-            : link && link.number === intent.helpdesk && link.reason
-              ? link.reason
+          : ref !== '' && (resolving || !resolved)
+            ? lookingUp(intent)
+            : resolved?.reason
+              ? resolved.reason
               : NO_KEY_REASON
 
   const start = useCallback(() => {
@@ -539,8 +566,8 @@ export default function NewSession(props: {
       return
     }
     if (!key) return
-    void begin(mode, key, instruction)
-  }, [canStart, wantsReading, text, transport, workspaceId, key, mode, instruction, begin])
+    void begin(mode, key, instruction, slackLink)
+  }, [canStart, wantsReading, text, transport, workspaceId, key, mode, instruction, slackLink, begin])
 
   useProvidePrimaryAction({
     label: busy ? 'Starting…' : wantsReading ? 'Read this' : 'Start',
@@ -641,7 +668,10 @@ export default function NewSession(props: {
             {blocked === '' && chips.length > 0 ? (
               <>
                 {confirming ? <span className="new-session__confirm">Confirm</span> : null}
-                <span className="new-session__chips">{chips.join(' · ')}</span>
+                {/* Keys, numbers and the arrows between them read left to right whatever surrounds them. */}
+                <bdi className="new-session__chips" dir="ltr">
+                  {chips.join(' · ')}
+                </bdi>
                 {confirming ? ' — press Enter again to start' : ''}
               </>
             ) : (

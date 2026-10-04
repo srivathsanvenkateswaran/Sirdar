@@ -45,6 +45,9 @@ type TriageInput struct {
 	// ThreadHeadTruncated says whether ThreadHead is only the head of a
 	// longer conversation, so the prompt's heading can say which it is.
 	ThreadHeadTruncated bool
+	// Slack is the bundle's slack.md — the Slack thread the session was
+	// started from — or empty when it was started from anything else.
+	Slack string
 	// NotesLanguage is the language code the note itself is written in
 	// (config language.notes); empty means "en".
 	NotesLanguage string
@@ -145,6 +148,9 @@ func Triage(in TriageInput) string {
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
 	)
+	if s := slackSection(in.Slack); s != "" {
+		sections = append(sections, s)
+	}
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
@@ -168,6 +174,9 @@ func RCA(in RCAInput) string {
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
 	)
+	if s := slackSection(in.Slack); s != "" {
+		sections = append(sections, s)
+	}
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
@@ -370,6 +379,25 @@ func conversationSection(threadHead string, truncated bool) string {
 		heading += " (first lines; the rest is in thread.md)"
 	}
 	return heading + "\n\n" + fenceBlock("", threadHead)
+}
+
+// slackSection is the Slack thread the session was started from: what the
+// reporter wrote before the ticket existed, or beside it. It is the
+// bundle's slack.md in a fence, so the Bundle pane reads it the way it
+// reads the conversation.
+func slackSection(md string) string {
+	if strings.TrimSpace(md) == "" {
+		return ""
+	}
+	// Slack messages carry code blocks often, so the fence is one backtick
+	// longer than the longest run inside and a ``` in a message cannot
+	// close it.
+	fence := "```"
+	for strings.Contains(md, fence) {
+		fence += "`"
+	}
+	return "## From Slack (the thread the session was started from; also in slack.md)\n\n" +
+		fence + "\n" + strings.TrimRight(md, "\n") + "\n" + fence
 }
 
 func warningsSection(warnings []string) string {

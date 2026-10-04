@@ -57,6 +57,9 @@ rather than being silently ignored.
 | `sources.tracker.helpdeskRef` | object, optional | unset | Description-regex fallback for the helpdesk reference; tracker only, see helpdeskRef fallback below |
 | `sources.tracker.helpdeskRef.pattern` | string | none (required with `helpdeskRef`) | Go regex matched against the ticket description, with exactly one capture group holding the helpdesk link or id |
 | `sources.tracker.helpdeskRef.idPattern` | string | unset | Go regex applied to `pattern`'s capture, with exactly one capture group holding the helpdesk ticket id |
+| `sources.helpdesk.trackerField` | string | `cf_jira_ticket_id` for `zohodesk`; unset otherwise | The helpdesk record field that holds the tracker issue's key or the tracker's own id, read first when a helpdesk number or link is resolved. The API name of a custom field, with or without a `cf.` prefix. See [Starting from anything](#starting-from-anything) |
+| `sources.slack` | object, optional | unset | The read-only Slack reader a pasted Slack link is resolved through. See [Starting from anything](#starting-from-anything) |
+| `sources.slack.token` | string | none (required with `slack`) | Credential reference to a Slack user (`xoxp-`) or bot (`xoxb-`) token with `channels:history` and `groups:history` |
 | `notes.dir` | string | `.sirdar/notes` | Where rendered notes are copied; expands `~` and relative paths against the workspace root |
 | `notes.templates` | string | `""` (embedded defaults) | Directory holding `triage.md.tmpl`, `rca.md.tmpl`, `resolution.md.tmpl` overrides |
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |
@@ -404,6 +407,68 @@ ticket without a link.
 `ListFilter.Limit` is capped by the adapters, not by the caller: `0` means 100 results and the
 maximum is 200. An adapter paginates its API as far as it has to in order to fill the limit, and
 never returns more than it was asked for.
+
+## Starting from anything
+
+The New session box, `sirdar triage`, `sirdar rca`, `sirdar fix` and `POST
+/api/workspaces/{id}/resolve` all take whatever the support engineer was handed, and the
+intake resolver turns it into the tracker key a session runs on. It recognises, in this
+order of preference when the text holds several:
+
+1. a tracker key (`SBX-1`), in any surrounding text, Arabic included;
+2. a tracker URL whose last path segment is a key;
+3. a helpdesk number, `#28310` (four digits or more);
+4. a Zoho Desk ticket link, in either shape Desk writes —
+   `desk.zoho.com/agent/<portal>/<dept>/tickets/details/<id>` or
+   `desk.zoho.com/support/<portal>/ShowHomePage.do#Cases/dv/<id>` — on any regional
+   `desk.zoho.*` host;
+5. a Slack message link, `https://<team>.slack.com/archives/<channel>/p<ts>`, with or
+   without `?thread_ts=`.
+
+Text with none of these is read by the model, as the composer's assist always did; the CLI
+does not make that call and says the text names no ticket instead.
+
+A helpdesk number or link is resolved to its tracker issue by trying, in order:
+
+1. **pairs found in the last day**, kept in `.sirdar/runs/intake-cache.json`;
+2. **the helpdesk record's fields.** `sources.helpdesk.trackerField` first (for
+   `zohodesk`, `cf_jira_ticket_id` unless you set it), then any field whose name contains
+   `janus`, `jira` or `ticket`, then the rest, then the subject. The Zoho Desk adapter
+   carries every custom field as `cf.<api name>`. A field holding several keys yields the
+   highest-numbered. A field holding a UUID rather than a key is the tracker's own id, and
+   is looked up with `tracker.get {"id"}` on an exec adapter that supports it;
+3. **the tracker's search**: `tracker.list` with `query: "#28310"`, which an adapter may
+   honour or ignore;
+4. **the tracker's newest 200 tickets**: `tracker.list` with `limit: 200` and
+   `order: "newest"`, matched on `HelpdeskRef` equal to the helpdesk record id, then on a
+   title that starts with `#28310`.
+
+Whatever is found in steps 3 and 4 is checked, never trusted: an adapter that ignores the
+query answers with its ordinary list. The status line names the step that held —
+`#28310 → SBX-1 · from Zoho field cf_jira_ticket_id`, `#28310 → SBX-1 · matched by title`
+— and a key typed outright shows its helpdesk ticket beside it, `SBX-1 · #28310`.
+
+A Slack link is read with two Slack Web API calls, `conversations.history` for the one
+message and `conversations.replies` for its thread (the first 50 messages), and the first
+key, number or helpdesk link in what was written is resolved onward: `Slack thread →
+#28310 → SBX-1 · matched by title`. The thread is carried into the run's bundle as
+`slack.md` and into the prompt under the conversation; the Bundle pane shows it as "From
+Slack". The token is sent to `slack.com` and nowhere else, and a redirect off that host is
+refused.
+
+```yaml
+sources:
+  helpdesk:
+    adapter: zohodesk
+    trackerField: cf_jira_ticket_id   # the default for zohodesk; set it if your layout differs
+  slack:
+    token: keychain:sirdar-slack      # a user (xoxp-) or bot (xoxb-) token
+```
+
+Without `sources.slack`, a Slack link is answered with "Slack is not configured: set
+sources.slack.token (a Slack user token with channels:history, groups:history) in
+config.yaml". `sirdar doctor` has a `sources.slack` row that checks the token with
+`auth.test`.
 
 ## Built-in helpdesks
 

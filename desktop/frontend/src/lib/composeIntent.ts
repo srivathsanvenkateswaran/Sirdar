@@ -31,6 +31,16 @@ export interface Intent {
    * helpdesk cannot say.
    */
   helpdesk: string
+  /**
+   * A helpdesk link the line carried (a Zoho Desk ticket URL), as typed;
+   * '' when none. Like the number, it is resolved by the workspace, not here.
+   */
+  helpdeskUrl: string
+  /**
+   * A Slack message link the line carried, as typed; '' when none. The
+   * workspace reads the thread and finds the ticket named in it.
+   */
+  slack: string
   /** The mode a word in the line asked for; '' when no word did. */
   mode: IntentMode | ''
   /** The line with the key, the URL and the mode word taken out. */
@@ -76,6 +86,49 @@ const MODE_WORDS: { pattern: RegExp; mode: IntentMode }[] = [
 interface Span {
   start: number
   end: number
+}
+
+/** A Zoho Desk host: desk.zoho.com, desk.zoho.eu, desk.zoho.com.au, … */
+const ZOHO_HOST = /^desk\.zoho\.[a-z]{2,3}(\.[a-z]{2})?$/
+
+/** A Slack message permalink, host on a .slack.com dot boundary. */
+const SLACK_LINK =
+  /^https:\/\/[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*\.slack\.com\/archives\/[A-Z0-9]{6,}\/p\d{16}(?:[?#]|$)/
+
+/** Whether a URL is a Slack message link the workspace can read. */
+export function isSlackLink(text: string): boolean {
+  return SLACK_LINK.test(text)
+}
+
+/**
+ * The record id in a Zoho Desk ticket link, or '' — the agent UI's
+ * `…/tickets/details/<id>` and the older `ShowHomePage.do#Cases/dv/<id>`.
+ */
+export function helpdeskIdInURL(text: string): string {
+  let url: URL
+  try {
+    url = new URL(text)
+  } catch {
+    return ''
+  }
+  if (!ZOHO_HOST.test(url.hostname.toLowerCase())) return ''
+  const fragment = /(?:^|\/)Cases\/dv\/(\d{4,})(?:\/|$)/.exec(url.hash.replace(/^#/, ''))
+  if (fragment) return fragment[1]
+  const path = /\/tickets\/(?:details\/)?(\d{4,})(?:\/|$)/.exec(url.pathname)
+  return path ? path[1] : ''
+}
+
+/**
+ * What the workspace is asked to resolve for this line: the key, else the
+ * helpdesk number, else the helpdesk link, else the Slack link — the same
+ * order the service prefers them in — or '' when the line names none. It is
+ * the reference alone and not the line, so typing the instruction around it
+ * does not ask again.
+ */
+export function intentRef(intent: Intent): string {
+  if (intent.key) return intent.key
+  if (intent.helpdesk) return `#${intent.helpdesk}`
+  return intent.helpdeskUrl || intent.slack
 }
 
 /** The key at the end of a URL's path, or '' — `…/browse/OMNI-2510`. */
@@ -143,19 +196,31 @@ function withoutSpans(text: string, spans: Span[]): string {
 export function parseIntent(text: string): Intent {
   const trimmed = text.trim()
   if (trimmed === '') {
-    return { key: '', helpdesk: '', mode: '', instruction: '', ambiguity: '' }
+    return { key: '', helpdesk: '', helpdeskUrl: '', slack: '', mode: '', instruction: '', ambiguity: '' }
   }
 
   const spans: Span[] = []
   /** Every key the line names, with where it was found, so "first" is first in the line. */
   const keys: { at: number; key: string }[] = []
+  let helpdeskUrl = ''
+  let slack = ''
 
   // URLs first: a key inside one is the URL's, and the whole URL comes out
-  // of the instruction rather than leaving a naked host behind.
+  // of the instruction rather than leaving a naked host behind. A Slack
+  // link and a helpdesk link are references of their own, resolved by the
+  // workspace.
   for (const match of text.matchAll(URL_LIKE)) {
     const at = match.index ?? 0
     const raw = match[0].replace(/[.,;:)\]]+$/, '')
     spans.push({ start: at, end: at + raw.length })
+    if (isSlackLink(raw)) {
+      if (!slack) slack = raw
+      continue
+    }
+    if (helpdeskIdInURL(raw)) {
+      if (!helpdeskUrl) helpdeskUrl = raw
+      continue
+    }
     const key = keyInURL(raw)
     if (key && !keys.some((k) => k.key === key)) keys.push({ at, key })
   }
@@ -165,6 +230,8 @@ export function parseIntent(text: string): Intent {
     return {
       key: trimmed.toUpperCase(),
       helpdesk: '',
+      helpdeskUrl: '',
+      slack: '',
       mode: '',
       instruction: '',
       ambiguity: '',
@@ -213,17 +280,17 @@ export function parseIntent(text: string): Intent {
   let ambiguity: Ambiguity = ''
   if (keys.length > 1) ambiguity = 'two-keys'
   else if (modes.length > 1) ambiguity = 'two-modes'
-  else if (key === '' && helpdesk === '') ambiguity = 'no-key'
+  else if (key === '' && helpdesk === '' && helpdeskUrl === '' && slack === '') ambiguity = 'no-key'
 
-  return { key, helpdesk, mode, instruction, ambiguity }
+  return { key, helpdesk, helpdeskUrl, slack, mode, instruction, ambiguity }
 }
 
 /** What the box says while it is empty. */
-export const COMPOSER_PLACEHOLDER = 'Ticket key or URL, e.g. OMNI-2510'
+export const COMPOSER_PLACEHOLDER = 'A ticket key, a #helpdesk number, or a ticket or Slack link'
 
 /** Why nothing can be started, when nothing resolved. */
 export const NO_KEY_REASON =
-  'No ticket key yet — type one like OMNI-2510, or paste the ticket’s URL'
+  'No ticket yet — type a key like SBX-1 or a helpdesk number like #28310, or paste a ticket or Slack link'
 
 /** The Mode selector's word for each mode, for the chips. */
 export const MODE_LABEL: Record<IntentMode, string> = {
@@ -242,8 +309,14 @@ export function intentChips(o: {
   mode: IntentMode
   key: string
   instruction: string
+  /**
+   * How the key was found, when the workspace resolved it — "#28310 →
+   * SBX-1 · matched by title", "SBX-1 · #28310". It stands in the key's
+   * place, since it names the key.
+   */
+  resolution?: string
 }): string[] {
-  const chips = [MODE_LABEL[o.mode], o.key]
+  const chips = [MODE_LABEL[o.mode], o.resolution || o.key]
   if (o.instruction.trim() !== '') chips.push('with your note')
   return chips
 }

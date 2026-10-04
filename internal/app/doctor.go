@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -17,6 +18,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/transcribe"
@@ -252,7 +254,37 @@ func sourceChecks(ctx context.Context, cfg *config.Config) []Check {
 		name := fmt.Sprintf("sources.%s (%s)", s.role, s.sc.Adapter)
 		checks = append(checks, checkSource(ctx, cfg, name, s.sc)...)
 	}
-	return checks
+	return append(checks, slackCheck(ctx, cfg, nil))
+}
+
+// slackCheck is the sources.slack row: absent is fine and says what a
+// Slack link gets instead; present, the token is resolved and auth.test
+// says whose it is. hc is the HTTP client the check uses; nil is the
+// default, and a test passes one that reaches its own server.
+func slackCheck(ctx context.Context, cfg *config.Config, hc *http.Client) Check {
+	const name = "sources.slack"
+	if cfg.Sources.Slack == nil {
+		return Check{Name: name, OK: true, Detail: "not configured; a pasted Slack link says to set sources.slack.token"}
+	}
+	token, err := resolveRef(config.Resolver{Keychain: KeychainFor()}, "token", cfg.Sources.Slack.Token)
+	if err != nil {
+		return Check{Name: name, Detail: err.Error()}
+	}
+	c := slack.New(token)
+	if hc != nil {
+		c.HTTP = hc
+	}
+	ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
+	defer cancel()
+	who, err := c.AuthTest(ctx)
+	if err != nil {
+		return Check{Name: name, Detail: "auth.test failed: " + err.Error()}
+	}
+	detail := "reachable as " + who.User
+	if who.Team != "" {
+		detail += " in " + who.Team
+	}
+	return Check{Name: name, OK: true, Detail: detail}
 }
 
 // checkSource returns every check one configured source is worth. Most

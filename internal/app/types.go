@@ -412,6 +412,10 @@ type TriageOptions struct {
 	// the session as an Operator's request section at the top of the
 	// prompt and is recorded on the run.
 	Instruction string `json:"instruction"`
+	// Slack is the Slack message link the session was started from. The
+	// thread is read again when the job starts and carried into the bundle
+	// as slack.md. Empty carries nothing.
+	Slack string `json:"slack,omitempty"`
 }
 
 // RCAOptions are the inputs an RCA run takes: the two only it has, and the
@@ -427,6 +431,8 @@ type RCAOptions struct {
 	KeepWorktree bool   `json:"keepWorktree"`
 	// Instruction is the operator's own words, as on TriageOptions.
 	Instruction string `json:"instruction"`
+	// Slack is the Slack message link, as on TriageOptions.
+	Slack string `json:"slack,omitempty"`
 }
 
 // FixOptions are the flags of one fix job, matching `sirdar fix`.

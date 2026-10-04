@@ -28,7 +28,8 @@ import (
 // with what it was testing.
 func TestMain(m *testing.M) {
 	testbin.Dispatch(map[string]func() int{
-		"probeadapter": probeAdapterMain,
+		"probeadapter":  probeAdapterMain,
+		"intakeadapter": intakeAdapterMain,
 		"fake-whisper": fakeWhisperMain,
 		"fakemcp":      testbin.FakeMCP,
 	})

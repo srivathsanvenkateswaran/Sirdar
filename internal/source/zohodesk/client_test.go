@@ -185,6 +185,35 @@ func TestGet_MapsFields(t *testing.T) {
 	}
 }
 
+// TestGet_CarriesEveryCustomField pins the link a support process keeps in a
+// custom field: every entry of the record's cf object reaches Fields under
+// "cf.<api name>", stringified, so the intake resolver can read a tracker
+// key out of whichever field the layout puts it in.
+func TestGet_CarriesEveryCustomField(t *testing.T) {
+	_, c := newFixtureServer(t, serverOpts{})
+
+	got, err := c.Get(context.Background(), "555")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	for name, want := range map[string]string{
+		"cf.cf_company_id":     "4561",
+		"cf.cf_jira_ticket_id": "SBX-1",
+		"cf.cf_labels":         "billing, export",
+		"cf.cf_count":          "3",
+	} {
+		if got.Fields[name] != want {
+			t.Errorf("Fields[%s] = %q, want %q", name, got.Fields[name], want)
+		}
+	}
+	if _, ok := got.Fields["cf.cf_unset"]; ok {
+		t.Error("a null custom field should be left out")
+	}
+	if got.CustomerID != "4561" {
+		t.Errorf("CustomerID = %q, still read from cf_company_id", got.CustomerID)
+	}
+}
+
 func TestThreads_OrderRoleAndAttachmentIDs(t *testing.T) {
 	_, c := newFixtureServer(t, serverOpts{})
 

@@ -159,7 +159,7 @@ describe('NewSession', () => {
       'What should we look at in omni?',
     )
     expect(bar()).toHaveFocus()
-    expect(bar()).toHaveAttribute('placeholder', 'Ticket key or URL, e.g. OMNI-2510')
+    expect(bar()).toHaveAttribute('placeholder', 'A ticket key, a #helpdesk number, or a ticket or Slack link')
     const form = screen.getByRole('form', { name: 'Start' })
     const chips = form.querySelector('.composer-bar__chips')!
     expect(within(chips as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
@@ -175,7 +175,7 @@ describe('NewSession', () => {
     expect(sendButton()).toBeDisabled()
     expect(sendButton()).toHaveAttribute(
       'title',
-      'No ticket key yet — type one like OMNI-2510, or paste the ticket\u2019s URL',
+      'No ticket yet — type a key like SBX-1 or a helpdesk number like #28310, or paste a ticket or Slack link',
     )
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Start · screen · off'))
     // The Playbook chip is gone; nothing in the bar is a fact without a menu.
@@ -637,8 +637,11 @@ describe('NewSession', () => {
       const { onStart } = mount({ transport })
       fireEvent.change(bar(), { target: { value: '#25312 the total is off by one fils' } })
 
-      expect(await screen.findByText(/Triage · OMNI-3233 · with your note/)).toBeInTheDocument()
-      expect(transport.calls.resolveHelpdesk).toEqual([{ ws: 'ws1', number: '25312' }])
+      expect(
+        await screen.findByText(/Triage · #25312 → OMNI-3233 · from the helpdesk record · with your note/),
+      ).toBeInTheDocument()
+      // The reference alone is asked about, not the whole line.
+      expect(transport.calls.resolve).toEqual([{ ws: 'ws1', text: '#25312' }])
       fireEvent.click(sendButton())
       await waitFor(() =>
         expect(onStart).toHaveBeenCalledWith(
@@ -653,10 +656,105 @@ describe('NewSession', () => {
       const transport = createFakeTransport({ tickets: [] })
       mount({ transport })
       fireEvent.change(bar(), { target: { value: '#25312' } })
-      expect(
-        await screen.findByText('the helpdesk record for 25312 names no tracker issue'),
-      ).toBeInTheDocument()
+      expect(await screen.findByText('no tracker issue names #25312')).toBeInTheDocument()
       expect(sendButton()).toBeDisabled()
+    })
+  })
+
+  describe('a Slack link', () => {
+    const SLACK = 'https://acme.slack.com/archives/C0123ABCD/p1712345678901234'
+
+    it('says it is reading, then starts on the ticket the thread names and carries the link', async () => {
+      const transport = createFakeTransport({
+        tickets: [],
+        intake: {
+          [SLACK]: {
+            input: 'slack',
+            key: 'SBX-1',
+            helpdeskNumber: '28310',
+            via: [
+              { from: 'Slack thread', to: '#28310', source: 'slack' },
+              { from: '#28310', to: 'SBX-1', how: 'matched by title', source: 'recent tickets' },
+            ],
+            summary: 'Slack thread → #28310 → SBX-1 · matched by title',
+            slack: { url: SLACK, messages: 3, thread: true },
+          },
+        },
+      })
+      const { onStart } = mount({ transport })
+      fireEvent.change(bar(), { target: { value: `${SLACK} look at the export first` } })
+      expect(screen.getByRole('status')).toHaveTextContent('Reading the Slack thread…')
+      expect(sendButton()).toBeDisabled()
+
+      expect(
+        await screen.findByText('Triage · Slack thread → #28310 → SBX-1 · matched by title · with your note'),
+      ).toBeInTheDocument()
+      expect(transport.calls.resolve).toEqual([{ ws: 'ws1', text: SLACK }])
+      fireEvent.click(sendButton())
+      await waitFor(() =>
+        expect(onStart).toHaveBeenCalledWith(
+          'triage',
+          'SBX-1',
+          expect.objectContaining({ instruction: 'look at the export first', slack: SLACK }),
+        ),
+      )
+    })
+
+    it('says what to configure when the workspace has no Slack token', async () => {
+      const reason =
+        'Slack is not configured: set sources.slack.token (a Slack user token with channels:history, groups:history) in config.yaml'
+      const transport = createFakeTransport({
+        tickets: [],
+        intake: { [SLACK]: { input: 'slack', key: '', via: [], reason } },
+      })
+      mount({ transport })
+      fireEvent.change(bar(), { target: { value: SLACK } })
+      expect(await screen.findByText(reason)).toBeInTheDocument()
+      expect(sendButton()).toBeDisabled()
+    })
+  })
+
+  describe('a helpdesk link', () => {
+    it('is resolved to the tracker key and starts with no Slack thread', async () => {
+      const url = 'https://desk.zoho.com/agent/acme/support/tickets/details/123400000456789'
+      const transport = createFakeTransport({
+        tickets: [],
+        intake: {
+          [url]: {
+            input: 'helpdesk-url',
+            key: 'SBX-1',
+            helpdeskNumber: '28310',
+            helpdeskId: '123400000456789',
+            via: [{ from: '#28310', to: 'SBX-1', how: 'from Zoho field cf_jira_ticket_id', source: 'helpdesk record' }],
+            summary: '#28310 → SBX-1 · from Zoho field cf_jira_ticket_id',
+          },
+        },
+      })
+      const { onStart } = mount({ transport })
+      fireEvent.change(bar(), { target: { value: url } })
+      expect(screen.getByRole('status')).toHaveTextContent('Looking up the helpdesk ticket…')
+      expect(
+        await screen.findByText('Triage · #28310 → SBX-1 · from Zoho field cf_jira_ticket_id'),
+      ).toBeInTheDocument()
+      fireEvent.click(sendButton())
+      await waitFor(() =>
+        expect(onStart).toHaveBeenCalledWith('triage', 'SBX-1', expect.objectContaining({ slack: undefined })),
+      )
+    })
+  })
+
+  describe('a key', () => {
+    it('can start at once, and names its helpdesk ticket once the tracker says', async () => {
+      const transport = createFakeTransport({
+        tickets: [],
+        intake: {
+          'SBX-1': { input: 'key', key: 'SBX-1', helpdeskNumber: '28310', via: [], summary: 'SBX-1 · #28310' },
+        },
+      })
+      mount({ transport })
+      fireEvent.change(bar(), { target: { value: 'SBX-1' } })
+      expect(sendButton()).toBeEnabled()
+      expect(await screen.findByText('Triage · SBX-1 · #28310')).toBeInTheDocument()
     })
   })
 
@@ -746,7 +844,7 @@ describe('NewSession', () => {
       fireEvent.change(bar(), { target: { value: 'sort out the rounding' } })
       expect(sendButton()).toBeDisabled()
       expect(screen.getByRole('status')).toHaveTextContent(
-        'No ticket key yet — type one like OMNI-2510, or paste the ticket’s URL',
+        'No ticket yet — type a key like SBX-1 or a helpdesk number like #28310, or paste a ticket or Slack link',
       )
 
       // A line that reads cleanly never spends a call, setting or no setting.

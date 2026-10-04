@@ -120,6 +120,12 @@ type Options struct {
 	// the session as an Operator's request section at the top of the
 	// prompt and is recorded in the run's state. Empty changes nothing.
 	Instruction string
+
+	// Slack is the Slack thread the run was started from, already read and
+	// rendered (slack.Markdown). It is written into the bundle as slack.md
+	// and put in front of the session under the conversation. Empty
+	// changes nothing; a replayed BundleDir keeps whatever slack.md it has.
+	Slack string
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull

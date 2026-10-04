@@ -200,6 +200,10 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	if err != nil {
 		return p, err
 	}
+	slackMD, err := stageSlack(rn.BundleDir(), o)
+	if err != nil {
+		return p, err
+	}
 
 	in := prompt.TriageInput{
 		Instruction:         p.state.Instruction,
@@ -208,6 +212,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		Playbooks:           playbooks,
 		ThreadHead:          threadHead,
 		ThreadHeadTruncated: truncated,
+		Slack:               slackMD,
 		NotesLanguage:       cfg.NotesLanguage(),
 		CustomerLanguage:    cfg.CustomerLanguage(),
 	}
@@ -340,6 +345,24 @@ func (r *Runner) stageBundle(ctx context.Context, key string, p *prepared, o Opt
 	}
 	p.state.Warnings = append(p.state.Warnings, "bundle replayed from "+o.BundleDir+"; no ticket source was called")
 	return bundle, nil
+}
+
+// stageSlack writes the Slack thread the run was started from into the
+// bundle as slack.md and returns it. A replayed bundle that already carries
+// a slack.md keeps it, and its text is what the session reads.
+func stageSlack(bundleDir string, o Options) (string, error) {
+	path := filepath.Join(bundleDir, "slack.md")
+	if strings.TrimSpace(o.Slack) == "" {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return "", nil
+		}
+		return string(data), nil
+	}
+	if err := os.WriteFile(path, []byte(o.Slack), 0o644); err != nil {
+		return "", fmt.Errorf("run: write slack.md: %w", err)
+	}
+	return o.Slack, nil
 }
 
 // copyTree copies src over dst recursively, creating directories as it

@@ -13,7 +13,7 @@ func init() { commands["rca"] = cmdRCA }
 
 func cmdRCA(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("rca", stderr,
-		"usage: sirdar rca KEY [--pr URL] [--resolution TEXT|@FILE] [--at COMMIT] [--keep-worktree] [--provider claude|codex|openai|acp|qwen|cursor] [--model NAME] [--no-notify]")
+		"usage: sirdar rca TICKET [--pr URL] [--resolution TEXT|@FILE] [--at COMMIT] [--keep-worktree] [--provider claude|codex|openai|acp|qwen|cursor] [--model NAME] [--no-notify]")
 	prURL := fs.String("pr", "", "merged pull request; its diff is read with gh when available")
 	resolution := fs.String("resolution", "", "what was done, as text or @path to a file")
 	providerName := fs.String("provider", "", "override the configured provider")
@@ -47,9 +47,15 @@ func cmdRCA(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := interruptible()
 	defer stop()
 
+	resolved, ok := resolveArgs(ctx, cfg, deps, []string{key}, stderr)
+	if !ok {
+		return 1
+	}
+	key = resolved.keys[0]
+
 	r := &runner.Runner{Deps: deps}
 	out, err := r.RCA(ctx, key, runner.RCAOptions{
-		Options:    runner.Options{Model: *model, NoNotify: *noNotify, At: *at, KeepWorktree: *keepWorktree},
+		Options:    runner.Options{Model: *model, NoNotify: *noNotify, At: *at, KeepWorktree: *keepWorktree, Slack: resolved.slack},
 		PRURL:      *prURL,
 		Resolution: text,
 	})

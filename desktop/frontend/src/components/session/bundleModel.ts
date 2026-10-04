@@ -29,6 +29,8 @@ export interface Playbook {
 export interface Bundle {
   facts: { key: string; value: string }[]
   thread: BundleMessage[]
+  /** The Slack thread the session was started from (slack.md); empty when it was started from anything else. */
+  slack: BundleMessage[]
   files: string[]
   playbooks: Playbook[]
 }
@@ -66,6 +68,36 @@ function thread(prompt: string): BundleMessage[] {
       continue
     }
     const head = /^## (.+?) · (.+?) · (.+)$/.exec(line)
+    if (head) {
+      if (current) out.push(current)
+      current = { at: head[1].trim(), role: head[2].trim(), author: head[3].trim(), text: '' }
+      continue
+    }
+    if (current) current.text = current.text ? `${current.text}\n${line}` : line
+  }
+  if (current) out.push(current)
+  return out.map((m) => ({ ...m, text: m.text.trim() }))
+}
+
+/**
+ * The `## From Slack` section: slack.md in a fence of its own length (one
+ * backtick longer than any run inside, since Slack messages carry code
+ * blocks), with the same `## stamp · role · author` heading per message the
+ * conversation uses. Only the fence that opened the section closes it.
+ */
+function slack(prompt: string): BundleMessage[] {
+  const lines = prompt.split('\n')
+  const start = lines.findIndex((l) => /^## From Slack\b/.test(l))
+  if (start === -1) return []
+  let i = start + 1
+  while (i < lines.length && lines[i].trim() === '') i++
+  const fence = /^(`{3,})\s*$/.exec(lines[i] ?? '')?.[1]
+  if (!fence) return []
+  const out: BundleMessage[] = []
+  let current: BundleMessage | undefined
+  for (const line of lines.slice(i + 1)) {
+    if (line === fence) break
+    const head = /^## (.*?) · (.+?) · (.+)$/.exec(line)
     if (head) {
       if (current) out.push(current)
       current = { at: head[1].trim(), role: head[2].trim(), author: head[3].trim(), text: '' }
@@ -117,7 +149,13 @@ function files(prompt: string): string[] {
 
 /** Everything the Bundle pane draws, read out of the prompt. */
 export function parseBundle(prompt: string): Bundle {
-  return { facts: facts(prompt), thread: thread(prompt), files: files(prompt), playbooks: playbooks(prompt) }
+  return {
+    facts: facts(prompt),
+    thread: thread(prompt),
+    slack: slack(prompt),
+    files: files(prompt),
+    playbooks: playbooks(prompt),
+  }
 }
 
 /** One `Key: value` line of the ticket block, by its key, case aside. */

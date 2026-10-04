@@ -67,6 +67,10 @@ type Options struct {
 	// ProbeModel resolves one model alias with the provider's CLI; nil
 	// means claude.ProbeModel. Tests set it so no CLI is started.
 	ProbeModel ProbeFunc
+	// Slack builds the Slack reader for a workspace; nil means SlackFor,
+	// which reads sources.slack.token. Tests set it so no request leaves
+	// the process.
+	Slack func(cfg *config.Config) (SlackReader, error)
 }
 
 // DefaultBuffer is how many events a subscriber may fall behind by before
@@ -730,7 +734,14 @@ func (s *Service) startTriage(ctx context.Context, wsID string, keys []string, o
 			return "", err
 		}
 	}
+	if err := checkSlackLink(o.Slack); err != nil {
+		return "", err
+	}
 	return s.startJob(ctx, wsID, o.Provider, o.Model, done, func(jctx context.Context, deps runner.Deps) []JobOutcome {
+		slackMD, err := s.slackMarkdown(jctx, deps.Config, o.Slack)
+		if err != nil {
+			return s.failed(keys, err)
+		}
 		r := &runner.Runner{Deps: deps}
 		outs, err := r.Triage(jctx, keys, runner.Options{
 			Model:        o.Model,
@@ -739,6 +750,7 @@ func (s *Service) startTriage(ctx context.Context, wsID string, keys []string, o
 			At:           o.At,
 			KeepWorktree: o.KeepWorktree,
 			Instruction:  o.Instruction,
+			Slack:        slackMD,
 		})
 		if err != nil {
 			return s.failed(keys, err)
@@ -752,10 +764,17 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 	if err := checkID(ErrNoSuchRun, "key", key); err != nil {
 		return "", err
 	}
+	if err := checkSlackLink(o.Slack); err != nil {
+		return "", err
+	}
 	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
+		slackMD, err := s.slackMarkdown(jctx, deps.Config, o.Slack)
+		if err != nil {
+			return s.failed([]string{key}, err)
+		}
 		r := &runner.Runner{Deps: deps}
 		out, err := r.RCA(jctx, key, runner.RCAOptions{
-			Options:    runner.Options{Model: o.Model, At: o.At, KeepWorktree: o.KeepWorktree, Instruction: o.Instruction},
+			Options:    runner.Options{Model: o.Model, At: o.At, KeepWorktree: o.KeepWorktree, Instruction: o.Instruction, Slack: slackMD},
 			PRURL:      o.PRURL,
 			Resolution: o.Resolution,
 		})

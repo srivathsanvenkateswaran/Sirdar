@@ -369,8 +369,38 @@ func (s *server) refreshModels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
+// resolve is POST /api/workspaces/{id}/resolve: what a piece of pasted
+// text points at — a tracker key or URL, a helpdesk number or link, a Slack
+// link — and the tracker key it resolves to, with the hops that got there.
+//
+// It reads and starts nothing else, and like the helpdesk route it answers
+// "no key" as 200 with the reason on it: the composer asks this while
+// somebody is still typing. A POST because the text is a body.
+func (s *server) resolve(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Text string `json:"text"`
+	}
+	if !decode(w, r, &body, false) {
+		return
+	}
+	if strings.TrimSpace(body.Text) == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "text is required")
+		return
+	}
+	out, err := s.svc.Resolve(r.Context(), r.PathValue("id"), body.Text)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	if out.Via == nil {
+		out.Via = []IntakeStep{}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 // resolveHelpdesk is GET /api/workspaces/{id}/helpdesk/{number}: which
-// tracker issue a helpdesk number belongs to.
+// tracker issue a helpdesk number belongs to. It is an alias of resolve
+// for "#<number>", answered in the older shape.
 //
 // It reads one helpdesk record and starts nothing, so it carries no gate
 // beyond the ones every read route has. A number the helpdesk does not

@@ -2,25 +2,19 @@ package app
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
 )
 
 // HelpdeskLink is what one helpdesk number resolves to: the tracker key the
-// helpdesk record points at, or nothing with the reason it could not be
-// found.
-//
-// Key empty is an ordinary answer and not an error. A person typing a
-// helpdesk number into the composer needs to be told which of the three it
-// was — the workspace reads no helpdesk, the record does not exist, or the
-// record exists and names no tracker issue — and each of those is a
-// different thing to do next.
+// helpdesk ticket belongs to, or nothing with the reason it could not be
+// found. It is the older, narrower answer of GET …/helpdesk/{number}, kept
+// as an alias of Resolve for clients that still ask it.
 type HelpdeskLink struct {
 	Number string `json:"number"`
 	Key    string `json:"key"`
@@ -32,9 +26,8 @@ type HelpdeskLink struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// helpdeskNumber is what this route accepts: digits, as a helpdesk writes a
-// ticket number. It goes no further than the adapter, but it is checked
-// here for the same reason every other identifier is.
+// helpdeskNumber is what the alias route accepts: digits, as a helpdesk
+// writes a ticket number.
 var helpdeskNumber = regexp.MustCompile(`^[0-9]{1,32}$`)
 
 // trackerKeyIn finds a tracker key in arbitrary text: two or more
@@ -43,23 +36,119 @@ var helpdeskNumber = regexp.MustCompile(`^[0-9]{1,32}$`)
 // key the person could have typed is a key the resolver can find.
 var trackerKeyIn = regexp.MustCompile(`\b[A-Z][A-Z0-9]+-[0-9]+\b`)
 
+// SlackFor builds the Slack reader a workspace configures, or nil when it
+// configures none. The token is resolved here and held only by the client.
+func SlackFor(cfg *config.Config) (SlackReader, error) {
+	if cfg.Sources.Slack == nil {
+		return nil, nil
+	}
+	token, err := resolveRef(config.Resolver{Keychain: KeychainFor()}, "sources.slack.token", cfg.Sources.Slack.Token)
+	if err != nil {
+		return nil, err
+	}
+	return slack.New(token), nil
+}
+
+// ResolveIntake resolves text against the sources a caller already built —
+// the CLI's path, which builds its own and runs no service. fallback reads
+// text with no reference in it; nil answers such text with a reason.
+func ResolveIntake(ctx context.Context, cfg *config.Config, tracker source.Tracker, helpdesk source.Helpdesk, text string, fallback func(context.Context, string) (ComposedIntent, error)) (Intake, error) {
+	sr, serr := SlackFor(cfg)
+	r := newResolver(cfg, tracker, helpdesk, sr, serr, fallback)
+	return r.resolve(ctx, text)
+}
+
+func newResolver(cfg *config.Config, tracker source.Tracker, helpdesk source.Helpdesk, sr SlackReader, serr error, fallback func(context.Context, string) (ComposedIntent, error)) *intakeResolver {
+	r := &intakeResolver{
+		tracker:      tracker,
+		helpdesk:     helpdesk,
+		helpdeskName: helpdeskDisplayName(cfg.Sources.Helpdesk),
+		slack:        sr,
+		slackErr:     serr,
+		cache:        newIntakeCache(cfg.Root, nil),
+		fallback:     fallback,
+	}
+	if cfg.Sources.Helpdesk != nil {
+		r.trackerField = cfg.Sources.Helpdesk.TrackerField
+	}
+	return r
+}
+
+// Resolve answers what a piece of pasted text points at: a tracker key, a
+// tracker URL, a helpdesk number or link, or a Slack link whose thread names
+// one of those. It is read-only — it reads the tracker, the helpdesk and
+// Slack, starts no run and writes nothing but its own day-long cache of
+// helpdesk→tracker pairs. Text with none of those in it is read by the
+// model, one short call, the same reading ComposeIntent makes.
+func (s *Service) Resolve(ctx context.Context, wsID, text string) (Intake, error) {
+	if strings.TrimSpace(text) == "" {
+		return Intake{}, fmt.Errorf("%w: there is nothing to resolve", ErrInvalidArgument)
+	}
+	_, cfg, err := s.load(wsID)
+	if err != nil {
+		return Intake{}, err
+	}
+	deps, cleanup, err := s.build(cfg, "", "", s.stderr())
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		return Intake{}, err
+	}
+	sr, serr := s.slackFor(cfg)
+	fallback := func(ctx context.Context, text string) (ComposedIntent, error) {
+		return s.ComposeIntent(ctx, wsID, text)
+	}
+	r := newResolver(cfg, deps.Tracker, deps.Helpdesk, sr, serr, fallback)
+	r.cache = newIntakeCache(cfg.Root, s.opts.Now)
+	return r.resolve(ctx, text)
+}
+
+// checkSlackLink refuses a start whose Slack field is not a Slack link,
+// before any job exists.
+func checkSlackLink(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	if _, ok := slack.FindLink(raw); !ok {
+		return fmt.Errorf("%w: %q is not a Slack message link", ErrInvalidArgument, raw)
+	}
+	return nil
+}
+
+// slackMarkdown reads the Slack link a start carries and renders the thread
+// for the bundle's slack.md. Empty when the start carries none.
+func (s *Service) slackMarkdown(ctx context.Context, cfg *config.Config, raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", nil
+	}
+	l, ok := slack.FindLink(raw)
+	if !ok {
+		return "", fmt.Errorf("%w: %q is not a Slack message link", ErrInvalidArgument, raw)
+	}
+	sr, err := s.slackFor(cfg)
+	if err != nil {
+		return "", fmt.Errorf("the Slack token could not be read: %w", err)
+	}
+	if sr == nil {
+		return "", fmt.Errorf("%s", SlackNotConfigured)
+	}
+	th, err := sr.Read(ctx, l)
+	if err != nil {
+		return "", fmt.Errorf("the Slack link could not be read: %w", err)
+	}
+	return slack.Markdown(th), nil
+}
+
+func (s *Service) slackFor(cfg *config.Config) (SlackReader, error) {
+	if s.opts.Slack != nil {
+		return s.opts.Slack(cfg)
+	}
+	return SlackFor(cfg)
+}
+
 // ResolveHelpdesk answers which tracker issue a helpdesk number belongs to.
-//
-// It is read-only: one Get against the workspace's helpdesk adapter, and no
-// run, no job and no write of any kind. It exists because the composer lets
-// a person paste the number they have — support engineers are handed
-// helpdesk numbers, not tracker keys — and everything Sirdar files is filed
-// under the tracker key.
-//
-// How the link is found is the honest part. ticket.HelpdeskTicket carries
-// no tracker reference of its own: the link is modelled in the other
-// direction, as TrackerTicket.HelpdeskRef, because that is the direction a
-// triage run reads it in. So the key is looked for where the adapters
-// actually put it — the record's own Fields, which is where an adapter that
-// knows the link records it (Front's `ticketIds`, for one), and failing
-// that the subject line, where a support process that types the key into
-// the subject puts it. When neither has one, the answer says so rather than
-// guessing, and the composer tells the person to type the key instead.
+// It is Resolve for "#<number>", answered in the older HelpdeskLink shape.
 func (s *Service) ResolveHelpdesk(ctx context.Context, wsID, number string) (HelpdeskLink, error) {
 	number = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(number), "#"))
 	if !helpdeskNumber.MatchString(number) {
@@ -76,46 +165,8 @@ func (s *Service) ResolveHelpdesk(ctx context.Context, wsID, number string) (Hel
 	if err != nil {
 		return HelpdeskLink{}, err
 	}
-	if deps.Helpdesk == nil {
-		return HelpdeskLink{Number: number, Reason: "this workspace reads no helpdesk, so a helpdesk number cannot be looked up"}, nil
-	}
-
-	hd, err := deps.Helpdesk.Get(ctx, number)
-	if err != nil {
-		var serr *source.Error
-		if errors.As(err, &serr) {
-			switch serr.Code {
-			case source.NotFound:
-				return HelpdeskLink{Number: number, Reason: "the helpdesk has no ticket " + number}, nil
-			case source.Unsupported:
-				return HelpdeskLink{}, ErrUnsupported
-			}
-		}
-		return HelpdeskLink{}, err
-	}
-
-	link := HelpdeskLink{Number: number, Subject: hd.Subject}
-	if key := trackerKeyOf(hd); key != "" {
-		link.Key = key
-		return link, nil
-	}
-	link.Reason = "the helpdesk record for " + number + " names no tracker issue"
-	return link, nil
-}
-
-// trackerKeyOf is the first tracker key the helpdesk record carries: its
-// fields first, read in name order so the answer does not depend on map
-// iteration, then the subject. Empty when it carries none.
-func trackerKeyOf(hd ticket.HelpdeskTicket) string {
-	names := make([]string, 0, len(hd.Fields))
-	for name := range hd.Fields {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		if key := trackerKeyIn.FindString(hd.Fields[name]); key != "" {
-			return key
-		}
-	}
-	return trackerKeyIn.FindString(hd.Subject)
+	r := newResolver(cfg, deps.Tracker, deps.Helpdesk, nil, nil, nil)
+	r.cache = newIntakeCache(cfg.Root, s.opts.Now)
+	in := r.fromHelpdesk(ctx, InputHelpdeskNumber, number, "")
+	return HelpdeskLink{Number: number, Key: in.Key, Subject: in.Subject, Reason: in.Reason}, nil
 }

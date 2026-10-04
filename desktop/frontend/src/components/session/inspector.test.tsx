@@ -213,6 +213,50 @@ describe('the bundle pane', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(dir))
   })
 
+  it('draws the Slack thread under the conversation, code block and all, when the run carried one', async () => {
+    const fixture = triageWithAttachments()
+    const slackSection = [
+      '## From Slack (the thread the session was started from; also in slack.md)',
+      '',
+      '````',
+      '# Slack thread',
+      '',
+      'Link: https://acme.slack.com/archives/C0123ABCD/p1712345678901234',
+      'Messages: 2',
+      '',
+      '## 2026-09-12T09:00:00Z · slack · سارة',
+      '',
+      'العميل يقول إن التصدير فارغ #28310',
+      '```',
+      'error 500',
+      '```',
+      '',
+      '## 2026-09-12T09:05:00Z · slack · sam',
+      '',
+      'looking now',
+      '````',
+    ].join('\n')
+    const t = createFakeTransport({
+      sessions: { [TRIAGE_RUN_ID]: { ...fixture, prompt: `${fixture.prompt}\n\n${slackSection}\n` } },
+    })
+    render(<BundlePane transport={t} workspaceId="ws1" runId={TRIAGE_RUN_ID} />)
+    const block = await screen.findByRole('region', { name: 'From Slack' })
+    expect(block).toHaveTextContent('2 messages')
+    const rows = within(block).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]).getByText('سارة')).toHaveAttribute('dir', 'auto')
+    expect(rows[0]).toHaveTextContent('error 500')
+    // The conversation above it is untouched by the Slack messages.
+    const conversation = screen.getByRole('region', { name: 'Conversation' })
+    expect(within(conversation).queryByText(/looking now/)).toBeNull()
+  })
+
+  it('draws no Slack block for a run that was not started from Slack', async () => {
+    render(<BundlePane transport={transport()} workspaceId="ws1" runId={TRIAGE_RUN_ID} />)
+    await screen.findByTestId('bundle-view')
+    expect(screen.queryByRole('region', { name: 'From Slack' })).toBeNull()
+  })
+
   it('leaves the menu out where there is neither a folder to open nor a path to copy', async () => {
     render(<BundlePane transport={transport()} workspaceId="ws1" runId={TRIAGE_RUN_ID} />)
     await screen.findByTestId('bundle-view')

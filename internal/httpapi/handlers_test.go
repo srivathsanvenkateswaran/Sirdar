@@ -375,6 +375,32 @@ func TestResolveHelpdeskAnswersTheLink(t *testing.T) {
 	}
 }
 
+// TestResolveAnswersTheIntake pins the one route the composer asks while
+// somebody types: the text goes in, the key and the hops come back, and an
+// answer with no key is 200 with the reason on it.
+func TestResolveAnswersTheIntake(t *testing.T) {
+	f := newFake()
+	f.intake = Intake{Input: "helpdesk-number", Key: "SBX-1", HelpdeskNumber: "28310",
+		Via:     []IntakeStep{{From: "#28310", To: "SBX-1", How: "matched by title", Source: "recent tickets"}},
+		Summary: "#28310 → SBX-1 · matched by title"}
+	var got Intake
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/resolve", `{"text":"#28310"}`), 200, &got)
+	if f.gotResolve != "#28310" || got.Key != "SBX-1" || got.Summary != f.intake.Summary || len(got.Via) != 1 {
+		t.Fatalf("intake %+v (text %q)", got, f.gotResolve)
+	}
+
+	f = newFake()
+	f.intake = Intake{Input: "slack", Reason: "Slack is not configured"}
+	var raw map[string]any
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/resolve", `{"text":"https://acme.slack.com/archives/C0123ABCD/p1712345678901234"}`), 200, &raw)
+	if raw["reason"] != "Slack is not configured" || raw["via"] == nil {
+		t.Fatalf("a reason answers 200 with an empty via list, got %+v", raw)
+	}
+
+	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/resolve", `{"text":" "}`), 400, "bad_request")
+	assertError(t, do(t, newFake(), "POST", "/api/workspaces/nope/resolve", `{"text":"SBX-1"}`), 404, "not_found")
+}
+
 func TestResolveHelpdeskUnknownWorkspace(t *testing.T) {
 	assertError(t, do(t, newFake(), "GET", "/api/workspaces/nope/helpdesk/25312", ""), 404, "not_found")
 }
