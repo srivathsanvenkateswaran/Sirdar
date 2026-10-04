@@ -24,6 +24,7 @@ import Avatar from '../../ui/run-card/Avatar'
 import SegmentedControl from '../../ui/segmented-control'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
 import Toggle from '../../ui/toggle'
+import ReposCard from './ReposCard'
 import { levelOf, MARKS, OpenConfig, type DoctorState, type Loaded } from './shared'
 
 /** How long a Remove button stays armed before it goes back to asking. */
@@ -261,6 +262,8 @@ export default function GeneralPage({
           </>
         )}
       </SettingCard>
+
+      {currentWorkspaceId ? <ReposCard summary={summary} /> : null}
 
       <SettingCard heading="Appearance">
         <SettingRow

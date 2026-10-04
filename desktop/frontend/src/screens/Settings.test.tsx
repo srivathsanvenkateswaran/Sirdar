@@ -197,6 +197,35 @@ describe('General', () => {
     expect(document.querySelector('.settings-you .sd-avatar')?.textContent).toBe('S')
   })
 
+  it('lists the repositories a session may read, with what each clone says, and no paths in the rows', async () => {
+    const facts = { exists: true, git: true, branch: 'main', upstream: 'origin/main', behind: 0, ahead: 0 }
+    const summary = configSummary({
+      repos: [
+        { name: 'omni', path: '/repos/omni', workspace: true, facts, state: 'main · up to date with origin/main · fetched 1 hour ago' },
+        {
+          name: 'Acme.Web',
+          about: 'web frontend',
+          path: '/repos/Acme.Web',
+          origin: 'git@github.com:acme/Acme.Web.git',
+          facts: { ...facts, behind: 3 },
+          state: 'main · 3 behind origin/main · fetched 2 days ago',
+        },
+        { name: 'reports', path: '/repos/reports', facts: { exists: false, git: false, behind: 0, ahead: 0 }, state: 'not found' },
+      ],
+    })
+    open({}, transportWith({}, { configSummary: summary }))
+    const card = (await screen.findByRole('heading', { name: 'Repositories' })).closest('section') as HTMLElement
+    expect(within(card).getByText('web frontend')).toBeInTheDocument()
+    expect(within(card).getByText('main · 3 behind origin/main · fetched 2 days ago')).toBeInTheDocument()
+    expect(screen.getByTestId('repo-state-reports')).toHaveAttribute('data-level', 'warn')
+    expect(within(card).getByText('Where a fix is made')).toBeInTheDocument()
+    expect(within(card).queryByText('/repos/Acme.Web')).toBeNull()
+    expect(within(card).getByText('Acme.Web').closest('[title]')).toHaveAttribute(
+      'title',
+      '/repos/Acme.Web\ngit@github.com:acme/Acme.Web.git',
+    )
+  })
+
   it('names the rule that answered when it is not the me block', async () => {
     const summary = configSummary({ me: { email: 'sri@acme.com', names: [], source: 'git' } })
     open({}, transportWith({}, { configSummary: summary }))
