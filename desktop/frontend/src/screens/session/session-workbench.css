@@ -1455,6 +1455,12 @@ button.wb-ttab:hover,
   background: var(--sd-sheet);
 }
 
+/* Matches `.wb-cmd`'s own inset, so the activity line's dot and label start
+   at the same left edge as the composer's `›` prompt below it. */
+.wb-centre > .sd-activity {
+  padding-inline: 16px 12px;
+}
+
 .wb-cmd {
   display: flex;
   flex: 0 0 auto;

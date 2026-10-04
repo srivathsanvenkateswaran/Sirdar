@@ -360,6 +360,22 @@ describe('SessionWorkbench', () => {
       fireEvent.click(within(commandBar()).getByRole('button', { name: 'Stop the run' }))
       await waitFor(() => expect(f.transport.cancel).toHaveBeenCalledWith('job-7'))
     })
+
+    it('shows the live activity line above the command bar while running, and not once finished', async () => {
+      const running: RunDetail = { ...TRIAGE_RUN, status: 'running' }
+      const f = fake({ detail: running })
+      const scene = renderWorkbench(f, running)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+      const centre = document.querySelector('.wb-centre') as HTMLElement
+      expect(within(centre).getByTestId('live-activity')).toBeInTheDocument()
+      scene.unmount()
+
+      const f2 = fake()
+      renderWorkbench(f2)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+      const centre2 = document.querySelector('.wb-centre') as HTMLElement
+      expect(within(centre2).queryByTestId('live-activity')).toBeNull()
+    })
   })
 
   describe('S3 · one call expanded in place', () => {

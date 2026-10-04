@@ -372,6 +372,23 @@ describe('the live states', () => {
     await waitFor(() => expect(note).toHaveBeenCalled())
     expect(await within(doc).findByTestId('note-document')).toBeInTheDocument()
   })
+
+  it('shows the live activity line above the composer strip while running, and not once finished', async () => {
+    const running = triageFixture({ status: 'running', notes: [] })
+    running.events = running.events.slice(0, 40)
+    running.note = ''
+    const { unmount } = mount([running], TRIAGE_RUN_ID)
+    await opened()
+    const doc = document.querySelector('.sn-doc') as HTMLElement
+    expect(within(doc).getByTestId('live-activity')).toBeInTheDocument()
+    unmount()
+
+    const finished = triageFixture()
+    mount([finished], TRIAGE_RUN_ID)
+    await opened()
+    const doc2 = document.querySelector('.sn-doc') as HTMLElement
+    expect(within(doc2).queryByTestId('live-activity')).toBeNull()
+  })
 })
 
 describe('the frame', () => {
