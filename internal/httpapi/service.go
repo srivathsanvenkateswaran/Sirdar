@@ -41,6 +41,9 @@ type Service interface {
 	TriageIfIdle(ctx context.Context, wsID, key string, o TriageOptions) (JobID, string, error)
 	HookReceived(source, key, outcome string)
 	StartRCA(ctx context.Context, wsID, key string, o RCAOptions) (JobID, error)
+	StartSession(ctx context.Context, wsID string, o SessionOptions) (SessionStarted, error)
+	UpdateNote(ctx context.Context, wsID, runID string) (JobID, error)
+	SaveNote(wsID, runID string) (string, error)
 	StartFix(ctx context.Context, wsID, key string, o FixOptions) (JobID, error)
 	StartEval(ctx context.Context, wsID string, keys []string, o EvalOptions) (JobID, error)
 	EvalReports(wsID string) ([]EvalReport, error)
@@ -125,6 +128,10 @@ func classify(err error) (int, string) {
 	case errors.Is(err, app.ErrBadDecision):
 		return 400, "bad_request"
 	case errors.Is(err, app.ErrNotAsking):
+		return 409, "conflict"
+	case errors.Is(err, app.ErrBadSession):
+		return 400, "bad_request"
+	case errors.Is(err, app.ErrNoteRefused):
 		return 409, "conflict"
 	case errors.Is(err, ErrRefused), errors.Is(err, ErrRunLive), errors.Is(err, ErrPlaybookExists):
 		return 409, "conflict"

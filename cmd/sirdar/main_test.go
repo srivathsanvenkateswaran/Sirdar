@@ -37,3 +37,27 @@ func TestNoArgumentsIsServe(t *testing.T) {
 		t.Fatalf("usage does not say the command is optional")
 	}
 }
+
+func TestUsageListsAskAndNote(t *testing.T) {
+	text := usageText()
+	if !strings.Contains(text, "ask         ask about anything, with or without a ticket; the answer comes back as chat") {
+		t.Fatalf("usage does not list ask:\n%s", text)
+	}
+	if !strings.Contains(text, "note        file the note again for a triage or RCA run that has a reply") {
+		t.Fatalf("usage does not list note:\n%s", text)
+	}
+}
+
+func TestAskWithoutAnInstructionIsUsage(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"ask"}, &out, &errb); code != 2 {
+		t.Fatalf("exit %d, stderr %q", code, errb.String())
+	}
+}
+
+func TestNoteWithoutARunIDIsUsage(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"note"}, &out, &errb); code != 2 {
+		t.Fatalf("exit %d, stderr %q", code, errb.String())
+	}
+}

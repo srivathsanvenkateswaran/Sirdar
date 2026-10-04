@@ -35,6 +35,9 @@ var bridgeMethods = []string{
 	"DropHunk",
 	"StartTriage",
 	"StartRCA",
+	"StartSession",
+	"UpdateNote",
+	"SaveNote",
 	"StartFix",
 	"StartEval",
 	"EvalReports",
@@ -90,10 +93,15 @@ var notBridged = map[string]string{
 	// in the frontend calls them. See internal/app/live.go.
 	"Append": "the run executor publishes its own event lines through this",
 	"Done":   "the run executor closes its event log through this",
-	// Temporary: the bridge methods arrive with the session routes, and
-	// these two entries go with them.
-	"UpdateNote": "bridged with the session routes in task B5",
-	"SaveNote":   "bridged with the session routes in task B5",
+}
+
+// awaitingFrontend are bridge methods whose BridgeBindings entries the frontend track adds in
+// its own worktree. Until the two tracks merge, the reverse check skips them; task M1 deletes
+// this map once transport.ts names them.
+var awaitingFrontend = map[string]string{
+	"StartSession": "the session composer's start",
+	"UpdateNote":   "the session screen's Update note",
+	"SaveNote":     "the session screen's Save as note",
 }
 
 // bridgeOnlyMethods are the desktop's own bindings: methods on *Bridge with
@@ -178,7 +186,31 @@ func TestFrontendBridgeCallsExist(t *testing.T) {
 	for i := 0; i < bridge.NumMethod(); i++ {
 		name := bridge.Method(i).Name
 		if !called[name] {
+			if _, ok := awaitingFrontend[name]; ok {
+				continue
+			}
 			t.Errorf("Bridge.%s is bound but the frontend's BridgeBindings does not name it", name)
+		}
+	}
+}
+
+// TestAwaitingFrontendIsStillAwaited: every name in awaitingFrontend is a
+// method the Go side already has and the frontend's BridgeBindings does
+// not yet name. Once transport.ts catches up, this fails — which is the
+// point: the map cannot outlive the merge silently, and task M1 is the one
+// that deletes it.
+func TestAwaitingFrontendIsStillAwaited(t *testing.T) {
+	bridge := reflect.TypeOf(&Bridge{})
+	called := map[string]bool{}
+	for _, name := range frontendBridgeCalls(t) {
+		called[name] = true
+	}
+	for name := range awaitingFrontend {
+		if _, ok := bridge.MethodByName(name); !ok {
+			t.Errorf("awaitingFrontend names %s, which *Bridge does not have", name)
+		}
+		if called[name] {
+			t.Errorf("awaitingFrontend still names %s, but the frontend's BridgeBindings already calls it; delete this entry", name)
 		}
 	}
 }

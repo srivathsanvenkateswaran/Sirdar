@@ -33,6 +33,8 @@ type (
 	ComposedIntent       = app.ComposedIntent
 	TriageOptions        = app.TriageOptions
 	RCAOptions           = app.RCAOptions
+	SessionOptions       = app.SessionOptions
+	SessionStarted       = app.SessionStarted
 	FixOptions           = app.FixOptions
 	FixInfo              = app.FixInfo
 	EvalOptions          = app.EvalOptions

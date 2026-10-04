@@ -88,40 +88,48 @@ type fake struct {
 	dropErr          error
 
 	// What the handlers passed in.
-	gotRoot      string
-	gotRemoved   string
-	gotDeleted   string
-	gotFilter    QueueFilter
-	gotHelpdesk  string
-	helpdeskLink HelpdeskLink
-	gotResolve   string
-	intake       Intake
-	gotCompose   string
-	composed     ComposedIntent
-	gotKey       string
-	gotAfter     int
-	gotNoteKind  string
-	gotKeys      []string
-	gotTriage    TriageOptions
-	gotRCAKey    string
-	gotRCA       RCAOptions
-	gotFixKey    string
-	gotFix       FixOptions
-	gotEvalKeys  []string
-	gotEval      EvalOptions
-	retro        *RetroReport
-	gotGolden    struct{ Key, RunID string }
-	gotAnswer    string
-	gotDecision  *PermissionDecision
-	resumeErr    error // when set, Resume refuses with it
-	gotSteer     string
-	gotModel     string
-	steerErr     error // when set, Steer refuses with it
-	steerQueued  bool  // when set, Steer queues on a live run and starts no job
-	gotCancelled JobID
-	gotConnect   bool
-	gotCall      mcpCall
-	gotDrop      dropCall
+	gotRoot          string
+	gotRemoved       string
+	gotDeleted       string
+	gotFilter        QueueFilter
+	gotHelpdesk      string
+	helpdeskLink     HelpdeskLink
+	gotResolve       string
+	intake           Intake
+	gotCompose       string
+	composed         ComposedIntent
+	gotKey           string
+	gotAfter         int
+	gotNoteKind      string
+	gotKeys          []string
+	gotTriage        TriageOptions
+	gotRCAKey        string
+	gotRCA           RCAOptions
+	gotSession       SessionOptions
+	sessionErr       error // when set, StartSession refuses with it
+	started          SessionStarted
+	gotUpdateNoteRun string
+	updateNoteErr    error // when set, UpdateNote refuses with it
+	gotSaveNoteRun   string
+	savePath         string
+	saveNoteErr      error // when set, SaveNote refuses with it
+	gotFixKey        string
+	gotFix           FixOptions
+	gotEvalKeys      []string
+	gotEval          EvalOptions
+	retro            *RetroReport
+	gotGolden        struct{ Key, RunID string }
+	gotAnswer        string
+	gotDecision      *PermissionDecision
+	resumeErr        error // when set, Resume refuses with it
+	gotSteer         string
+	gotModel         string
+	steerErr         error // when set, Steer refuses with it
+	steerQueued      bool  // when set, Steer queues on a live run and starts no job
+	gotCancelled     JobID
+	gotConnect       bool
+	gotCall          mcpCall
+	gotDrop          dropCall
 
 	// Webhook plumbing: the reason TriageIfIdle gives for starting
 	// nothing, the error it fails with, and what the hook route asked it
@@ -694,6 +702,45 @@ func (f *fake) StartRCA(_ context.Context, wsID, key string, o RCAOptions) (JobI
 	f.gotRCAKey, f.gotRCA = key, o
 	f.mu.Unlock()
 	return knownJob, nil
+}
+
+func (f *fake) StartSession(_ context.Context, wsID string, o SessionOptions) (SessionStarted, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return SessionStarted{}, err
+	}
+	if f.sessionErr != nil {
+		return SessionStarted{}, f.sessionErr
+	}
+	f.mu.Lock()
+	f.gotSession = o
+	f.mu.Unlock()
+	return f.started, nil
+}
+
+func (f *fake) UpdateNote(_ context.Context, wsID, runID string) (JobID, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return "", err
+	}
+	if f.updateNoteErr != nil {
+		return "", f.updateNoteErr
+	}
+	f.mu.Lock()
+	f.gotUpdateNoteRun = runID
+	f.mu.Unlock()
+	return knownJob, nil
+}
+
+func (f *fake) SaveNote(wsID, runID string) (string, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return "", err
+	}
+	if f.saveNoteErr != nil {
+		return "", f.saveNoteErr
+	}
+	f.mu.Lock()
+	f.gotSaveNoteRun = runID
+	f.mu.Unlock()
+	return f.savePath, nil
 }
 
 func (f *fake) Resume(_ context.Context, wsID, runID, answer, model string, decision *PermissionDecision) (JobID, error) {

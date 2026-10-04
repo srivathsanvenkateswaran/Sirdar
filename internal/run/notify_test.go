@@ -318,6 +318,52 @@ func TestEventCarriesTheRunsFacts(t *testing.T) {
 	}
 }
 
+// TestSessionNotificationReadsSensibly: a session has no ticket and files no
+// note, so its completion event must carry neither — a channel told "note:
+// …" or shown a ticket title for a session that gathered none would be
+// reading a different kind of run's words.
+func TestSessionNotificationReadsSensibly(t *testing.T) {
+	hook := newWebhook(t, http.StatusOK)
+	cfg := newWorkspaceWith(t, configYAML)
+	p := &stubProvider{script: replay(provider.Event{Kind: provider.EvFinal, Text: sessionReply})}
+	r := newRunner(cfg, p, nil, nil)
+	r.Notifier = &notify.Router{Notifier: &notify.Generic{URL: hook.srv.URL + "/hook"}, On: []string{"completed"}}
+
+	out, err := r.Session(context.Background(), "", Options{Instruction: sessionInstruction, NoBundle: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if hook.count() != 1 {
+		t.Fatalf("%d posts, want 1", hook.count())
+	}
+
+	var ev notify.Event
+	body := hook.payload(t, 0)
+	if err := json.Unmarshal([]byte(body), &ev); err != nil {
+		t.Fatalf("payload: %v\n%s", err, body)
+	}
+	if ev.Kind != "session" || ev.Key != out.State.Key || ev.Status != "completed" {
+		t.Errorf("identity %+v", ev)
+	}
+	if ev.Title != "" {
+		t.Errorf("a session has no ticket title: %+v", ev)
+	}
+	if ev.NotePath != "" {
+		t.Errorf("a session files no note: %+v", ev)
+	}
+	if ev.Confidence != "" || ev.Classification != "" {
+		t.Errorf("a session has no triage verdict: %+v", ev)
+	}
+	for _, leak := range []string{"ticket", "Ticket", "note:", `"note"`} {
+		if strings.Contains(body, leak) {
+			t.Errorf("the message carried %q, which is not true of a session:\n%s", leak, body)
+		}
+	}
+}
+
 // TestNotifyReasonHidesTheAgentsQuestion: a run blocked on a question tells
 // the channel that it happened, never what was asked — the question may
 // quote the ticket — while state.json (and so `sirdar resume`) keep the

@@ -95,6 +95,7 @@ nav:
       - Credentials: credentials.md
       - Fix flow: fix.md
       - Steer: steer.md
+      - Sessions: sessions.md
       - Blocked runs: blocked.md
       - Evaluation: eval.md
       - Webhooks: webhooks.md

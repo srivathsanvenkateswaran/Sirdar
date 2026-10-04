@@ -18,6 +18,13 @@ is still working takes the instruction into a queue instead of refusing it (belo
 blocked on a permission question is answered with a decision — `sirdar resume RUN --allow`,
 `--allow-run` or `--deny` — rather than words; see [Blocked runs](blocked.md).
 
+## Sessions, and a triage or RCA that has replied
+
+A steer on a session run, or on a triage or RCA run that has already answered in chat, is
+conversation: the follow-up goes to the agent that wrote the reply (or a fresh one handed the
+same context), and the answer replaces `answer.md`. No schema, no note turn — the run's filed
+note, if it has one, is left exactly as it stood. See [Sessions](sessions.md).
+
 ## While the run works
 
 A steer on a `preparing` or `running` run is queued, not refused:
