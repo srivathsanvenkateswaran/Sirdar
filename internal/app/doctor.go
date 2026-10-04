@@ -268,7 +268,10 @@ func sourceChecks(ctx context.Context, cfg *config.Config) []Check {
 func slackCheck(ctx context.Context, cfg *config.Config, hc *http.Client) Check {
 	const name = "sources.slack"
 	if cfg.Sources.Slack == nil {
-		return Check{Name: name, OK: true, Detail: "not configured; a pasted Slack link says to set sources.slack.token"}
+		if cfg.HasUserServer(slackMCPServer) {
+			return Check{Name: name, OK: true, Detail: "no token; Slack links are read through the slack MCP server in mcp.userServers"}
+		}
+		return Check{Name: name, OK: true, Detail: "not configured; a pasted Slack link says to set sources.slack.token or add slack to mcp.userServers"}
 	}
 	token, err := resolveRef(config.Resolver{Keychain: KeychainFor()}, "token", cfg.Sources.Slack.Token)
 	if err != nil {

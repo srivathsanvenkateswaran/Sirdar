@@ -738,7 +738,7 @@ func (s *Service) startTriage(ctx context.Context, wsID string, keys []string, o
 		return "", err
 	}
 	return s.startJob(ctx, wsID, o.Provider, o.Model, done, func(jctx context.Context, deps runner.Deps) []JobOutcome {
-		slackMD, err := s.slackMarkdown(jctx, deps.Config, o.Slack)
+		slackMD, err := s.slackMarkdown(jctx, deps.Config, deps.Provider, o.Slack)
 		if err != nil {
 			return s.failed(keys, err)
 		}
@@ -768,7 +768,7 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 		return "", err
 	}
 	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
-		slackMD, err := s.slackMarkdown(jctx, deps.Config, o.Slack)
+		slackMD, err := s.slackMarkdown(jctx, deps.Config, deps.Provider, o.Slack)
 		if err != nil {
 			return s.failed([]string{key}, err)
 		}

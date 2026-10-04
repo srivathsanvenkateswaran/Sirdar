@@ -36,7 +36,7 @@ func resolveArgs(ctx context.Context, cfg *config.Config, deps runner.Deps, args
 			out.keys = append(out.keys, arg)
 			continue
 		}
-		in, err := app.ResolveIntake(ctx, cfg, deps.Tracker, deps.Helpdesk, arg, nil)
+		in, err := app.ResolveIntake(ctx, cfg, deps.Provider, deps.Tracker, deps.Helpdesk, arg, nil)
 		if err != nil {
 			fmt.Fprintf(stderr, "sirdar: %s: %v\n", arg, err)
 			return out, false

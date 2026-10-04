@@ -133,6 +133,10 @@ type Thread struct {
 	// IsThread is set when the messages are a thread rather than the one
 	// message.
 	IsThread bool
+	// Refs are ticket references a reader found beside the texts: the
+	// MCP path's model lists the keys and helpdesk numbers it saw. The
+	// Web API path leaves it empty; the resolver scans the texts either way.
+	Refs []string
 }
 
 // Texts are every message's text and attachment titles, the linked message
