@@ -44,6 +44,17 @@ func ThreadMarkdown(t Thread, atts []Attachment) string {
 	return b.String()
 }
 
+// reportedManifest is manifest.json for a bundle built from where a ticket
+// was reported rather than from a tracker or helpdesk.
+type reportedManifest struct {
+	Source   string `json:"source"`
+	Key      string `json:"key"`
+	URL      string `json:"url,omitempty"`
+	Tracker  string `json:"tracker"`
+	Helpdesk string `json:"helpdesk"`
+	*Cutoff
+}
+
 // WriteBundle writes ticket.json, thread.md and copies nothing (attachments are already
 // in dir/attachments because Helpdesk.Attachments downloaded them there).
 func WriteBundle(dir string, b Bundle) error {
@@ -68,6 +79,18 @@ func WriteBundle(dir string, b Bundle) error {
 	// assembled under: what was dropped and what was redacted, in the
 	// directory a reader opens rather than only in the run state. An
 	// ordinary live bundle has no cutoff and gets no manifest.
+	//
+	// A bundle with no tracker or helpdesk ticket says so in the same
+	// file: where it was built from, and that both sources are absent,
+	// beside the cutoff fields when there is one.
+	if b.Reported != nil {
+		m := reportedManifest{Source: b.Reported.Source, Key: b.Reported.Key, URL: b.Reported.URL, Tracker: "absent", Helpdesk: "absent", Cutoff: b.Cutoff}
+		raw, err := json.MarshalIndent(m, "", "  ")
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(dir, "manifest.json"), append(raw, '\n'), 0o644)
+	}
 	if b.Cutoff != nil {
 		raw, err := json.MarshalIndent(b.Cutoff, "", "  ")
 		if err != nil {
