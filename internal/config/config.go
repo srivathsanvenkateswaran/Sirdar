@@ -599,8 +599,16 @@ type Config struct {
 	// WorkspaceOnly (default true) starts the session with
 	// --strict-mcp-config against <root>/.mcp.json, so the operator's own
 	// global connectors are not loaded into a triage run.
+	//
+	// UserServers names servers from the Claude CLI's own user scope
+	// (~/.claude.json, or $CLAUDE_CONFIG_DIR/.claude.json) that a run sees
+	// beside the workspace's: the operator's Slack, helpdesk or tracker
+	// connectors. Each entry is copied verbatim into the session's
+	// generated MCP config and nowhere else. A name the CLI does not have
+	// fails the load.
 	MCP struct {
-		WorkspaceOnly *bool `yaml:"workspaceOnly"`
+		WorkspaceOnly *bool    `yaml:"workspaceOnly"`
+		UserServers   []string `yaml:"userServers"`
 	} `yaml:"mcp"`
 	// Attachments caps what a helpdesk download may put in the bundle,
 	// and optionally turns the audio in it into text the session can read.
@@ -934,7 +942,57 @@ func (c *Config) Validate() error {
 	if err := validateWebhooks(&c.Webhooks); err != nil {
 		return err
 	}
+	if err := validateUserServers(c.MCP.UserServers); err != nil {
+		return err
+	}
 	return validateNotify(c.Notify)
+}
+
+// validateUserServers checks mcp.userServers against the servers the Claude
+// CLI actually has at user scope, so a typo is a load error that lists the
+// right names rather than a run that quietly lacks a connector.
+func validateUserServers(names []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	for i, n := range names {
+		if strings.TrimSpace(n) == "" {
+			return fmt.Errorf("config: mcp.userServers[%d]: is empty", i)
+		}
+		if seen[n] {
+			return fmt.Errorf("config: mcp.userServers: %q is named twice", n)
+		}
+		seen[n] = true
+	}
+	if _, err := provider.UserServersFor(nil, names); err != nil {
+		return fmt.Errorf("config: mcp.userServers: %w", err)
+	}
+	return nil
+}
+
+// UserMCPServers reads the servers mcp.userServers names from the Claude
+// CLI's user scope as env sees it. Empty when the workspace names none, or
+// when mcp.workspaceOnly is off — the session then loads every user server
+// itself, these among them.
+func (c *Config) UserMCPServers(env []string) ([]provider.UserMCPServer, error) {
+	if c == nil || len(c.MCP.UserServers) == 0 || !c.WorkspaceOnlyMCP() {
+		return nil, nil
+	}
+	return provider.UserServersFor(env, c.MCP.UserServers)
+}
+
+// HasUserServer reports whether mcp.userServers names server.
+func (c *Config) HasUserServer(server string) bool {
+	if c == nil {
+		return false
+	}
+	for _, n := range c.MCP.UserServers {
+		if n == server {
+			return true
+		}
+	}
+	return false
 }
 
 // validateTranscribe checks the optional transcription block: there is a

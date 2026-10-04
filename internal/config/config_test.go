@@ -1743,3 +1743,52 @@ func TestSlackAndTrackerField(t *testing.T) {
 		t.Fatalf("a Slack block without a token should be refused, got %v", err)
 	}
 }
+
+// TestMCPUserServers: mcp.userServers names servers from the Claude CLI's
+// user scope; a name the CLI does not have fails the load and lists the
+// ones it does.
+func TestMCPUserServers(t *testing.T) {
+	cli := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", cli)
+	if err := os.WriteFile(filepath.Join(cli, ".claude.json"), []byte(`{"mcpServers":{
+		"slack":{"type":"http","url":"https://mcp.example/mcp","oauth":{"clientId":"c"}},
+		"zoho-desk":{"type":"stdio","command":"node","env":{"K":"v"}},
+		"janus":{"type":"http","url":"https://janus.example/mcp"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(writeCfg(t, minimal+`
+mcp:
+  userServers: [slack, zoho-desk]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.HasUserServer("slack") || cfg.HasUserServer("janus") {
+		t.Errorf("HasUserServer: %v", cfg.MCP.UserServers)
+	}
+	got, err := cfg.UserMCPServers(nil)
+	if err != nil || len(got) != 2 || got[0].Label() != "slack (http, oauth)" || got[1].Label() != "zoho-desk (stdio)" {
+		t.Fatalf("UserMCPServers = %+v, %v", got, err)
+	}
+
+	_, err = Load(writeCfg(t, minimal+`
+mcp:
+  userServers: [slack, jira]
+`))
+	if err == nil || !strings.Contains(err.Error(), `"jira"`) || !strings.Contains(err.Error(), "janus, slack, zoho-desk") {
+		t.Fatalf("an unknown name must fail the load with the CLI's names, got %v", err)
+	}
+
+	cfg, err = Load(writeCfg(t, minimal+`
+mcp:
+  workspaceOnly: false
+  userServers: [slack]
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := cfg.UserMCPServers(nil); len(got) != 0 {
+		t.Errorf("with workspaceOnly off the session loads every user server itself; nothing to copy, got %+v", got)
+	}
+}
