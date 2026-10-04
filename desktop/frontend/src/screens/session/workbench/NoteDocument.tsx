@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ChatMarkdown from '../../../components/markdown/ChatMarkdown'
 import type { NoteKind, Transport } from '../../../api/types'
 import { notePathFor, splitFrontmatter } from '../../../lib/events'
 import { reasonOf } from '../../../lib/format'
@@ -194,9 +194,7 @@ export default function NoteDocument({
                 {s.title}
                 {/reply draft/i.test(s.title) ? <CopyText text={s.body.trim()} /> : null}
               </div>
-              <div className="md wb-md sd-bidi" dir="auto">
-                <ReactMarkdown>{s.body}</ReactMarkdown>
-              </div>
+              <ChatMarkdown className="md wb-md sd-bidi">{s.body}</ChatMarkdown>
             </section>
           ))}
           {note.path ? (

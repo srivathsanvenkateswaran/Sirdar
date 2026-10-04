@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ChatMarkdown from '../markdown/ChatMarkdown'
 import type { Attachment, Transport } from '../../api/types'
 import { reasonOf } from '../../lib/format'
 import { usePathAction } from '../../lib/pathAction'
@@ -335,9 +335,7 @@ function PlaybooksBlock({ bundle }: { bundle: Bundle }): JSX.Element | null {
                 <bdi>{p.name}</bdi>
               </button>
               {shown === p.name ? (
-                <div className="si-pb__body sd-bidi" dir="auto">
-                  <ReactMarkdown>{p.body || '_Nothing but headings._'}</ReactMarkdown>
-                </div>
+                <ChatMarkdown className="si-pb__body sd-bidi">{p.body || '_Nothing but headings._'}</ChatMarkdown>
               ) : null}
             </li>
           ))}

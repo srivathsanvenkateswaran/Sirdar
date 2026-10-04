@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
-import ReactMarkdown, { type Components } from 'react-markdown'
+import ChatMarkdown, { type Components } from '../markdown/ChatMarkdown'
 import { markersForRef, parseRefs, type Marker as MarkerModel } from '../../lib/evidence'
 import Button from '../../ui/button'
 import Marker from '../../ui/marker'
@@ -102,7 +102,7 @@ function withRefs(text: string, handlers: MarkerHandlers, key: number): ReactNod
  * react-markdown would print as text; callers strip those first.
  */
 export function Markdown({ text, ...handlers }: { text: string } & MarkerHandlers): JSX.Element {
-  const components: Components = {
+  const components: Partial<Components> = {
     code: ({ children, className }) => {
       const value = String(children ?? '')
       if (className) return <code className={className}>{children}</code>
@@ -111,9 +111,9 @@ export function Markdown({ text, ...handlers }: { text: string } & MarkerHandler
     },
   }
   return (
-    <div className="sn-md" dir="auto">
-      <ReactMarkdown components={components}>{text}</ReactMarkdown>
-    </div>
+    <ChatMarkdown className="sn-md" components={components}>
+      {text}
+    </ChatMarkdown>
   )
 }
 

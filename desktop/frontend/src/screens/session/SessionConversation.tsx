@@ -11,7 +11,7 @@ import {
   type JSX,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import ReactMarkdown from 'react-markdown'
+import ChatMarkdown from '../../components/markdown/ChatMarkdown'
 import type { FixStart, NoteKind, QueuedSteer, RunDiff, SourcesSummary, Transport, Verdict } from '../../api/types'
 import ChangesView, { withoutCode } from '../../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../../components/run/Composer'
@@ -555,9 +555,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
         return (
           <div key={item.index} className="sc-agent" data-item={item.index} data-testid="assistant-message">
             <ProviderMark provider={detail.provider} size="sm" />
-            <div className="sc-agent__say" dir="auto">
-              <ReactMarkdown>{item.text}</ReactMarkdown>
-            </div>
+            <ChatMarkdown className="sc-agent__say">{item.text}</ChatMarkdown>
           </div>
         )
       case 'answer':
