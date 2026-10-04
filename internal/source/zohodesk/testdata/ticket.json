@@ -6,7 +6,7 @@
   "channel": "EMAIL",
   "contact": { "firstName": "John", "lastName": "Doe" },
   "accountName": "Acme Co",
-  "cf": { "cf_company_id": "4561" },
+  "cf": { "cf_company_id": "4561", "cf_jira_ticket_id": "SBX-1", "cf_labels": ["billing", "export"], "cf_count": 3, "cf_unset": null },
   "webUrl": "https://desk.zoho.com/support/555",
   "createdTime": "2026-09-10T06:00:00.000Z",
   "modifiedTime": "2026-09-10T06:30:00.000Z",

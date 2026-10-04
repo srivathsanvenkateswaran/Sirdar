@@ -290,8 +290,61 @@ type zohoDepartment struct {
 	Name string `json:"name"`
 }
 
+// zohoCustomFields is a record's `cf` object: the layout's custom fields,
+// keyed by their API names. CompanyID is the one the adapter reads for
+// itself; All keeps every one, stringified, so the record's Fields can carry
+// them — a support process links a helpdesk ticket to its tracker issue in a
+// custom field, and a field the adapter drops is a link nobody can follow.
 type zohoCustomFields struct {
-	CompanyID string `json:"cf_company_id"`
+	CompanyID string
+	All       map[string]string
+}
+
+func (f *zohoCustomFields) UnmarshalJSON(data []byte) error {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		// A cf that is not an object (null, or a layout Desk changed)
+		// costs the custom fields and nothing else.
+		return nil
+	}
+	f.All = map[string]string{}
+	for name, v := range raw {
+		if s := customFieldText(v); s != "" {
+			f.All[name] = s
+		}
+	}
+	f.CompanyID = f.All["cf_company_id"]
+	return nil
+}
+
+// customFieldText renders one custom field value as text: strings as they
+// are, numbers and booleans in their JSON spelling, lists joined with ", ",
+// and null or an empty value as nothing.
+func customFieldText(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(x)
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(x)
+	case []any:
+		parts := make([]string, 0, len(x))
+		for _, e := range x {
+			if s := customFieldText(e); s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return strings.Join(parts, ", ")
+	default:
+		b, err := json.Marshal(x)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
 }
 
 type zohoTicket struct {
@@ -354,6 +407,12 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 	}
 	if zt.Contact.Email != "" {
 		fields["contactEmail"] = zt.Contact.Email
+	}
+	// Every custom field, under "cf.<api name>": the link to a tracker
+	// issue lives in one of them in most support processes, and which one
+	// is the operator's layout, not something this adapter can know.
+	for name, v := range zt.CF.All {
+		fields["cf."+name] = v
 	}
 
 	return ticket.HelpdeskTicket{
