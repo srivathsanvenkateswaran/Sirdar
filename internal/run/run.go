@@ -445,8 +445,14 @@ func (r *Runner) Resume(ctx context.Context, runID string, o ResumeOptions) (Out
 	if err != nil {
 		return Outcome{}, err
 	}
-	// A session with no ticket reference has no bundle to read back.
-	bundle, err := readBundleIfAny(rn.BundleDir())
+	// A session with no ticket reference has no bundle to read back; every
+	// other kind has one, and a run whose bundle is gone is refused, as a
+	// steer refuses it.
+	read := readBundle
+	if state.Kind == store.KindSession {
+		read = readBundleIfAny
+	}
+	bundle, err := read(rn.BundleDir())
 	if err != nil {
 		return Outcome{}, err
 	}

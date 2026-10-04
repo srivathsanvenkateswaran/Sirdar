@@ -318,3 +318,27 @@ func TestReplyKeptWhenTheProviderExitsBadly(t *testing.T) {
 		t.Errorf("warnings %v", out.State.Warnings)
 	}
 }
+
+// TestResumeOnATriageWithoutItsBundleIsRefused: only a session may resume with
+// no bundle. A blocked triage whose ticket.json is gone is refused, rather than
+// continued with an empty ticket.
+func TestResumeOnATriageWithoutItsBundleIsRefused(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(provider.Event{Kind: provider.EvQuestion, Text: "Which tenant?"})}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil || outs[0].State.Status != store.StatusBlocked {
+		t.Fatalf("triage: %v %+v", err, outs)
+	}
+	dir := runDir(t, cfg, outs[0])
+	if err := os.Remove(filepath.Join(dir, "bundle", "ticket.json")); err != nil {
+		t.Fatal(err)
+	}
+	starts := p.startCount()
+	if _, err := r.Resume(context.Background(), outs[0].State.RunID, ResumeOptions{Answer: "The main one."}); err == nil || !strings.Contains(err.Error(), "read bundle") {
+		t.Fatalf("Resume = %v, want the missing bundle", err)
+	}
+	if p.startCount() != starts {
+		t.Error("a refused resume started a session")
+	}
+}
