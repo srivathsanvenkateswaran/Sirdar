@@ -340,7 +340,7 @@ func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (Permissio
 		covered := append(append([]string(nil), p.BashAllow...), p.Grants.runPatterns(AskBash)...)
 		for _, seg := range SplitCommand(command) {
 			norm := normaliseGitFlags(seg)
-			if ok, _ := MatchCommand(p.Root, covered, norm, p.ExtraReserved...); ok {
+			if ok, _ := p.matchBash(covered, norm); ok {
 				continue
 			}
 			if pat := commandPattern(norm); pat != "" {

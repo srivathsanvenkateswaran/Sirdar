@@ -142,7 +142,10 @@ func (s ReadScope) Resolve(path string) (string, error) {
 		}
 	}
 	for _, pattern := range s.Also {
-		if matchReadAlso(pattern, raw, real) {
+		// candidate is the path made absolute before symlinks: a relative
+		// "../Companion/src" matches an entry naming the companion only in
+		// that form when the companion sits under a symlinked ancestor.
+		if matchReadAlso(pattern, raw, real) || matchReadAlso(pattern, candidate, real) {
 			return real, nil
 		}
 	}

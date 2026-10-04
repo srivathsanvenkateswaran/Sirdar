@@ -1181,9 +1181,12 @@ and everything inside it. Both spellings of a home directory are matched, so an 
 with `~` still covers the same path sent absolutely. A relative entry, or a bare `*`, fails the
 config load: the first is already in scope and the second is the whole machine.
 
-**`Bash` is not judged by this list.** A shell command is confined by `permissions.bash` and its
-own root-escape rule (see above), which reads the command as text. Adding a directory to
-`readAlso` does not let `cat` reach it.
+**In a read-only run, `Bash` reaches as far as reads do.** A command still has to match
+`permissions.bash`, but a path argument inside the read scope (this list, a `repos:` companion,
+the run directory) is not treated as an escape, and `git -C <dir>` into such a directory is
+judged as the git command it runs there: `git -C ~/code/Acme.Web log -- src` matches `git log*`.
+A flag's value (an output file) must still be inside the workspace. A fix run's shell stays inside
+its worktree whatever this list says.
 
 A repository is better named under [`repos:`](#more-than-one-repository) than here: its path
 joins the scope exactly as a `readAlso` entry would, and it also gets a name the operator can
@@ -1226,7 +1229,8 @@ repos:
 What it changes:
 
 - **Read scope.** Each path joins the scope a read-class tool is judged against, exactly as a
-  [`permissions.readAlso`](#read-scope) entry would. `Bash` is still not judged by it.
+  [`permissions.readAlso`](#read-scope) entry would, which in a read-only run includes the
+  allow-listed shell commands.
 - **The prompt** gets a `# Repositories` section: the workspace repository first, as the only
   place a fix is made, then each companion with its path, origin and `about`. The session is told
   to look in the companion a ticket's pull request, stack trace or file path points at, and, when

@@ -413,7 +413,7 @@ func (p *PermissionPolicy) decideWrite(tool string, input json.RawMessage) Decis
 // close that gap without hiding anything — every pattern named here is one
 // the workspace's own operator already wrote into that file.
 func (p *PermissionPolicy) decideBash(command string) Decision {
-	ok, reason := MatchCommand(p.Root, p.BashAllow, command, p.ExtraReserved...)
+	ok, reason := p.matchBash(p.BashAllow, command)
 	if ok {
 		return Decision{Allow: true}
 	}
@@ -482,6 +482,35 @@ func bashAllowHint(allow []string) string {
 // argues by allow-listed pattern, but .git/hooks/x is code the next commit
 // runs, not a coverage profile.
 func MatchCommand(root string, allow []string, command string, extraReserved ...string) (bool, string) {
+	return matchCommand(root, allow, command, nil, extraReserved)
+}
+
+// matchBash is MatchCommand for this policy's runs. A read-only run's shell
+// reaches as far as its reads do: a path argument inside the read scope —
+// the run directory, a permissions.readAlso entry, a repos: companion — is
+// not an escape, and `git -C` into such a directory is judged as the git
+// command it runs there. A fix run's shell stays inside its worktree.
+//
+// Nothing becomes readable that Read could not already reach. The
+// 2026-10-04 OMNI-3413 rerun read OXO.Systems with Read and had seven
+// `rg`, `find` and `git -C … log` calls into the same clone refused.
+func (p *PermissionPolicy) matchBash(allow []string, command string) (bool, string) {
+	var readable func(string) bool
+	if !p.IsFix() {
+		scope := p.ReadScope()
+		if scope.Confined() {
+			readable = func(path string) bool {
+				_, err := scope.Resolve(path)
+				return err == nil
+			}
+		}
+	}
+	return matchCommand(p.Root, allow, command, readable, p.ExtraReserved)
+}
+
+// matchCommand is MatchCommand with readable, when it is not nil, saying
+// which paths outside root a read-only command may still name.
+func matchCommand(root string, allow []string, command string, readable func(string) bool, extraReserved []string) (bool, string) {
 	segments := SplitCommand(strings.TrimSpace(command))
 	if len(segments) == 0 {
 		return false, "empty command"
@@ -492,6 +521,9 @@ func MatchCommand(root string, allow []string, command string, extraReserved ...
 		// command git will actually carry out. The operator's own text is
 		// what a denial quotes back, because that is what they wrote.
 		segment := normaliseGitFlags(original)
+		if readable != nil {
+			segment = dropReadableGitDir(segment, readable)
+		}
 		if construct := ShellConstruct(segment); construct != "" {
 			return false, quote(segment) + " uses " + construct +
 				"; a read-only run allows no redirection or " +
@@ -517,7 +549,7 @@ func MatchCommand(root string, allow []string, command string, extraReserved ...
 			return false, quote(original) + " is not in the allow-list; " +
 				"every segment of a pipeline or compound command has to match"
 		}
-		if escape := escapesRoot(root, extraReserved, segment); escape != "" {
+		if escape := escapesRoot(root, extraReserved, segment, readable); escape != "" {
 			return false, escape
 		}
 	}
@@ -541,7 +573,7 @@ func MatchCommand(root string, allow []string, command string, extraReserved ...
 // own run records, not a write, and treating its plain positional argument
 // the same as a build's output flag would refuse that alongside the
 // output-flag cases this rule exists for.
-func escapesRoot(root string, extraReserved []string, segment string) string {
+func escapesRoot(root string, extraReserved []string, segment string, readable func(string) bool) string {
 	previousBareFlag := false
 	for _, arg := range argTokens(segment) {
 		isFlagValue := previousBareFlag
@@ -568,6 +600,12 @@ func escapesRoot(root string, extraReserved []string, segment string) string {
 			}
 			arg = value
 			isFlagValue = true
+		}
+		// A positional argument the run may read is not an escape. A flag's
+		// value is judged as before, since an output flag is where a
+		// command writes.
+		if readable != nil && !isFlagValue && readable(arg) {
+			continue
 		}
 		switch {
 		case strings.HasPrefix(arg, "~"):
@@ -778,6 +816,38 @@ func inertGitConfig(pair string) bool {
 		return value == "cat" || value == ""
 	}
 	return false
+}
+
+// dropReadableGitDir removes a leading `-C <dir>` from a git segment when
+// dir is one the run may read, so `git -C <companion> log -- src` is matched
+// and judged as `git log -- src`. Any other -C stays, and gitDenial refuses
+// it as before. Only a -C before the subcommand, the one git honours, is
+// looked at.
+func dropReadableGitDir(segment string, readable func(string) bool) string {
+	toks := spanTokens(segment)
+	i := 0
+	for i < len(toks) {
+		if _, _, ok := envAssignment(toks[i].text); !ok {
+			break
+		}
+		i++
+	}
+	if i >= len(toks) || !isGit(toks[i].text) {
+		return segment
+	}
+	for j := i + 1; j+1 < len(toks); j++ {
+		tok := toks[j].text
+		if !strings.HasPrefix(tok, "-") {
+			return segment
+		}
+		if tok == "-C" {
+			if !readable(toks[j+1].text) {
+				return segment
+			}
+			return strings.TrimSpace(segment[:toks[j].start] + strings.TrimLeft(segment[toks[j+1].end:], " \t"))
+		}
+	}
+	return segment
 }
 
 // normaliseGitFlags removes the inert global flags from a git segment, so
