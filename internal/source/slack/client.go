@@ -121,6 +121,16 @@ type Message struct {
 	// Titles are the titles of the message's attachments and files, which
 	// is where an unfurled helpdesk or tracker link puts the ticket's name.
 	Titles []string
+	// Files are the files posted with the message: a name, and the
+	// url_private a token can download it from when the reader was given
+	// one.
+	Files []File
+}
+
+// File is one file a message carries.
+type File struct {
+	Name string
+	URL  string
 }
 
 // Thread is what one read returns: the message the link points at and, when
@@ -276,8 +286,9 @@ type apiMessage struct {
 		Fallback string `json:"fallback"`
 	} `json:"attachments"`
 	Files []struct {
-		Title string `json:"title"`
-		Name  string `json:"name"`
+		Title      string `json:"title"`
+		Name       string `json:"name"`
+		URLPrivate string `json:"url_private"`
 	} `json:"files"`
 }
 
@@ -291,10 +302,17 @@ func (m apiMessage) message() Message {
 		}
 	}
 	for _, f := range m.Files {
+		name := strings.TrimSpace(f.Name)
 		if t := strings.TrimSpace(f.Title); t != "" {
 			out.Titles = append(out.Titles, t)
-		} else if n := strings.TrimSpace(f.Name); n != "" {
-			out.Titles = append(out.Titles, n)
+		} else if name != "" {
+			out.Titles = append(out.Titles, name)
+		}
+		if name == "" {
+			name = strings.TrimSpace(f.Title)
+		}
+		if name != "" {
+			out.Files = append(out.Files, File{Name: name, URL: f.URLPrivate})
 		}
 	}
 	return out

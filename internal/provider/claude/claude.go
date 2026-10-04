@@ -280,7 +280,9 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	// the caller's ctx. cmd.Cancel turns either into an interrupt, and
 	// WaitDelay escalates to a kill if the process has not exited by then.
 	runCtx, cancelRun := context.WithCancel(ctx)
-	cmd := exec.CommandContext(runCtx, binary, args(spec)...)
+	argv := args(spec)
+	debugCommand(os.Stderr, os.Getenv("SIRDAR_DEBUG"), spec.Cwd, binary, argv)
+	cmd := exec.CommandContext(runCtx, binary, argv...)
 	// Its own process group. On Unix that keeps a terminal's Ctrl-C off
 	// the child, which is Sirdar's to stop rather than the terminal's; on
 	// Windows it is what gives the group below an address a console
@@ -359,6 +361,33 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	}
 	started = true
 	return s, nil
+}
+
+// debugCommand writes the command a session is started with, one line,
+// when SIRDAR_DEBUG is set: the binary, every argument shell-quoted, and the
+// directory it runs in. The prompt goes on stdin and is not part of it. It
+// is how a session that misbehaves — a one-turn Slack reading that answers
+// with nothing — is re-run by hand exactly as Sirdar ran it.
+func debugCommand(w io.Writer, flag, cwd, binary string, argv []string) {
+	if flag == "" || flag == "0" {
+		return
+	}
+	quoted := make([]string, 0, len(argv)+1)
+	for _, a := range append([]string{binary}, argv...) {
+		quoted = append(quoted, shellQuote(a))
+	}
+	fmt.Fprintf(w, "sirdar debug: (cd %s && %s)\n", shellQuote(cwd), strings.Join(quoted, " "))
+}
+
+// shellQuote quotes s for a POSIX shell when it needs it.
+func shellQuote(s string) string {
+	if s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r == '-' || r == '_' || r == '.' || r == '/' || r == ',' || r == ':' || r == '=' || r == '@' ||
+			(r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9'))
+	}) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // Doctor checks that the binary runs and that a login is present.
