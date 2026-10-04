@@ -178,7 +178,14 @@ func (r *Runner) refuseSteer(state store.State) error {
 	if err := RefuseSteer(r.Config.Budget.MaxTurns, r.Config.Budget.MaxMinutes, r.Config.Budget.MaxUSD, state); err != nil {
 		return err
 	}
-	if name := r.providerName(); name != "" && state.Provider != "" && state.Provider != name {
+	return RefuseProvider(r.providerName(), state)
+}
+
+// RefuseProvider says why a run made under one provider cannot be continued under the
+// provider named, or nil when they agree or either is unknown. It reads the name alone, so
+// the app layer can ask it from the workspace's configuration before a job builds a provider.
+func RefuseProvider(name string, state store.State) error {
+	if name != "" && state.Provider != "" && state.Provider != name {
 		return fmt.Errorf("run: %s was made under provider %s and the workspace now uses %s; the session handle would name a session %s never held, so steer it under provider %s",
 			state.RunID, state.Provider, name, name, state.Provider)
 	}

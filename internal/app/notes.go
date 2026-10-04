@@ -20,8 +20,9 @@ var ErrNoteRefused = errors.New("app: note refused")
 var ErrBadSession = errors.New("app: bad session request")
 
 // UpdateNote runs one note turn on a triage or RCA run that has replied, and files its note
-// and register row again. What the run's state alone refuses is refused here, before a job
-// exists; what only the provider knows ends the job with the reason in the log, as a steer does.
+// and register row again. What the run's state, the workspace's caps and its provider name
+// refuse is refused here, before a job exists; what only the built provider knows ends the job
+// with the reason in the log, as a steer does.
 func (s *Service) UpdateNote(ctx context.Context, wsID, runID string) (JobID, error) {
 	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
 		return "", err
@@ -35,6 +36,15 @@ func (s *Service) UpdateNote(ctx context.Context, wsID, runID string) (JobID, er
 		return "", fmt.Errorf("%w: %s", ErrNoSuchRun, runID)
 	}
 	if err := runner.RefuseNote(rn, state); err != nil {
+		return "", fmt.Errorf("%w: %w", ErrNoteRefused, err)
+	}
+	// The note turn shares the run's caps and its provider session, so a run that hit a
+	// cap or was made under another provider is refused here too, where the operator who
+	// clicked Update note sees the reason, rather than only in the job's log.
+	if err := runner.RefuseSteer(cfg.Budget.MaxTurns, cfg.Budget.MaxMinutes, cfg.Budget.MaxUSD, state); err != nil {
+		return "", fmt.Errorf("%w: %w", ErrNoteRefused, err)
+	}
+	if err := runner.RefuseProvider(string(cfg.Provider), state); err != nil {
 		return "", fmt.Errorf("%w: %w", ErrNoteRefused, err)
 	}
 	key := state.Key

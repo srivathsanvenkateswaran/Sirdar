@@ -52,6 +52,47 @@ func TestUpdateNoteRefusesASessionRun(t *testing.T) {
 	}
 }
 
+// TestUpdateNoteRefusesARunOverItsCaps: a replied triage that has spent its USD
+// budget, or was made under another provider, is refused before a job exists,
+// with the reason, since the note turn would be refused inside the job anyway.
+func TestUpdateNoteRefusesARunOverItsCaps(t *testing.T) {
+	root := newWorkspace(t)
+	p := &stubProvider{script: replay()}
+	svc := newService(t, root, stubBuilder(p, stubTracker{}, stubHelpdesk{}))
+	state := settledSession(t, root)
+	state.Kind = store.KindTriage
+	state.Provider = "claude"
+	state.Usage.CostUSD = 5.10
+	rn, _, err := store.Open(root, state.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rn.WriteState(state); err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := svc.UpdateNote(context.Background(), WorkspaceID(root), state.RunID)
+	if !errors.Is(err, ErrNoteRefused) || !strings.Contains(err.Error(), "has spent $5.10 of its $5.00 budget") {
+		t.Fatalf("UpdateNote = %q, %v; want ErrNoteRefused with the budget reason", job, err)
+	}
+	if job != "" || len(svc.Jobs()) != 0 {
+		t.Fatalf("a refused Update note started job %q", job)
+	}
+
+	state.Usage.CostUSD = 0.40
+	state.Provider = "codex"
+	if err := rn.WriteState(state); err != nil {
+		t.Fatal(err)
+	}
+	job, err = svc.UpdateNote(context.Background(), WorkspaceID(root), state.RunID)
+	if !errors.Is(err, ErrNoteRefused) || !strings.Contains(err.Error(), "made under provider codex") {
+		t.Fatalf("UpdateNote = %q, %v; want ErrNoteRefused with the provider reason", job, err)
+	}
+	if job != "" || len(svc.Jobs()) != 0 {
+		t.Fatalf("a refused Update note started job %q", job)
+	}
+}
+
 // TestUpdateNoteRunsAJob: a reply-first triage files its note again in a
 // job, and the run ends completed on its own id.
 func TestUpdateNoteRunsAJob(t *testing.T) {
