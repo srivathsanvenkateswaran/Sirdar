@@ -1307,3 +1307,18 @@ func TestTurnsCountModelRoundTrips(t *testing.T) {
 		}
 	}
 }
+
+// TestNoOutputSchemaParamWithoutASchema pins what a session run relies on:
+// with no schema the turn carries no outputSchema param, so Codex leaves
+// the agent free to answer in prose.
+func TestNoOutputSchemaParamWithoutASchema(t *testing.T) {
+	sess := startSession(t, "script-basic.jsonl", nil)
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if turn := findSent(t, res, "turn/start"); strings.Contains(turn, "outputSchema") {
+		t.Errorf("turn/start carries outputSchema without a schema: %s", turn)
+	}
+}

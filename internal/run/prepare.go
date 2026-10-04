@@ -90,7 +90,21 @@ type prepared struct {
 	// session ("you allowed rg for this run").
 	once     []provider.Grant
 	answered *answeredAsk
+
+	// reply says this execute opens with a reply turn: no schema, and the
+	// final text is the answer to the operator rather than a note to
+	// validate. Every reply-first run has one.
+	reply bool
+
+	// noteAfter says a note turn follows the reply in the same session: a
+	// reply-first triage or rca still files its note. A session run has
+	// no note to file.
+	noteAfter bool
 }
+
+// replyTurn reports whether the turn being run now is a reply: the run
+// answers in chat, and its note turn, when it has one, has not begun.
+func (p *prepared) replyTurn() bool { return p.reply && p.state.Phase != store.PhaseNote }
 
 // sessionRoot is the directory this run's session stands in: its own root
 // when it has one, else the workspace root.
@@ -138,9 +152,22 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 
 	// The run id is minted here rather than inside store.Create because an
 	// --at run names its worktree after it, and that directory has to
-	// exist before the session that stands in it.
-	runID := store.NewRunID(now)
-	rn, err := store.CreateID(cfg.Root, key, runID)
+	// exist before the session that stands in it. A caller that already
+	// told someone where the run will be names the id itself.
+	runID := o.RunID
+	if runID == "" {
+		runID = store.NewRunID(now)
+	}
+	// A session with no ticket reference has no bundle, so its run
+	// directory is made without the bundle/ a fetch would fill.
+	noBundle := kind == store.KindSession && o.NoBundle
+	var rn store.Run
+	var err error
+	if noBundle {
+		rn, err = store.CreateSessionDir(cfg.Root, key, runID)
+	} else {
+		rn, err = store.CreateID(cfg.Root, key, runID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +193,16 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		// the HTTP route, the Wails bridge — hands over whatever was
 		// typed, and a request of nothing but spaces is no request.
 		Instruction: strings.TrimSpace(o.Instruction),
+		// A session answers the operator in chat and files no note.
+		ReplyFirst: kind == store.KindSession,
 	}
+	if kind == store.KindSession {
+		p.state.Access = o.Access
+		if p.state.Access == "" {
+			p.state.Access = store.AccessReadOnly
+		}
+	}
+	p.reply = p.state.ReplyFirst
 	// The historical checkout, before anything else the run does: a
 	// commit that does not exist, or a repository that refuses the
 	// worktree, should stop the run before a ticket is fetched.
@@ -193,29 +229,44 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		p.triageNoteCopy, p.triageLink = triageNoteCopy(cfg.Root, notePath)
 	}
 
-	bundle, err := r.stageBundle(ctx, key, p, o)
-	if err != nil {
-		return p, err
+	// Everything that reads the ticket is skipped for a session with no
+	// ticket: there is no bundle to stage, no thread to quote, and nothing
+	// in either to name another repository.
+	var (
+		bundle     ticket.Bundle
+		threadHead string
+		truncated  bool
+		slackMD    string
+		others     []string
+		origin     string
+	)
+	if !noBundle {
+		bundle, err = r.stageBundle(ctx, key, p, o)
+		if err != nil {
+			return p, err
+		}
+		p.bundle = bundle
 	}
-	p.bundle = bundle
 
 	playbooks, err := prompt.LoadPlaybooks(cfg.ExpandPath(cfg.Playbooks))
 	if err != nil {
 		return p, err
 	}
-	threadHead, truncated, err := readThreadHead(rn.BundleDir())
-	if err != nil {
-		return p, err
-	}
-	slackMD, err := stageSlack(rn.BundleDir(), o)
-	if err != nil {
-		return p, err
-	}
+	if !noBundle {
+		threadHead, truncated, err = readThreadHead(rn.BundleDir())
+		if err != nil {
+			return p, err
+		}
+		slackMD, err = stageSlack(rn.BundleDir(), o)
+		if err != nil {
+			return p, err
+		}
 
-	others, origin := otherRepos(ctx, cfg.Root, bundle, slackMD)
-	others = unconfigured(others, cfg.Repositories())
-	if len(others) > 0 {
-		p.state.Warnings = append(p.state.Warnings, "the ticket names "+strings.Join(others, ", ")+", not this workspace's repository ("+origin+")")
+		others, origin = otherRepos(ctx, cfg.Root, bundle, slackMD)
+		others = unconfigured(others, cfg.Repositories())
+		if len(others) > 0 {
+			p.state.Warnings = append(p.state.Warnings, "the ticket names "+strings.Join(others, ", ")+", not this workspace's repository ("+origin+")")
+		}
 	}
 
 	in := prompt.TriageInput{
@@ -242,6 +293,23 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 			return p, err
 		}
 		p.promptText = prompt.RCA(rcaIn)
+	case store.KindSession:
+		sin := prompt.SessionInput{
+			Instruction:      p.state.Instruction,
+			Access:           p.state.Access,
+			Playbooks:        playbooks,
+			NotesLanguage:    cfg.NotesLanguage(),
+			CustomerLanguage: cfg.CustomerLanguage(),
+			Repositories:     in.Repositories,
+		}
+		if !noBundle {
+			sin.Bundle = &in.Bundle
+			sin.BundleDir = in.BundleDir
+			sin.ThreadHead, sin.ThreadHeadTruncated = threadHead, truncated
+			sin.Slack = slackMD
+			sin.OtherRepos, sin.Origin = others, origin
+		}
+		p.promptText = prompt.Session(sin)
 	default:
 		return p, fmt.Errorf("run: unknown run kind %q", kind)
 	}

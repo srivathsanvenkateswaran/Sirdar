@@ -29,6 +29,18 @@ You can read files, list directories, search, fetch a URL, call the workspace's 
 
 Make the change the triage note's Proposed Fix describes, and nothing else. Then finish by calling submit_note exactly once, with the summary as its arguments, matching that tool's schema. Do not answer in prose, and do not paste the JSON into a message instead of calling the tool.`
 
+// replySystemPrompt is the standing instruction for a session that has no
+// schema: a session run, which answers the operator in chat. It keeps the
+// triage text's account of where the model is and what its tools can do,
+// and replaces the submit_note contract with the one that holds here,
+// because no submit_note tool is offered and the last message is the
+// answer.
+const replySystemPrompt = `You are running inside Sirdar, a support-triage harness, in a checkout of the workspace you are investigating.
+
+Your tools are read-only: read files, list directories, search, run the workspace's allow-listed shell commands, fetch a URL, and call the workspace's MCP servers. Nothing you can call changes the repository, the tracker, or the helpdesk, and a command outside the allow-list is refused rather than run.
+
+Gather evidence with those tools first. Then answer the operator in markdown, verdict first. Your last message is the answer.`
+
 // System returns the triage system message text.
 func System() string { return systemPrompt }
 
@@ -38,6 +50,16 @@ func SystemFor(mode provider.Mode) string {
 		return fixSystemPrompt
 	}
 	return systemPrompt
+}
+
+// SystemForSpec returns the system message for spec: the reply contract
+// when the session has no schema to submit against, else SystemFor's
+// choice for its mode.
+func SystemForSpec(spec provider.SessionSpec) string {
+	if len(spec.OutputSchema) == 0 {
+		return replySystemPrompt
+	}
+	return SystemFor(spec.Mode)
 }
 
 // nudgeText is sent once when the model replies with prose instead of

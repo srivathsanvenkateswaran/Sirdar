@@ -2590,3 +2590,16 @@ func allows(argv []string, tool string) bool {
 	}
 	return false
 }
+
+// TestArgsOmitJSONSchemaWithoutASchema covers a session run: with no schema
+// there is nothing for --json-schema to carry, and passing it would make the
+// CLI fail the prose answer the session is asked for.
+func TestArgsOmitJSONSchemaWithoutASchema(t *testing.T) {
+	got := args(provider.SessionSpec{Model: "m1"}, Endpoint{}, nil)
+	if contains(got, "--json-schema") {
+		t.Fatalf("--json-schema passed without a schema: %v", got)
+	}
+	if !contains(args(provider.SessionSpec{OutputSchema: []byte(`{}`)}, Endpoint{}, nil), "--json-schema") {
+		t.Fatal("--json-schema dropped from a run that has a schema")
+	}
+}

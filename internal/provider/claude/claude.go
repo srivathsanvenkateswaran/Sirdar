@@ -69,9 +69,11 @@ func args(spec provider.SessionSpec) []string {
 		"--permission-prompt-tool", "stdio",
 		"--permission-mode", "default",
 	}
-	// The runner always supplies a schema; an empty one is a caller bug, so
-	// it is passed through rather than silently dropped.
-	out = append(out, "--json-schema", compactJSON(spec.OutputSchema))
+	// A session run has no schema: it answers the operator in prose, and
+	// the result line's text is that answer. Every other run supplies one.
+	if len(spec.OutputSchema) > 0 {
+		out = append(out, "--json-schema", compactJSON(spec.OutputSchema))
+	}
 	if spec.Model != "" {
 		out = append(out, "--model", spec.Model)
 	}

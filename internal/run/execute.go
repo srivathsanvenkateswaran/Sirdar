@@ -73,6 +73,11 @@ type execution struct {
 	final    []byte // the validated JSON note
 	rawFinal string // the last candidate, kept when validation failed
 
+	// reply is the answer a reply turn ended with, already written to
+	// answer.md. A steer delivered after it clears it: the next turn owes
+	// the operator a new one.
+	reply string
+
 	// row and completeErr are the outcome of filing the note, which
 	// happens the moment the note validates rather than after the
 	// session has ended: a run that has produced its answer must not be
@@ -522,6 +527,34 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 			p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+", after the note was written")
 		}
 		return r.finish(ctx, p, store.StatusCompleted, "", ex.row)
+	case ex.reply != "" && len(ex.final) == 0:
+		// A reply that landed is the run's answer, written the moment it
+		// arrived, and what happened to the session afterwards is a
+		// warning on a completed run for the same reason it is after a
+		// note.
+		if ex.completeErr != nil {
+			return r.finish(ctx, p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
+		}
+		if res.ExitErr != nil {
+			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
+		}
+		if ex.interrupted {
+			p.state.Warnings = append(p.state.Warnings, "interrupted after the reply was produced")
+		}
+		if ex.failure != "" {
+			p.state.Warnings = append(p.state.Warnings, ex.failure+", after the reply was written")
+		}
+		if timedOut.Load() {
+			p.state.Warnings = append(p.state.Warnings,
+				fmt.Sprintf("the session was still running when the %d minute budget expired, after the reply was written", r.Config.Budget.MaxMinutes))
+		}
+		if ex.overBudget != "" {
+			p.state.Warnings = append(p.state.Warnings, ex.overBudget+", after the reply was written")
+		}
+		if ex.stall.fired() {
+			p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+", after the reply was written")
+		}
+		return r.finish(ctx, p, store.StatusCompleted, "", note.DigestRow{Issue: firstLine(p.state.Instruction)})
 	case timedOut.Load():
 		return r.finish(ctx, p, store.StatusOverBudget,
 			fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes), note.DigestRow{})
@@ -562,6 +595,9 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		return r.finish(ctx, p, store.StatusFailed, stallReason(stallFor), note.DigestRow{})
 	default:
 		reason := "the session ended without a JSON note"
+		if p.reply {
+			reason = "the session ended without a reply"
+		}
 		if res.ExitErr != nil {
 			reason = fmt.Sprintf("provider exited: %v", res.ExitErr)
 		}
@@ -585,8 +621,9 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// this run was told answered: a steer that pinned the reported
 		// id would quietly stop honouring a configuration that named an
 		// alias on purpose.
-		Model:        p.state.RequestedModel(),
-		OutputSchema: schemaFor(p.kind),
+		Model: p.state.RequestedModel(),
+		// A reply turn has no schema: it answers the operator in prose.
+		OutputSchema: specSchema(p),
 		Policy: &provider.PermissionPolicy{
 			BashAllow:  cfg.Permissions.Bash,
 			MCPAllow:   cfg.Permissions.MCP,
@@ -751,6 +788,15 @@ func imageAttachments(p *prepared) []string {
 	return out
 }
 
+// specSchema is the schema the session about to start is held to: none for
+// a reply turn, else the run kind's.
+func specSchema(p *prepared) []byte {
+	if p.replyTurn() {
+		return nil
+	}
+	return schemaFor(p.kind)
+}
+
 func schemaFor(kind store.Kind) []byte {
 	switch kind {
 	case store.KindRCA:
@@ -876,6 +922,11 @@ type eventPayload struct {
 	// saying whether the session that answers the instruction is the one
 	// that wrote the note or a fresh one handed it.
 	Continuation string `json:"continuation,omitempty"`
+
+	// Phase is "note" on every line written while a reply-first run files
+	// its note, so a reader can tell the note turn from the reply it
+	// follows. It is empty, and left out, everywhere else.
+	Phase string `json:"phase,omitempty"`
 }
 
 func (r *Runner) record(p *prepared, log *eventLog, ev provider.Event) {
@@ -889,6 +940,7 @@ func (r *Runner) record(p *prepared, log *eventLog, ev provider.Event) {
 		Model:    ev.Model,
 		Delta:    ev.Delta,
 		Replace:  ev.Replace,
+		Phase:    p.state.Phase,
 	}
 	if ev.Raw != nil {
 		payload.Raw = ev.Raw
@@ -1240,6 +1292,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
+	// A reply is prose, and prose is the answer rather than narration
+	// around one, so answerDoc and the schema check are not applied to it.
+	if p.replyTurn() {
+		r.handleReply(ctx, p, sess, log, ex, ev)
+		return
+	}
+
 	doc, narration := answerDoc(ev)
 	if narration != "" {
 		// Kept for the failure reason below. It is the provider's own
@@ -1424,6 +1483,84 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	ex.retrySession = next
 }
 
+// replyNudge is what a reply turn that ended with nothing in it is sent:
+// the empty-turn nudge handleFinal sends a schema'd run, asking for the
+// answer in the form a reply takes.
+const replyNudge = "Your previous turn ended without an answer. A refused tool call does not end the " +
+	"task: carry on from what you have already done, and finish by answering the operator in markdown."
+
+// handleReply takes a reply turn's final: the text is the answer, written to
+// answer.md the moment it arrives, and the turn boundary after it is where a
+// queued steer goes in or the note turn starts. A turn that ended with no
+// text is asked to carry on, under the same limit handleFinal puts on a
+// schema'd run's empty turns.
+func (r *Runner) handleReply(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, ev provider.Event) {
+	// A provider that repeats its result line on the way out is answering
+	// once; only a steer, which clears the reply, makes room for another.
+	if ex.reply != "" {
+		return
+	}
+	text := strings.TrimSpace(ev.Text)
+	if text == "" && len(bytes.TrimSpace(ev.Final)) > 0 {
+		// A provider that still produced structured output has still
+		// answered, and its document is the only text there is.
+		text = strings.TrimSpace(string(ev.Final))
+	}
+
+	if text == "" {
+		if ex.emptyTurns >= maxEmptyTurns {
+			ex.failure = errEmptyAnswer.Error()
+			if ex.finalNarration != "" {
+				ex.failure += ": " + firstLine(ex.finalNarration)
+			}
+			sess.Cancel()
+			return
+		}
+		ex.emptyTurns++
+		sendErr := sess.Send(ctx, replyNudge)
+		if sendErr == nil {
+			return
+		}
+		// The same fallback the schema retry takes, for the same reason:
+		// a session past taking another message is resumed by handle, and
+		// the stall guard is held while the fresh process starts.
+		ex.stall.hold()
+		next, startErr := r.resumeForRetry(ctx, p, sess, replyNudge)
+		if startErr != nil {
+			ex.failure = fmt.Sprintf("the nudge to answer could not be sent: %v; resuming for it failed: %v", sendErr, startErr)
+			sess.Cancel()
+			return
+		}
+		ex.retrySession = next
+		return
+	}
+
+	ex.reply = text
+	ex.completeErr = r.completeSession(p, text)
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+	if r.deliverSteers(ctx, p, sess, log, ex) {
+		return
+	}
+	if p.noteAfter {
+		r.startNoteTurn(ctx, p, sess, log, ex)
+		return
+	}
+	ex.stall.stop()
+	r.endSession(p, sess)
+}
+
+// startNoteTurn continues a reply-first triage or rca run's session into
+// the turn that files its note. Nothing sets noteAfter yet, so there is no
+// note turn to start: the session is ended as a session run's is, rather
+// than left open waiting for a turn that never comes.
+func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution) {
+	ex.stall.stop()
+	r.endSession(p, sess)
+}
+
 // modelLimitReason is the terminal reason of a run stopped by a per-model
 // limit. It is the one string `sirdar resume`, the board card and the
 // session banner all read the model back out of, so it is built and parsed
@@ -1525,7 +1662,7 @@ func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Ses
 	if spec.Resume != "" {
 		// The transcript is already there; what the session needs is the
 		// instruction to finish, not the whole prompt again.
-		spec.Prompt = resumeContinue
+		spec.Prompt = continuePrompt(p)
 	}
 	fresh, err := r.Provider.Start(ctx, spec)
 	if err != nil {

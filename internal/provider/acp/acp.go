@@ -1252,7 +1252,19 @@ func (s *session) finishTurn(stopReason string, raw json.RawMessage) {
 // EvFinal that follows carries the prose so the runner's schema check sees
 // it, fails it, and spends its one retry turn — which reaches this session
 // as a Send, and the wire as a second session/prompt.
+//
+// A session run asked for no JSON, so its prose is the answer rather than a
+// failure, and a JSON example quoted inside that prose is part of the
+// answer rather than the answer itself: the text goes through whole.
 func (s *session) finishAnswer(text string, raw json.RawMessage) {
+	if len(s.spec.OutputSchema) == 0 && strings.TrimSpace(text) != "" {
+		s.mu.Lock()
+		s.finalText = text
+		s.mu.Unlock()
+		s.emit(provider.Event{Kind: provider.EvFinal, Text: text, Raw: raw})
+		s.endTurn(nil)
+		return
+	}
 	doc := jsonObject(text)
 	if doc != nil {
 		s.mu.Lock()
@@ -1335,13 +1347,16 @@ func (s *session) unanswered() {
 // ACP has: an instruction. There is no schema field on session/prompt and
 // no response_format equivalent, so the schema goes in the text and the
 // answer is parsed out of the assistant's own message.
+//
+// A session run has no schema and answers the operator in prose, so it is
+// asked for no JSON at all; its prompt already says how to answer.
 func promptText(spec provider.SessionSpec) string {
 	var b strings.Builder
 	b.WriteString(spec.Prompt)
-	b.WriteString("\n\n---\n\nFinish by replying with one JSON object and nothing else: " +
-		"no prose before or after it, no commentary, no summary, no code fence. " +
-		"Anything else is discarded and you will be asked again.")
 	if len(spec.OutputSchema) > 0 {
+		b.WriteString("\n\n---\n\nFinish by replying with one JSON object and nothing else: " +
+			"no prose before or after it, no commentary, no summary, no code fence. " +
+			"Anything else is discarded and you will be asked again.")
 		b.WriteString("\n\nThe object must match this JSON Schema:\n\n```json\n")
 		b.Write(compactJSON(spec.OutputSchema))
 		b.WriteString("\n```")

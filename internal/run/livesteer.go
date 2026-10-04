@@ -113,7 +113,13 @@ func (r *Runner) deliverSteers(ctx context.Context, p *prepared, sess provider.S
 		return false
 	}
 	text := joinSteers(batch)
-	if err := sess.Send(ctx, steerPrompt(text, p.kind)); err != nil {
+	// A run that answers in chat takes a follow-up as conversation: the
+	// operator gets an answer to what they asked, not the document again.
+	msg := steerPrompt(text, p.kind)
+	if p.reply {
+		msg = conversationPrompt(text)
+	}
+	if err := sess.Send(ctx, msg); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] the session takes no message mid-run (%v); the steer waits for the run to settle\n",
 			p.state.Key, firstLine(err.Error()))
 		return false
@@ -138,7 +144,7 @@ func (r *Runner) deliverSteers(ctx context.Context, p *prepared, sess provider.S
 
 	// A new turn, owed a new answer: everything that judged the last one
 	// starts again.
-	ex.final = nil
+	ex.final, ex.reply = nil, ""
 	ex.row, ex.completeErr = note.DigestRow{}, nil
 	ex.retried, ex.emptyTurns, ex.schemaError = false, 0, ""
 	ex.finalNarration = ""

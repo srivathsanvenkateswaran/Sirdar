@@ -1724,3 +1724,53 @@ func TestSubagentTitlesAreMatchedOnTheLeadingIdentifier(t *testing.T) {
 		}
 	}
 }
+
+// TestPromptAsksForNoJSONWithoutASchema covers a session run: it answers
+// the operator in prose, so the prompt carries neither the JSON-only
+// instruction nor a schema, and still states the read-only posture.
+func TestPromptAsksForNoJSONWithoutASchema(t *testing.T) {
+	got := promptText(provider.SessionSpec{Prompt: "Why is the refund stuck?", Policy: &provider.PermissionPolicy{}})
+	for _, never := range []string{"Finish by replying with one JSON object", "JSON Schema"} {
+		if strings.Contains(got, never) {
+			t.Errorf("prompt without a schema carries %q:\n%s", never, got)
+		}
+	}
+	if !strings.HasPrefix(got, "Why is the refund stuck?") || !strings.Contains(got, "This run is read-only.") {
+		t.Errorf("prompt = %q", got)
+	}
+	withSchema := promptText(provider.SessionSpec{Prompt: "x", OutputSchema: []byte(`{}`), Policy: &provider.PermissionPolicy{}})
+	if !strings.Contains(withSchema, "Finish by replying with one JSON object") {
+		t.Errorf("prompt with a schema lost the JSON instruction:\n%s", withSchema)
+	}
+}
+
+// TestProseIsTheAnswerWithoutASchema covers the answer side of the same
+// run: the turn's whole text is the final, with no error saying a JSON note
+// was missing and no object pulled out of the prose in its place.
+func TestProseIsTheAnswerWithoutASchema(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-basic.jsonl", cwd, func(spec *provider.SessionSpec) {
+		spec.OutputSchema = nil
+	})
+	var finals []provider.Event
+	for _, ev := range drain(sess) {
+		switch ev.Kind {
+		case provider.EvFinal:
+			finals = append(finals, ev)
+		case provider.EvError:
+			if strings.Contains(ev.Text, "JSON note") {
+				t.Errorf("error event without a schema: %s", ev.Text)
+			}
+		}
+	}
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if len(finals) != 1 {
+		t.Fatalf("finals = %+v", finals)
+	}
+	want := "The empty cart takes the 500 branch.\n{\"title\":\"Checkout 500s\",\"ok\":true}"
+	if finals[0].Text != want || len(finals[0].Final) != 0 {
+		t.Errorf("final Text %q Final %s", finals[0].Text, finals[0].Final)
+	}
+}

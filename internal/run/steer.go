@@ -202,6 +202,15 @@ func steerPrompt(text string, kind store.Kind) string {
 		"was everywhere else. If nothing in it changes, reply with the same document."
 }
 
+// conversationPrompt is the message a follow-up is sent as on a run that
+// answers in chat: the operator's words and the reply contract, with no
+// schema, so a question gets an answer rather than the note again.
+func conversationPrompt(text string) string {
+	return "Follow-up from the operator:\n\n" + text + "\n\n" +
+		"Answer the operator. Reply in markdown, verdict first, and say how each claim was " +
+		"established. Do not repeat your earlier reply or the note unless they ask for it."
+}
+
 // primedPrompt is the opening message of a fresh session standing in for
 // the one that wrote the note: the run's original prompt, the answer it
 // produced, and the instruction. The bundle is still on disk where the

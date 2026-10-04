@@ -132,6 +132,28 @@ type Options struct {
 	// helpdesk number. The tracker and helpdesk are not called, and the
 	// run is filed under the bundle's synthetic key. It takes one key.
 	Reported *ReportedBundle
+
+	// RunID is the run id to use instead of minting one, so a caller can
+	// name the run directory before the job starts: app.StartSession
+	// answers the request with it, ahead of the run itself.
+	RunID string
+
+	// NoBundle says the run has no ticket reference: nothing is fetched,
+	// no bundle directory is made, and the prompt has no ticket section.
+	// Only a session run can have no ticket.
+	NoBundle bool
+
+	// Access is what a session run may do to the workspace's files,
+	// store.AccessReadOnly or store.AccessWorktree. Empty means read-only,
+	// the posture every run had before sessions existed.
+	Access string
+
+	// NoteOnly runs a triage or rca as one schema'd session that files its
+	// note and answers nothing in chat, as every run did before this
+	// change. Eval sets it: what an eval scores is the note, and a reply
+	// turn ahead of it would only spend the budget the score is measured
+	// against.
+	NoteOnly bool
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull
@@ -423,12 +445,13 @@ func (r *Runner) Resume(ctx context.Context, runID string, o ResumeOptions) (Out
 	if err != nil {
 		return Outcome{}, err
 	}
-	bundle, err := readBundle(rn.BundleDir())
+	// A session with no ticket reference has no bundle to read back.
+	bundle, err := readBundleIfAny(rn.BundleDir())
 	if err != nil {
 		return Outcome{}, err
 	}
 
-	p := &prepared{run: rn, state: state, kind: state.Kind, bundle: bundle}
+	p := &prepared{run: rn, state: state, kind: state.Kind, bundle: bundle, reply: state.ReplyFirst}
 	// A blocked --at run kept its worktree, and the resumed session has to
 	// stand where the first one stood. A worktree that is no longer there —
 	// the operator removed it, or the run was kept from an older Sirdar —
@@ -470,6 +493,19 @@ func (r *Runner) Resume(ctx context.Context, runID string, o ResumeOptions) (Out
 }
 
 const resumeContinue = "Continue where you left off and produce the JSON note."
+
+// resumeReply is resumeContinue for a run in its reply turn, which owes the
+// operator an answer rather than a note.
+const resumeReply = "Continue where you left off and answer the operator."
+
+// continuePrompt is the plain nudge a resumed session opens with: finish
+// the reply when the run is in its reply turn, else produce the note.
+func continuePrompt(p *prepared) string {
+	if p.replyTurn() {
+		return resumeReply
+	}
+	return resumeContinue
+}
 
 // applyModel puts a continued run on another model: the session about to
 // start asks for it, and so does every session after it, because the run's
@@ -521,7 +557,7 @@ func (r *Runner) resumeText(p *prepared, o ResumeOptions) (string, error) {
 		return text, nil
 	}
 	if !strings.HasPrefix(state.Reason, askedPrefix) {
-		return resumeContinue, nil
+		return continuePrompt(p), nil
 	}
 	if answer != "" {
 		return answer, nil

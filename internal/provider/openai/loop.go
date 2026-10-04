@@ -180,7 +180,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		sendCh:   make(chan string, 1),
 		dead:     make(chan struct{}),
 		done:     make(chan struct{}),
-		messages: []Message{{Role: "system", Content: SystemFor(spec.Mode)}},
+		messages: []Message{{Role: "system", Content: SystemForSpec(spec)}},
 	}
 	s.transcript = transcriptPath(spec.RunDir)
 	if len(resumed) > 0 {
@@ -491,9 +491,12 @@ func (s *session) discoverTools() bool {
 		}
 	}
 
+	// A session with no schema answers in prose, and its last message is
+	// the answer; offering submit_note would only invite a note nobody
+	// asked for.
 	schema := s.spec.OutputSchema
 	if len(schema) == 0 {
-		schema = json.RawMessage(`{"type":"object"}`)
+		return true
 	}
 	s.add(&tool{
 		name:        submitNoteTool,
@@ -593,8 +596,24 @@ func (s *session) turnLoop() {
 // taken as the note — some models answer that way however firmly they are
 // told not to — and anything else earns one reminder, then ends the
 // session. It reports whether the loop should take another turn.
+//
+// A session with no schema is the exception: prose is what it was asked
+// for, so its reply is the answer and ends the loop, whatever it looks
+// like. A reply with nothing in it ends the loop too, as an empty final,
+// and the runner decides whether to ask again.
 func (s *session) handleProse(content string) bool {
 	text := strings.TrimSpace(content)
+	if len(s.spec.OutputSchema) == 0 {
+		if text != "" && !s.emit(provider.Event{
+			Kind: provider.EvAssistantText,
+			Text: text,
+			Raw:  rawOf(map[string]string{"assistant": text}),
+		}) {
+			return false
+		}
+		s.final(nil, text)
+		return false
+	}
 	if isJSONObject(text) {
 		s.final(json.RawMessage(text), "")
 		return false
