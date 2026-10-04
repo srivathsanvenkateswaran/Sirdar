@@ -66,12 +66,12 @@ func TestAsksTable(t *testing.T) {
 
 func TestPhrasesAndReasons(t *testing.T) {
 	cases := map[string]string{
-		Mention{Name: "Acme.Web", Status: StatusCompanion}.Phrase(): "mentions Acme.Web (companion repo)",
-		Mention{Name: "Acme.Web", Status: StatusUnknown}.Phrase():   "mentions Acme.Web (not configured — add it under repos:)",
-		Mention{Name: "api", Status: StatusWorkspace}.Phrase():      "",
-		Ask{Phrase: "Acme.Web", Status: StatusUnknown}.Reason():     "Acme.Web is not a configured repository",
+		Mention{Name: "Acme.Web", Status: StatusCompanion}.Phrase():                                  "mentions Acme.Web (companion repo)",
+		Mention{Name: "Acme.Web", Status: StatusUnknown}.Phrase():                                    "mentions Acme.Web (not configured — add it under repos:)",
+		Mention{Name: "api", Status: StatusWorkspace}.Phrase():                                       "",
+		Ask{Phrase: "Acme.Web", Status: StatusUnknown}.Reason():                                      "Acme.Web is not a configured repository",
 		Ask{Phrase: "POS", Status: StatusAmbiguous, Candidates: []string{"A.POS", "B.POS"}}.Reason(): "POS matches more than one repository: A.POS, B.POS",
-		Ask{Phrase: "web", Name: "Acme.Web", Status: StatusCompanion}.Reason():                        "",
+		Ask{Phrase: "web", Name: "Acme.Web", Status: StatusCompanion}.Reason():                       "",
 	}
 	for got, want := range cases {
 		if got != want {
