@@ -1779,6 +1779,13 @@ mcp:
 	if err == nil || !strings.Contains(err.Error(), `"jira"`) || !strings.Contains(err.Error(), "janus, slack, zoho-desk") {
 		t.Fatalf("an unknown name must fail the load with the CLI's names, got %v", err)
 	}
+	// doctor keeps it, so its row can say the same thing.
+	if _, err := LoadDoctor(writeCfg(t, minimal+`
+mcp:
+  userServers: [slack, jira]
+`)); err != nil {
+		t.Fatalf("LoadDoctor must keep a config whose only fault is a user server name: %v", err)
+	}
 
 	cfg, err = Load(writeCfg(t, minimal+`
 mcp:

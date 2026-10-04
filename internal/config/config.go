@@ -716,7 +716,7 @@ func LoadDoctor(root string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := c.Validate(); err != nil && !errors.Is(err, ErrAgyDisabled) {
+	if err := c.Validate(); err != nil && !errors.Is(err, ErrAgyDisabled) && !errors.Is(err, ErrUserServers) {
 		return nil, err
 	}
 	return c, nil
@@ -942,11 +942,18 @@ func (c *Config) Validate() error {
 	if err := validateWebhooks(&c.Webhooks); err != nil {
 		return err
 	}
-	if err := validateUserServers(c.MCP.UserServers); err != nil {
+	if err := validateNotify(c.Notify); err != nil {
 		return err
 	}
-	return validateNotify(c.Notify)
+	// Last, so LoadDoctor can keep a configuration whose only fault is a
+	// name the CLI does not have: the doctor row is where that is shown.
+	return validateUserServers(c.MCP.UserServers)
 }
+
+// ErrUserServers marks a mcp.userServers entry the Claude CLI does not
+// have. LoadDoctor keeps such a configuration, so the report can say which
+// names the CLI does have.
+var ErrUserServers = errors.New("mcp.userServers")
 
 // validateUserServers checks mcp.userServers against the servers the Claude
 // CLI actually has at user scope, so a typo is a load error that lists the
@@ -966,7 +973,7 @@ func validateUserServers(names []string) error {
 		seen[n] = true
 	}
 	if _, err := provider.UserServersFor(nil, names); err != nil {
-		return fmt.Errorf("config: mcp.userServers: %w", err)
+		return fmt.Errorf("config: %w: %v", ErrUserServers, err)
 	}
 	return nil
 }
