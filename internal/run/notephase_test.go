@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -432,5 +433,277 @@ func TestSteerDuringTheNoteTurnIsHeld(t *testing.T) {
 	}
 	if !held {
 		t.Errorf("no steer_held line: %v", kinds)
+	}
+}
+
+func TestBreachInTheNoteTurnFailsTheRunAndClearsThePhase(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replyThenNote("The ledger skips zero rows.",
+		breachEvent("the session wrote src/ledger.go"), finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	st, err := (store.Run{Dir: runDir(t, cfg, out)}).ReadState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Phase != "" || out.State.Phase != "" {
+		t.Errorf("phase %q on disk, %q returned, after a breach ended the run", st.Phase, out.State.Phase)
+	}
+}
+
+// TestBudgetCoversBothTurnsTogether: each turn alone is under the $5 cap,
+// the two together are over it. The run is held to the total, the note
+// session is told what is left, and the run's usage is the sum.
+func TestBudgetCoversBothTurnsTogether(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
+		{Kind: provider.EvUsage, Turns: 2, CostUSD: 3},
+		{Kind: provider.EvFinal, Text: "The ledger skips zero rows."},
+	}, provider.Event{Kind: provider.EvUsage, Turns: 2, CostUSD: 3}, finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !strings.Contains(out.State.NoteWarning, "cost $6.00 exceeded the $5.00 budget") {
+		t.Errorf("note warning %q", out.State.NoteWarning)
+	}
+	if u := out.State.Usage; u.CostUSD != 6 || u.Turns != 4 {
+		t.Errorf("usage %+v, want the two turns' sum", u)
+	}
+	if b := p.spec(1).Budget; b.MaxUSD != 2 || b.MaxTurns != 58 {
+		t.Errorf("note session budget %+v, want what the reply turn left", b)
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "answer.md")); err != nil {
+		t.Error(err)
+	}
+	if rows, _ := store.ReadRegister(cfg.Root); len(rows) != 0 {
+		t.Errorf("register rows %+v after the budget refused the note", rows)
+	}
+}
+
+func TestRunUsageIsTheSumOfBothTurns(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
+		{Kind: provider.EvUsage, Turns: 2, InputTok: 100, OutputTok: 10, CostUSD: 1},
+		{Kind: provider.EvFinal, Text: "The ledger skips zero rows."},
+	}, provider.Event{Kind: provider.EvUsage, Turns: 3, InputTok: 50, OutputTok: 20, CostUSD: 1.5}, finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q note warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	if u := out.State.Usage; u.Turns != 5 || u.InputTokens != 150 || u.OutputTokens != 30 || u.CostUSD != 2.5 {
+		t.Errorf("usage %+v, want the two turns' sum", u)
+	}
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil || len(rows) != 1 || rows[0].CostUSD != 2.5 || rows[0].Turns != 5 {
+		t.Errorf("register %+v, %v", rows, err)
+	}
+}
+
+// TestRepeatedReplyResultLineDoesNotDisturbTheNoteTurn: a CLI that repeats
+// its result line on the way out does so after the note turn has begun.
+// That line belongs to the reply; it must not be judged as a note, spend
+// the schema retry, or start a session that replaces the note turn's.
+func TestRepeatedReplyResultLineDoesNotDisturbTheNoteTurn(t *testing.T) {
+	cfg := newWorkspace(t)
+	const reply = "The ledger skips zero rows."
+	p := &stubProvider{sendErr: errors.New("the session has exited")}
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if len(spec.OutputSchema) > 0 {
+			s.emit(finalEvent(triageDoc))
+			return
+		}
+		if !s.emit(provider.Event{Kind: provider.EvFinal, Text: reply}) {
+			return
+		}
+		for p.startCount() < 2 {
+			time.Sleep(time.Millisecond)
+		}
+		s.emit(provider.Event{Kind: provider.EvFinal, Text: reply})
+		s.emit(provider.Event{Kind: provider.EvPermission, Decision: "deny", Tool: "Bash"})
+	}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q note warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	if n := p.startCount(); n != 2 {
+		t.Fatalf("started %d sessions, want the reply and the note", n)
+	}
+	for i := 0; i < 2; i++ {
+		if p.session(i).waitCount() == 0 {
+			t.Errorf("session %d was never reaped", i)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
+		t.Error(err)
+	}
+}
+
+// TestNoteTurnPrimedWhenTheProviderCannotContinue: cursor and agy refuse
+// to continue a run, because a follow-up could lead to tool calls nothing
+// judges first. The note turn leads to none, so it runs primed in a fresh
+// session under the note policy and files the note.
+func TestNoteTurnPrimedWhenTheProviderCannotContinue(t *testing.T) {
+	cfg := newWorkspace(t)
+	const reply = "The ledger skips zero rows."
+	stub := &stubProvider{script: replyThenNote(reply, finalEvent(triageDoc))}
+	p := steerable{stubProvider: stub, c: provider.ContinueNone, err: errors.New("cannot continue")}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q note warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	noteSpec := stub.spec(1)
+	if noteSpec.Resume != "" || !strings.Contains(noteSpec.Prompt, "## Your reply") || !strings.Contains(noteSpec.Prompt, reply) {
+		t.Errorf("note turn resume %q, prompt not primed", noteSpec.Resume)
+	}
+	if pol := noteSpec.Policy; pol == nil || len(pol.BashAllow) != 0 || len(pol.ReadRoots) != 1 {
+		t.Errorf("note turn policy %+v", noteSpec.Policy)
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
+		t.Error(err)
+	}
+}
+
+// TestNoNoteTurnAfterTheWallClockRanOut: the wall-clock timer fires once,
+// on whichever session is live. One that fired while the reply was on its
+// way would not fire again for the note session, so no note turn starts;
+// the run keeps its reply and says why it filed no note.
+func TestNoNoteTurnAfterTheWallClockRanOut(t *testing.T) {
+	cfg := newWorkspace(t)
+	const reply = "The ledger skips zero rows."
+	p := &stubProvider{}
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if len(spec.OutputSchema) > 0 {
+			s.emit(finalEvent(triageDoc))
+			return
+		}
+		// The reply lands after the timer has cancelled this session:
+		// it was already in the stream.
+		<-s.cancelled
+		s.events <- provider.Event{Kind: provider.EvFinal, Text: reply}
+	}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	ctx := context.Background()
+	prep, err := r.prepare(ctx, "OMNI-1", store.KindTriage, Options{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// All but a moment of the 25 minute budget is already spent, so the
+	// timer fires a second into the run.
+	prep.usageBase.ElapsedSeconds = 25*60 - 0.1
+	out := r.execute(ctx, prep, "", newPool(nil))
+
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if n := p.startCount(); n != 1 {
+		t.Fatalf("started %d sessions, want no note turn", n)
+	}
+	if !strings.Contains(out.State.NoteWarning, "wall-clock budget of 25 minutes exceeded") {
+		t.Errorf("note warning %q", out.State.NoteWarning)
+	}
+	if got := readFile(t, filepath.Join(runDir(t, cfg, out), "answer.md")); got != reply+"\n" {
+		t.Errorf("answer.md = %q", got)
+	}
+}
+
+// TestUnwrittenReplyFailsTheRun: a reply that could not be written to
+// answer.md is no reply to file a note from, so the run fails as a
+// session run does and no note turn starts.
+func TestUnwrittenReplyFailsTheRun(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{}
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		if len(spec.OutputSchema) == 0 {
+			// A directory where the file should go makes the write fail.
+			if err := os.Mkdir(filepath.Join(spec.RunDir, answerFile), 0o755); err != nil {
+				t.Error(err)
+			}
+		}
+		replyThenNote("The ledger skips zero rows.", finalEvent(triageDoc))(spec, s)
+	}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusFailed || !strings.Contains(out.State.Reason, answerFile) {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if n := p.startCount(); n != 1 {
+		t.Errorf("started %d sessions, want no note turn", n)
+	}
+	if out.State.Phase != "" || out.State.NoteWarning != "" {
+		t.Errorf("phase %q note warning %q", out.State.Phase, out.State.NoteWarning)
+	}
+}
+
+func TestNoteTurnNamesWhyItStopped(t *testing.T) {
+	resets := time.Date(2026, 9, 10, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name string
+		ev   provider.Event
+		want string
+	}{
+		{"rate limit", provider.Event{Kind: provider.EvRateLimited, ResetsAt: resets},
+			"note not filed: rate limited, resets at 2026-09-10T12:00:00Z"},
+		{"permission question", askEvent(), "note not filed: the note turn tried Bash, which it may not use"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newWorkspace(t)
+			p := &stubProvider{script: replyThenNote("The ledger skips zero rows.", tc.ev)}
+			r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+			r.StallTimeout = -1
+
+			outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			out := outs[0]
+			if out.State.Status != store.StatusCompleted {
+				t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+			}
+			if out.State.NoteWarning != tc.want {
+				t.Errorf("note warning %q, want %q", out.State.NoteWarning, tc.want)
+			}
+		})
 	}
 }

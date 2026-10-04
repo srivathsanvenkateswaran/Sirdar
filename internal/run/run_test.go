@@ -282,6 +282,7 @@ type stubSession struct {
 	sends      []string
 	cancels    int
 	inputClose int
+	waits      int
 	cancelOnce sync.Once
 	finishOnce sync.Once
 }
@@ -316,8 +317,19 @@ func (s *stubSession) Send(ctx context.Context, userText string) error {
 	return nil
 }
 
-func (s *stubSession) Wait() (provider.Result, error) { return s.result, nil }
-func (s *stubSession) Handle() string                 { return s.handle }
+func (s *stubSession) Wait() (provider.Result, error) {
+	s.mu.Lock()
+	s.waits++
+	s.mu.Unlock()
+	return s.result, nil
+}
+
+func (s *stubSession) waitCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.waits
+}
+func (s *stubSession) Handle() string { return s.handle }
 
 func (s *stubSession) Cancel() {
 	s.mu.Lock()
@@ -2469,7 +2481,7 @@ func TestUsageKeepsTheHighestReport(t *testing.T) {
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 	r.CloseGrace = 50 * time.Millisecond
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}

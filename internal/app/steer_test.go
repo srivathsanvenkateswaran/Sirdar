@@ -246,6 +246,12 @@ func TestHeldSteerAppliedWhenTheRunSettles(t *testing.T) {
 	first := true
 	p.script = func(spec provider.SessionSpec, s *stubSession) {
 		defer s.finish()
+		// The triage's note turn files the note and spends nothing of its
+		// own, so the turns below are the reply's and the steer's.
+		if strings.HasPrefix(spec.Prompt, "# File the note") {
+			s.emit(finalEvent(triageDoc))
+			return
+		}
 		if !first {
 			s.emit(provider.Event{Kind: provider.EvUsage, Turns: 2})
 			s.emit(finalEvent(steered))

@@ -216,7 +216,10 @@ func TestServeEndToEnd(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if done.Usage.Turns != 3 {
+	// The fake CLI reports three turns per invocation, and the run is two:
+	// the reply and the note. The budget covers both, so the run's usage
+	// is their sum.
+	if done.Usage.Turns != 6 {
 		t.Errorf("run usage %+v", done.Usage)
 	}
 

@@ -154,6 +154,27 @@ type execution struct {
 	// would fail a run elsewhere is only a warning on this one.
 	noteErr string
 
+	// noteSess is the session carrying the note turn, once one has
+	// started. In the note phase only its events are judged: the reply
+	// session is still draining when the note turn begins, and a result
+	// line it repeats, or a refusal it reports on the way out, belongs to
+	// the reply rather than to the note.
+	noteSess provider.Session
+
+	// sessions is every session this execute has read from, in the order
+	// they started, and folded is how many of them had ended their part in
+	// the run when the note turn began. Their usage was folded into base
+	// then, so the reaping loop does not count it a second time.
+	sessions []provider.Session
+	folded   int
+
+	// started is when this execute's first session started, and timedOut
+	// says the wall-clock timer has fired. Both are read when the note
+	// turn starts, which is after the timer may already have cancelled
+	// the session the reply came from.
+	started  time.Time
+	timedOut atomic.Bool
+
 	// breach is set when the provider reported that a read-only session
 	// did something a read-only session cannot do. It is kept apart from
 	// failure because it outranks everything, the note included: a run
@@ -420,7 +441,8 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	// Anything typed while the run was preparing is in the inbox already.
 	r.pickUpSteers(p, log)
 
-	var timedOut atomic.Bool
+	ex.started = started
+	timedOut := &ex.timedOut
 	if mins := r.Config.Budget.MaxMinutes; mins > 0 {
 		timer := time.AfterFunc(remainingWallClock(mins, ex.base.ElapsedSeconds), func() {
 			timedOut.Store(true)
@@ -455,13 +477,21 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	// result is the run's: a schema retry that had to open a fresh session
 	// carries the answer.
 	var res provider.Result
-	for _, s := range sessions {
+	for i, s := range sessions {
 		got, _ := s.Wait()
 		res = got
 		if got.Handle != "" {
 			p.state.Handle = got.Handle
 		} else if h := s.Handle(); h != "" {
 			p.state.Handle = h
+		}
+		if len(got.StderrTail) > 0 {
+			p.state.StderrTail = got.StderrTail
+		}
+		// A session that ended before the note turn began has its usage
+		// in base already; its counters are not the note turn's.
+		if i < ex.folded {
+			continue
 		}
 		if got.Usage.Turns > ex.seen.Turns {
 			ex.seen.Turns = got.Usage.Turns
@@ -470,9 +500,6 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		}
 		if got.Usage.CostUSD > ex.seen.CostUSD {
 			ex.seen.CostUSD = got.Usage.CostUSD
-		}
-		if len(got.StderrTail) > 0 {
-			p.state.StderrTail = got.StderrTail
 		}
 	}
 	p.state.Usage = usagePlus(ex.base, ex.seen)
@@ -493,7 +520,10 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		// that watched a write complete cannot file one, and the answer
 		// it was about to give is worth less than the fact that the
 		// guarantee failed. handleFinal refuses to file after a breach,
-		// so on the ordinary path there is no note to disown here.
+		// so on the ordinary path there is no note to disown here. A
+		// breach in the note turn ends that turn too, so the run is no
+		// longer filing anything.
+		p.state.Phase = ""
 		return r.finish(ctx, p, store.StatusFailed, ex.breach, note.DigestRow{})
 	case p.state.Phase == store.PhaseNote:
 		// The reply was written before the note turn began, so however
@@ -604,6 +634,13 @@ func (r *Runner) finishNote(ctx context.Context, p *prepared, ex *execution, res
 		reason = "interrupted"
 	case ex.stall.fired():
 		reason = stallReason(stallFor)
+	case ex.rateLimited:
+		reason = "rate limited"
+		if !ex.resetsAt.IsZero() {
+			reason += ", resets at " + ex.resetsAt.Format(time.RFC3339)
+		}
+	case ex.ask != nil:
+		reason = askReason(ex.ask)
 	case ex.failure != "":
 		reason = ex.failure
 	default:
@@ -893,20 +930,28 @@ func noteKind(kind store.Kind) note.Kind {
 // that carried it, whose events are consumed the same way and into the same
 // execution state.
 func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, pl *pool, ex *execution) []provider.Session {
-	sessions := []provider.Session{sess}
+	ex.sessions = []provider.Session{sess}
 	for {
 		r.consumeSession(ctx, p, sess, log, pl, ex)
 		if ex.retrySession == nil {
-			return sessions
+			return ex.sessions
 		}
 		sess, ex.retrySession = ex.retrySession, nil
 		ex.live.set(sess)
+		// The wall-clock timer and the stall guard cancel whichever
+		// session is live when they fire, and fire once. One that fired
+		// while the session before this one was still draining has
+		// already spent itself, so the session that follows is cancelled
+		// here rather than left to run past the budget.
+		if ex.timedOut.Load() || ex.stall.fired() {
+			sess.Cancel()
+		}
 		// The retry session is live: the hold handleFinal put on for
 		// Provider.Start is over, and the countdown resumes rather than
 		// staying suspended. reset would not do this — the guard is
 		// still held at this point — so this is rearm, not reset.
 		ex.stall.rearm()
-		sessions = append(sessions, sess)
+		ex.sessions = append(ex.sessions, sess)
 	}
 }
 
@@ -1098,8 +1143,17 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 	if ev.Kind != provider.EvError {
 		ex.malformed = 0
 	}
-	if p.state.Phase == store.PhaseNote && r.handleNoteEvent(p, sess, ex, ev) {
-		return
+	if p.state.Phase == store.PhaseNote {
+		// The reply session drains after the note turn has begun. What it
+		// says on the way out is recorded but not judged as the note
+		// turn's, except a breach, which outranks everything whichever
+		// session it came from.
+		if sess != ex.noteSess && ev.Kind != provider.EvBreach {
+			return
+		}
+		if r.handleNoteEvent(p, sess, ex, ev) {
+			return
+		}
 	}
 
 	switch ev.Kind {
@@ -1243,7 +1297,9 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 func (r *Runner) handleNoteEvent(p *prepared, sess provider.Session, ex *execution, ev provider.Event) bool {
 	switch ev.Kind {
 	case provider.EvPermission:
-		if ev.Decision != "deny" {
+		// The note policy asks nobody, so a question about a call is as
+		// much a refusal as a deny is.
+		if ev.Decision != "deny" && ev.Decision != "ask" {
 			return false
 		}
 		r.endNoteTurn(sess, ex, "the note turn tried "+ev.Tool+", which it may not use")
@@ -1573,6 +1629,11 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// the stall window must not fail a run that is about to carry on
 	// normally. consume rearms it once the retry session is live; on
 	// failure here the run is ending anyway; held is where it stays.
+	if ex.retrySession != nil {
+		// A session is already waiting to carry the run on; starting a
+		// second would orphan it, unread and unreaped.
+		return
+	}
 	ex.stall.hold()
 	next, startErr := r.resumeForRetry(ctx, p, sess, msg)
 	if startErr != nil {
@@ -1582,6 +1643,9 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	}
 	fmt.Fprintf(r.stderr(), "[%s] schema retry in a resumed session\n", p.state.Key)
 	ex.retrySession = next
+	if p.state.Phase == store.PhaseNote {
+		ex.noteSess = next
+	}
 }
 
 // failTurn records why the turn could not produce its note: the run's
@@ -1636,6 +1700,9 @@ func (r *Runner) handleReply(ctx context.Context, p *prepared, sess provider.Ses
 		// The same fallback the schema retry takes, for the same reason:
 		// a session past taking another message is resumed by handle, and
 		// the stall guard is held while the fresh process starts.
+		if ex.retrySession != nil {
+			return
+		}
 		ex.stall.hold()
 		next, startErr := r.resumeForRetry(ctx, p, sess, replyNudge)
 		if startErr != nil {
@@ -1652,6 +1719,13 @@ func (r *Runner) handleReply(ctx context.Context, p *prepared, sess provider.Ses
 	p.state.UpdatedAt = r.now()
 	if err := p.run.WriteState(p.state); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+	if ex.completeErr != nil {
+		// The reply is not on disk, so there is nothing to file a note
+		// from or to follow up on: the run fails as a session run does.
+		ex.stall.stop()
+		r.endSession(p, sess)
+		return
 	}
 	if r.deliverSteers(ctx, p, sess, log, ex) {
 		return
@@ -1680,18 +1754,41 @@ func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.S
 	// the reply is not one the note has used.
 	ex.retried, ex.emptyTurns, ex.schemaError, ex.finalNarration = false, 0, "", ""
 
+	// The budget covers both turns together. What the reply turn spent
+	// becomes part of the base: the caps judge the note turn's usage on
+	// top of it, and the note session is told only what is left. The
+	// minutes are the wall clock so far, which the run's own timer is
+	// already counting.
+	ex.base = usagePlus(ex.base, ex.seen)
+	ex.seen = store.Usage{}
+	ex.folded = len(ex.sessions)
+	p.usageBase = ex.base
+	p.usageBase.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(ex.started).Seconds()
+
 	r.endSession(p, sess)
+
+	// A clock that has already run out cancelled the reply session and
+	// will not fire again for a new one, and an interrupt means nobody
+	// wants more work done: the note turn does not start, and the run ends
+	// with the reply and the reason.
+	if ctx.Err() != nil {
+		ex.interrupted = true
+	}
+	if ex.timedOut.Load() || ex.stall.fired() || ex.interrupted {
+		return
+	}
 
 	// Held across Provider.Start for the reason the schema retry holds it:
 	// starting a process is not a live session going quiet. consume rearms
 	// it once the note session is live.
 	ex.stall.hold()
 
-	cont, err := provider.PlanSteer(r.Provider)
-	if err != nil {
-		ex.noteErr = "this provider cannot continue a session to file the note: " + err.Error()
-		return
-	}
+	// A provider that cannot continue a run at all (cursor, agy) refuses
+	// because a follow-up could lead to tool calls nothing judges before
+	// they run. The note turn leads to none: it runs under the note
+	// policy, which reads the run directory and nothing else. So it is
+	// primed in a fresh session, as for a provider without resume.
+	cont, _ := provider.PlanSteer(r.Provider)
 	var spec provider.SessionSpec
 	if handle := sess.Handle(); cont == provider.ContinueResume && handle != "" {
 		spec = r.sessionSpec(p, handle)
@@ -1711,7 +1808,7 @@ func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.S
 		return
 	}
 	fmt.Fprintf(r.stderr(), "[%s] filing the note\n", p.state.Key)
-	ex.retrySession = next
+	ex.retrySession, ex.noteSess = next, next
 }
 
 // notePrompt is the note turn's opening message for this run's kind.
@@ -1821,7 +1918,7 @@ func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Ses
 	}
 
 	next := r.nextModel(ex)
-	if next == "" {
+	if next == "" || ex.retrySession != nil {
 		r.endSession(p, sess)
 		return
 	}

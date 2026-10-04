@@ -77,10 +77,12 @@ func notifyingRunner(t *testing.T, hook *webhook, block string) (*config.Config,
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &stubProvider{script: replay(
-		provider.Event{Kind: provider.EvUsage, Turns: 3, InputTok: 100, OutputTok: 20, CostUSD: 0.42},
-		finalEvent(triageDoc),
-	)}
+	// The reply turn spends what the run spends; the note turn reports
+	// nothing of its own, so the run's usage is the reply turn's.
+	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
+		{Kind: provider.EvUsage, Turns: 3, InputTok: 100, OutputTok: 20, CostUSD: 0.42},
+		{Kind: provider.EvFinal, Text: "The export job times out."},
+	}, finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 	r.Notifier = n
 	return cfg, r
@@ -275,10 +277,10 @@ func TestEventCarriesTheRunsFacts(t *testing.T) {
 	// so it is wired straight onto the runner.
 	hook2 := newWebhook(t, http.StatusOK)
 	cfg := newWorkspaceWith(t, configYAML)
-	p := &stubProvider{script: replay(
-		provider.Event{Kind: provider.EvUsage, Turns: 7, CostUSD: 1.25},
-		finalEvent(triageDoc),
-	)}
+	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
+		{Kind: provider.EvUsage, Turns: 7, CostUSD: 1.25},
+		{Kind: provider.EvFinal, Text: "The export job times out."},
+	}, finalEvent(triageDoc))}
 	runner := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 	runner.Notifier = &notify.Router{Notifier: &notify.Generic{URL: hook2.srv.URL + "/hook"}}
 	outs, err := runner.Triage(context.Background(), []string{"OMNI-1"}, Options{})
