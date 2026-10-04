@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { QuestionInfo, RunDetail, RunEvent } from '../../api/types'
 import { createFakeTransport } from '../../store/fakeTransport'
-import { insertByIndex, useRunFeed } from './useRunFeed'
+import { insertByIndex, useRunFeed, withEcho, withoutEchoes } from './useRunFeed'
 
 const RUN: RunDetail = {
   runId: 'r1',
@@ -47,6 +47,37 @@ describe('insertByIndex', () => {
     expect(insertByIndex([a, b], c)).toEqual([a, b, c])
     expect(insertByIndex([a, c], b)).toEqual([a, b, c])
     expect(insertByIndex([b, c], a)).toEqual([a, b, c])
+  })
+})
+
+// The 2026-10-04 OMNI-3413 rerun: a steer typed on a finished run was drawn
+// twice, once as the screen's own echo and once as the logged steer.
+describe('own-words echoes', () => {
+  const now = '2026-10-04T10:31:58Z'
+  const line = (index: number, kind: string, text: string, t = now) => ({ index, event: { t, kind, payload: { text } } as RunEvent })
+
+  it('lets the logged steer replace the echo of the same words', () => {
+    const list = [line(1, 'final', '{}'), line(1.5, 'answer', 'Was it the PR?')]
+    const next = withoutEchoes(list, [line(2, 'steer', 'Was it the PR?')])
+    expect(next.map((i) => i.index)).toEqual([1])
+  })
+
+  it('keeps an echo the batch does not answer, and every logged line', () => {
+    const list = [line(1, 'steer', 'Was it the PR?'), line(1.5, 'answer', 'Something else')]
+    expect(withoutEchoes(list, [line(2, 'steer', 'Was it the PR?')])).toEqual(list)
+  })
+
+  it('adds no echo when the logged line is already here, and one otherwise', () => {
+    const logged = [line(1, 'final', '{}'), line(2, 'steer', 'Was it the PR?')]
+    expect(withEcho(logged, 'answer', 'Was it the PR?', Date.parse(now) + 5_000)).toBe(logged)
+    const added = withEcho(logged, 'answer', 'Next question', Date.parse(now) + 5_000)
+    expect(added.map((i) => [i.index, i.event.kind, i.event.payload?.text])).toEqual([
+      [1, 'final', '{}'],
+      [2, 'steer', 'Was it the PR?'],
+      [2.5, 'answer', 'Next question'],
+    ])
+    // The same words typed again much later are a new line.
+    expect(withEcho(logged, 'answer', 'Was it the PR?', Date.parse(now) + 120_000)).toHaveLength(3)
   })
 })
 

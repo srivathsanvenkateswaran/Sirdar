@@ -16,7 +16,7 @@ import type { FixStart, NoteKind, QueuedSteer, RunDiff, SourcesSummary, Transpor
 import ChangesView, { withoutCode } from '../../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
-import { LIVE, TERMINAL, type RunFeed } from '../../components/run/useRunFeed'
+import { LIVE, TERMINAL, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import ModelLimitBanner from '../../components/session/ModelLimitBanner'
 import { askedQuestion, modelLimited, notePathFor } from '../../lib/events'
@@ -340,8 +340,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
     (text: string) => {
       if (!text) return
       setEvents((prev) => {
-        const last = prev.length > 0 ? prev[prev.length - 1].index : 0
-        return [...prev, { index: last + 0.5, event: { t: new Date().toISOString(), kind: 'answer', payload: { text } } }]
+        return withEcho(prev, 'answer', text)
       })
     },
     [setEvents],

@@ -11,7 +11,7 @@ import {
 import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport, Verdict } from '../../api/types'
 import type { ComposerMode } from '../../components/run/Composer'
 import DecisionBar from '../../components/session/DecisionBar'
-import { LIVE, type RunFeed } from '../../components/run/useRunFeed'
+import { LIVE, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { parseTime, reasonOf } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
@@ -280,8 +280,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   const noteOwnLine = useCallback(
     (text: string) => {
       setEvents((prev) => {
-        const last = prev.length > 0 ? prev[prev.length - 1].index : 0
-        return [...prev, { index: last + 0.5, event: { t: new Date().toISOString(), kind: 'answer', payload: { text } } }]
+        return withEcho(prev, 'answer', text)
       })
     },
     [setEvents],

@@ -48,6 +48,55 @@ export function insertByIndex(list: IndexedEvent[], item: IndexedEvent): Indexed
   return [...list.slice(0, lo), item, ...list.slice(lo)]
 }
 
+/** The operator's own lines: what a screen echoes before the log has it. */
+const OWN_WORDS = new Set(['steer', 'answer'])
+
+/** How long a logged line counts as the one an echo would repeat. */
+const ECHO_WINDOW_MS = 60_000
+
+function ownText(item: IndexedEvent): string | undefined {
+  if (!OWN_WORDS.has(item.event.kind)) return undefined
+  return (item.event.payload?.text ?? '').trim()
+}
+
+/**
+ * The list with the operator's words added at the end as a local echo —
+ * a fractional index after the last line, so the next logged line still
+ * sorts after it — unless the log already carries the same words from the
+ * last minute, which is the echo losing the race to the run.updated.
+ */
+export function withEcho(list: IndexedEvent[], kind: 'steer' | 'answer', text: string, now = Date.now()): IndexedEvent[] {
+  const words = text.trim()
+  if (!words) return list
+  const logged = list.some(
+    (item) => Number.isInteger(item.index) && ownText(item) === words && now - Date.parse(item.event.t) < ECHO_WINDOW_MS,
+  )
+  if (logged) return list
+  const last = list.length > 0 ? list[list.length - 1].index : 0
+  const payload = kind === 'steer' ? { text, continuation: 'resume' } : { text }
+  return [...list, { index: last + 0.5, event: { t: new Date(now).toISOString(), kind, payload } }]
+}
+
+/**
+ * The list without the echoes a batch of logged lines answers: a logged
+ * steer or answer replaces the local echo of the same words, which would
+ * otherwise be drawn as a second copy.
+ */
+export function withoutEchoes(list: IndexedEvent[], batch: IndexedEvent[]): IndexedEvent[] {
+  const words = batch.map(ownText).filter((w): w is string => w !== undefined)
+  if (words.length === 0) return list
+  const pending = [...words]
+  const next = list.filter((item) => {
+    if (Number.isInteger(item.index)) return true
+    const text = ownText(item)
+    const at = text === undefined ? -1 : pending.indexOf(text)
+    if (at === -1) return true
+    pending.splice(at, 1)
+    return false
+  })
+  return next.length === list.length ? list : next
+}
+
 /**
  * Many events at once — the backfill, or a coalesced burst — placed with one
  * copy of the list rather than one per line. Each item is placed by the same
@@ -144,7 +193,7 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
       const batch = held.length === 0 ? extra : held.concat(extra)
       held = []
       if (batch.length === 0) return
-      setEvents((prev) => insertManyByIndex(prev, batch))
+      setEvents((prev) => insertManyByIndex(withoutEchoes(prev, batch), batch))
     }
 
     const append = (index: number, event: RunEvent) => {

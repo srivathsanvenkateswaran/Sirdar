@@ -3,7 +3,7 @@ import type { FixStart, NoteKind, PermissionDecision, SourcesSummary, Transport 
 import { modelOf } from '../components/session/model'
 import RunHeader from '../components/session/RunHeader'
 import { useSessionModel, withoutCode } from '../components/session/useSessionModel'
-import { LIVE, useRunFeed, type RunFeed } from '../components/run/useRunFeed'
+import { LIVE, useRunFeed, withEcho, type RunFeed } from '../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import { notePathFor } from '../lib/events'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
@@ -183,8 +183,7 @@ function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document'
     (text: string) => {
       if (!text) return
       setEvents((prev) => {
-        const last = prev.length > 0 ? prev[prev.length - 1].index : 0
-        return [...prev, { index: last + 0.5, event: { t: new Date().toISOString(), kind: 'answer', payload: { text } } }]
+        return withEcho(prev, 'answer', text)
       })
     },
     [setEvents],
@@ -222,8 +221,7 @@ function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document'
         // run.updated that says so is on its way.
         setDetail((prev) => (prev ? { ...prev, status: 'running' } : prev))
         setEvents((prev) => {
-          const last = prev.length > 0 ? prev[prev.length - 1].index : 0
-          return [...prev, { index: last + 0.5, event: { t: new Date().toISOString(), kind: 'steer', payload: { text, continuation: 'resume' } } }]
+          return withEcho(prev, 'steer', text)
         })
       } catch (err: unknown) {
         if (/^conflict:|refused/i.test(reasonOf(err))) setSteerRefusal(withoutCode(err))
