@@ -597,7 +597,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			// text and attachments staged inside it. A fix session's
 			// root is its worktree, which contains neither.
 			ReadRoots: []string{p.run.Dir, p.run.BundleDir()},
-			ReadAlso:  cfg.Permissions.ReadAlso,
+			ReadAlso:  cfg.ReadAlso(),
 		},
 		Mode: provider.ModeTriage,
 		// mcp.workspaceOnly travels as these two fields for every
@@ -636,7 +636,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// session is allowed to edit files.
 		spec.Policy.FetchAllow = cfg.Permissions.Fetch
 		spec.Policy.ReadRoots = []string{p.run.Dir, p.run.BundleDir()}
-		spec.Policy.ReadAlso = cfg.Permissions.ReadAlso
+		spec.Policy.ReadAlso = cfg.ReadAlso()
 	}
 
 	// A refusal the operator could lift is put to them, unless the
