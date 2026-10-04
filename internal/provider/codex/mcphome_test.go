@@ -154,7 +154,7 @@ func TestGeneratedConfigToml(t *testing.T) {
 		"CODEX_HOME=" + real,
 		"SIRDAR_TEST_NOTES_ROOT=/work/notes",
 		"SIRDAR_TEST_NOTES_TOKEN=s3cret",
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}
@@ -250,7 +250,7 @@ args = ["serve", "--quiet"]
 // the operator's.
 func TestScratchHomeWithNoWorkspaceFile(t *testing.T) {
 	real := writeRealHome(t)
-	home, warnings, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	home, warnings, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real}, nil)
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}
@@ -618,7 +618,7 @@ func refreshIn(t *testing.T, dir, body string) {
 // their own `codex` presenting a token this run has already replaced.
 func TestAuthRefreshIsWrittenBack(t *testing.T) {
 	real := writeRealHome(t)
-	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real}, nil)
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}
@@ -654,7 +654,7 @@ func TestAuthUntouchedWhenNothingRefreshed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real}, nil)
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}
@@ -676,7 +676,7 @@ func TestAuthUntouchedWhenNothingRefreshed(t *testing.T) {
 // overwriting a token their own session just minted.
 func TestAuthRefreshDiscardedWhenTheirsMovedOn(t *testing.T) {
 	real := writeRealHome(t)
-	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real}, nil)
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}
@@ -709,7 +709,7 @@ func TestAuthWriteBackWithNoLogin(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(real, "config.toml"), []byte("model = \"x\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real}, nil)
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}
@@ -773,7 +773,7 @@ func TestSweepStaleHomes(t *testing.T) {
 // that created it, from the moment newScratchHome returns.
 func TestNewScratchHomeWritesALock(t *testing.T) {
 	real := writeRealHome(t)
-	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real}, nil)
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}

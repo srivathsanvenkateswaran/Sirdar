@@ -2,6 +2,7 @@ package codex
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -89,8 +90,16 @@ type scratchHome struct {
 // CODEX_HOME is read from, and where a `.mcp.json` ${VAR} is expanded
 // from, so a credential internal/run stripped cannot come back through
 // the generated config.toml.
-func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
+//
+// user are the Claude CLI servers mcp.userServers opted in that Codex can
+// carry (the run layer has already dropped the OAuth ones); they are
+// written after the workspace's, verbatim, and a name clash is an error.
+func newScratchHome(root string, env []string, user []provider.UserMCPServer) (*scratchHome, []string, error) {
 	servers, warnings, err := mcpclient.LoadWorkspaceServersEnv(root, env)
+	if err != nil {
+		return nil, nil, err
+	}
+	userBody, err := renderUserServers(servers, user)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -118,6 +127,9 @@ func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
 	for _, s := range servers {
 		h.servers = append(h.servers, s.Name)
 	}
+	for _, s := range user {
+		h.servers = append(h.servers, s.Name)
+	}
 
 	real := realCodexHome(env)
 	h.realDir = real
@@ -125,7 +137,7 @@ func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
 		h.forceRemove()
 		return nil, nil, err
 	}
-	body := stripMCPServers(readConfig(real)) + renderServers(servers)
+	body := stripMCPServers(readConfig(real)) + renderServers(servers) + userBody
 	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(body), 0o600); err != nil {
 		h.forceRemove()
 		return nil, nil, err
@@ -589,6 +601,68 @@ func renderServers(servers []mcpclient.ServerConfig) string {
 		}
 	}
 	return b.String()
+}
+
+// renderUserServers writes one [mcp_servers.<name>] table per opted
+// Claude CLI server: command, args and env for a stdio entry, url and
+// http_headers for an http one. Values are the CLI's own, unexpanded. An
+// entry Codex cannot run (no command, no url) is an error rather than a
+// table that would fail the whole config.toml.
+func renderUserServers(workspace []mcpclient.ServerConfig, user []provider.UserMCPServer) (string, error) {
+	taken := map[string]bool{}
+	for _, s := range workspace {
+		taken[s.Name] = true
+	}
+	var b strings.Builder
+	for _, s := range user {
+		if taken[s.Name] {
+			return "", fmt.Errorf("mcp.userServers: %q is also declared in the workspace's .mcp.json; rename one", s.Name)
+		}
+		var e struct {
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+			URL     string            `json:"url"`
+			Headers map[string]string `json:"headers"`
+		}
+		if err := json.Unmarshal(s.Entry, &e); err != nil {
+			return "", fmt.Errorf("mcp.userServers: %s: %w", s.Name, err)
+		}
+		fmt.Fprintf(&b, "\n[mcp_servers.%s]\n", tomlString(s.Name))
+		var table map[string]string
+		var tableName string
+		switch {
+		case s.Transport == "stdio" && strings.TrimSpace(e.Command) != "":
+			fmt.Fprintf(&b, "command = %s\n", tomlString(e.Command))
+			b.WriteString("args = [")
+			for i, a := range e.Args {
+				if i > 0 {
+					b.WriteString(", ")
+				}
+				b.WriteString(tomlString(a))
+			}
+			b.WriteString("]\n")
+			table, tableName = e.Env, "env"
+		case e.URL != "":
+			fmt.Fprintf(&b, "url = %s\n", tomlString(e.URL))
+			table, tableName = e.Headers, "http_headers"
+		default:
+			return "", fmt.Errorf("mcp.userServers: %s: neither a command nor a url to start it with", s.Name)
+		}
+		if len(table) == 0 {
+			continue
+		}
+		keys := make([]string, 0, len(table))
+		for k := range table {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Fprintf(&b, "\n[mcp_servers.%s.%s]\n", tomlString(s.Name), tableName)
+		for _, k := range keys {
+			fmt.Fprintf(&b, "%s = %s\n", tomlString(k), tomlString(table[k]))
+		}
+	}
+	return b.String(), nil
 }
 
 // tomlString quotes a value as a TOML basic string. Environment values

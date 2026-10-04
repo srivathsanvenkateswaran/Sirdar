@@ -64,6 +64,13 @@ type prepared struct {
 	triageNoteCopy string
 	triageLink     string
 
+	// userMCP are the operator's Claude CLI servers mcp.userServers opted
+	// in, read once at the run's first session start; userMCPNotice says
+	// why this provider runs without some or all of them. See userServers.
+	userMCP       []provider.UserMCPServer
+	userMCPRead   bool
+	userMCPNotice string
+
 	// usageBase is what the run had spent before this execute: zero for a
 	// fresh run and for a resume, the run's recorded usage for a steer,
 	// whose session adds to it rather than replacing it.

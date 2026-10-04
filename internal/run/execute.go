@@ -349,6 +349,10 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		return r.finish(ctx, p, store.StatusBlocked, "interrupted", note.DigestRow{})
 	}
 
+	if err := r.userServers(p); err != nil {
+		return r.finish(ctx, p, store.StatusFailed, "mcp.userServers: "+err.Error(), note.DigestRow{})
+	}
+
 	started := r.now()
 	sess, err := r.Provider.Start(ctx, r.sessionSpec(p, resume))
 	if err != nil {
@@ -398,6 +402,9 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		if s.Continuation == string(provider.ContinuePrimed) {
 			r.record(p, log, provider.Event{Kind: provider.EvSystem, At: started, Text: continuedInNewSession})
 		}
+	}
+	if p.userMCPNotice != "" {
+		r.record(p, log, provider.Event{Kind: provider.EvSystem, At: started, Text: p.userMCPNotice})
 	}
 	// Anything typed while the run was preparing is in the inbox already.
 	r.pickUpSteers(p, log)
@@ -600,6 +607,8 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// and nothing else.
 		MCPConfig: cfg.MCPConfigPath(),
 		MCPStrict: cfg.WorkspaceOnlyMCP(),
+		// mcp.userServers, as far as this provider can carry them.
+		UserMCPServers: p.userMCP,
 		// What the provider may spend is what the run has left, not the
 		// whole cap: a steered run's earlier sessions already used some of
 		// it, and the caps apply to the run as a whole.
@@ -646,6 +655,51 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		spec.Images = imageAttachments(p)
 	}
 	return spec
+}
+
+// userServers reads the servers mcp.userServers names from the Claude CLI's
+// user scope, once per run, and keeps the ones this provider can carry.
+// The read happens at run start rather than at config load so a server the
+// operator changed since is the server the run gets. Claude Code takes
+// every entry; Codex takes stdio entries and http entries that carry their
+// own headers, because an OAuth grant held by the Claude CLI is not one
+// Codex can present; every other provider runs without them. What is left
+// out is said once, in the run's transcript.
+func (r *Runner) userServers(p *prepared) error {
+	if p.userMCPRead {
+		return nil
+	}
+	p.userMCPRead = true
+	all, err := r.Config.UserMCPServers(r.childEnv())
+	if err != nil || len(all) == 0 {
+		return err
+	}
+	name := r.providerName()
+	switch name {
+	case "claude":
+		p.userMCP = all
+	case "codex":
+		var skipped []string
+		for _, s := range all {
+			if s.Transport == "stdio" || (s.Headers && !s.OAuth) {
+				p.userMCP = append(p.userMCP, s)
+				continue
+			}
+			skipped = append(skipped, s.Name)
+		}
+		if len(skipped) > 0 {
+			p.userMCPNotice = "mcp.userServers: codex runs without " + strings.Join(skipped, ", ") +
+				": an http server with no headers of its own authenticates with an OAuth grant the Claude CLI holds, which Codex cannot use"
+		}
+	default:
+		names := make([]string, 0, len(all))
+		for _, s := range all {
+			names = append(names, s.Name)
+		}
+		p.userMCPNotice = "mcp.userServers: ignored by the " + name + " provider (" + strings.Join(names, ", ") +
+			"); only claude and codex can carry the Claude CLI's own servers"
+	}
+	return nil
 }
 
 // extraReserved is the per-run reserved list a fix session is judged
