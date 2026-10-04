@@ -37,8 +37,8 @@ response like how I'm getting for T3 Code so that I can act on it."
 
 - User-defined modes (`.sirdar/modes/*.md`), output hooks, the integrations screen: sections 2-4,
   designed separately. This spec leaves room for them (see Modes, later).
-- Fix runs keep their schema'd fix report: it drives the commit, push and PR in `internal/fix`. They
-  gain the chat reply only through the shared preamble change; their completion is unchanged.
+- Fix runs are unchanged: their schema'd fix report drives the commit, push and PR in
+  `internal/fix`, and they keep their own preamble. A reply-first fix belongs with modes.
 - Eval, golden sets and retro runs keep running the existing triage/rca flow unchanged.
 
 ## Design
