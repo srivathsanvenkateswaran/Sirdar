@@ -1223,20 +1223,8 @@ code.sc-ref {
   color: var(--sd-accent);
 }
 
-.sc-doc__body pre {
-  padding-block: 9px;
-  padding-inline: 11px;
-  border: 1px solid var(--sd-rule);
-  border-radius: 6px;
-  font-family: var(--sd-font-mono);
-  font-size: 12.5px;
-  overflow-x: auto;
-}
-
-.sc-doc__body pre code {
-  padding: 0;
-  background: transparent;
-}
+/* Fenced and indented code blocks render through ChatMarkdown's own
+   `CodeBlock`, which frames itself; a `pre` rule here would double it. */
 
 /* ------------------------------------------------------------------ bundle */
 

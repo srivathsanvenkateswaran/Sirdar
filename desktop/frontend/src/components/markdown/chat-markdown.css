@@ -1,0 +1,174 @@
+/*
+ * ChatMarkdown. The one Markdown look every chat surface shares: the Note
+ * pane, the workbench, the transcript's assistant turns and the bundle's
+ * playbooks. Headings are capped at `--sd-text-title` because a `#` in a
+ * reply is still a reply, not a page; a chat bubble has no business in
+ * display type.
+ */
+
+.cmd {
+  font-size: var(--sd-text-body);
+  line-height: 1.65;
+}
+
+.cmd[dir='rtl'] {
+  line-height: 1.85;
+}
+
+.cmd > :first-child {
+  margin-block-start: 0;
+}
+
+.cmd h1,
+.cmd h2,
+.cmd h3 {
+  margin-block: 1.2em 0.5em;
+  margin-inline: 0;
+  font-size: var(--sd-text-title);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.cmd h1:first-child,
+.cmd h2:first-child,
+.cmd h3:first-child {
+  margin-block-start: 0;
+}
+
+.cmd p,
+.cmd ul,
+.cmd ol {
+  margin-block: 0 0.75em;
+  margin-inline: 0;
+}
+
+.cmd li {
+  margin-block-end: 0.2em;
+}
+
+.cmd li input[type='checkbox'] {
+  margin-inline-end: var(--sd-space-2);
+}
+
+.cmd code {
+  font-family: var(--sd-font-mono);
+  font-size: 0.9em;
+  background: var(--sd-sunk);
+  padding-inline: 5px;
+  border-radius: var(--sd-radius-xs);
+  white-space: nowrap;
+  font-variant-ligatures: none;
+}
+
+/* Every fenced or indented block renders through `CodeBlock`, so the only
+   `pre > code` left under `.cmd` is `CodeBlock`'s own plain-text fallback —
+   this keeps its lines apart against the inline rule above, belt-and-braces
+   if something ever renders a `pre > code` `.cmd code` doesn't expect. */
+.cmd pre code {
+  white-space: pre;
+}
+
+.cmd blockquote {
+  margin-block: 0 0.75em;
+  margin-inline: 0;
+  padding-inline-start: var(--sd-space-3);
+  border-inline-start: 2px solid var(--sd-rule);
+  color: var(--sd-ink-3);
+}
+
+/* GFM alerts (`> [!NOTE]` and friends) are plain blockquotes here: the
+   coloured banner GitHub draws them as would outrank the chat around it. */
+.cmd blockquote > :last-child {
+  margin-block-end: 0;
+}
+
+.cmd a {
+  color: var(--sd-accent);
+}
+
+/* ---------- code blocks ---------- */
+
+.cmd-code {
+  margin-block: 0 0.75em;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+  overflow: hidden;
+}
+
+.cmd-code__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
+  padding-block: var(--sd-space-1);
+  border-block-end: 1px solid var(--sd-rule);
+  background: var(--sd-sunk);
+}
+
+.cmd-code__lang {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cmd-code__body {
+  margin: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
+  overflow-x: auto;
+  font-family: var(--sd-font-mono);
+  font-size: 0.85em;
+  line-height: 1.55;
+}
+
+.cmd-code__body pre,
+.cmd-code__body code {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+
+/* Shiki sets its own foreground per token but not the page background;
+   the surface behind it is this component's, in both themes. */
+.cmd-code__body pre.shiki {
+  background: transparent !important;
+}
+
+/* ---------- tables ---------- */
+
+.cmd-table {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sd-space-2);
+  margin-block: 0 0.75em;
+}
+
+.cmd-table__scroll {
+  max-inline-size: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sm);
+}
+
+.cmd-table__scroll table {
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+
+.cmd-table__scroll th,
+.cmd-table__scroll td {
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule);
+  text-align: start;
+}
+
+.cmd-table__scroll th {
+  background: var(--sd-sunk);
+  font-weight: 600;
+}

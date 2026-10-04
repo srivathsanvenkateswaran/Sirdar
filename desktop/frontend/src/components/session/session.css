@@ -1125,22 +1125,8 @@ a.sn-head__other:hover {
   margin-block: 0 10px;
 }
 
-.sn-md pre {
-  padding-block: 8px;
-  padding-inline: 10px;
-  border: 1px solid var(--sd-rule);
-  border-radius: 6px;
-  background: var(--sd-sheet);
-  font-size: 13px;
-  line-height: 1.5;
-  overflow-x: auto;
-}
-
-.sn-md pre code {
-  padding: 0;
-  background: transparent;
-  white-space: pre;
-}
+/* Fenced and indented code blocks render through ChatMarkdown's own
+   `CodeBlock`, which frames itself; a `pre` rule here would double it. */
 
 .sn-verdict {
   display: flex;

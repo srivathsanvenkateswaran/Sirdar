@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import ReactMarkdown, { type Components } from 'react-markdown'
+import ChatMarkdown, { type Components } from '../../components/markdown/ChatMarkdown'
 import type { NoteKind, Transport } from '../../api/types'
 import { notePathFor, splitFrontmatter } from '../../lib/events'
 import { reasonOf } from '../../lib/format'
@@ -34,7 +34,7 @@ function withRefs(children: ReactNode, onRef?: (ref: string) => void): ReactNode
   return children
 }
 
-function components(onRef?: (ref: string) => void): Components {
+function components(onRef?: (ref: string) => void): Partial<Components> {
   return {
     h1: ({ children }) => <h1 dir="auto">{children}</h1>,
     h2: ({ children }) => <h2 dir="auto">{children}</h2>,
@@ -109,9 +109,9 @@ export default function NoteDocument({ transport, workspaceId, runId, kinds, rel
         return (
           <article key={note.kind} className="sc-doc__note" aria-label={note.kind ? `${note.kind} note` : 'note'}>
             {notes.length > 1 ? <div className="sc-doc__kind">{note.kind}</div> : null}
-            <div className="sc-doc__body sd-bidi" dir="auto">
-              <ReactMarkdown components={components(onRef)}>{noteFromFirstHeading(stripRTLBlocks(body))}</ReactMarkdown>
-            </div>
+            <ChatMarkdown className="sc-doc__body sd-bidi" components={components(onRef)}>
+              {noteFromFirstHeading(stripRTLBlocks(body))}
+            </ChatMarkdown>
             {path ? <NoteFooter transport={transport} workspaceId={workspaceId} runId={runId} path={path} notesDir={notesDir} /> : null}
           </article>
         )
