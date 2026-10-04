@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/ghrepo"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/repos"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
@@ -77,9 +77,6 @@ type Intake struct {
 	// is then the synthetic SLACK-<channel>-<ts seconds> key, and starting
 	// a session triages the thread itself, with no tracker or helpdesk.
 	SlackOnly bool `json:"slackOnly,omitempty"`
-	// OtherRepos are the GitHub repositories the thread or the ticket names
-	// that are not this workspace's origin.
-	OtherRepos []string `json:"otherRepos,omitempty"`
 
 	// Mode, Instruction and Confidence are set only when nothing in the
 	// text was recognised and the model read it instead.
@@ -87,11 +84,16 @@ type Intake struct {
 	Instruction string  `json:"instruction,omitempty"`
 	Confidence  float64 `json:"confidence,omitempty"`
 
+	// Repos are the repositories other than the workspace's own that the
+	// text read on the way mentions — the tracker record, the helpdesk
+	// subject, the Slack thread — matched to repos: by origin. The chip
+	// adds "· mentions Acme.Web (companion repo)" for each.
+	Repos []repos.Mention `json:"repos,omitempty"`
+
 	thread *slack.Thread
 	reader SlackReader
-	// mentions is text read on the way that is not the thread — a tracker
-	// record's title and description — scanned for other repositories.
-	mentions string
+	// texts is what the resolution read that a person wrote, for Repos.
+	texts []string
 }
 
 // SlackMarkdown is the Slack thread this intake read, rendered for the
@@ -152,6 +154,7 @@ var (
 	zohoPathID     = regexp.MustCompile(`/tickets/(?:details/)?([0-9]{4,})(?:/|$)`)
 	zohoFragmentID = regexp.MustCompile(`(?:^|/)Cases/dv/([0-9]{4,})(?:/|$)`)
 	titleNumber    = regexp.MustCompile(`^\s*#([0-9]+)\b`)
+	githubShortRef = regexp.MustCompile(`[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+#[0-9]+\b`)
 )
 
 // recognise finds every reference the text carries and returns them in the
@@ -181,7 +184,11 @@ func recognise(text string) []intakeRef {
 			trackerURLs = append(trackerURLs, intakeRef{kind: InputTrackerURL, value: key})
 		}
 	}
-	plain := uuidIn.ReplaceAllStringFunc(string(rest), func(s string) string { return strings.Repeat(" ", len(s)) })
+	blankOut := func(s string) string { return strings.Repeat(" ", len(s)) }
+	plain := uuidIn.ReplaceAllStringFunc(string(rest), blankOut)
+	// A GitHub reference, acme/web#1234, is a pull request or an issue,
+	// not helpdesk ticket #1234.
+	plain = githubShortRef.ReplaceAllStringFunc(plain, blankOut)
 	trimmed := strings.TrimSpace(plain)
 	if loneKey.MatchString(trimmed) {
 		keys = append(keys, intakeRef{kind: InputKey, value: strings.ToUpper(trimmed)})
@@ -252,10 +259,8 @@ type intakeResolver struct {
 	slack        SlackReader
 	slackErr     error
 	cache        *intakeCache
+	repos        []repos.Repo
 	fallback     func(ctx context.Context, text string) (ComposedIntent, error)
-	// origin is the workspace's GitHub origin as owner/repo, "" when it
-	// has none; nil asks nobody, and no repository is called foreign.
-	origin func(ctx context.Context) string
 }
 
 // recentLimit is how many of the tracker's newest tickets the last-resort
@@ -282,32 +287,34 @@ func (r *intakeResolver) resolve(ctx context.Context, text string) (Intake, erro
 		return in, nil
 	}
 	refs := recognise(text)
+	var in Intake
+	var err error
 	if len(refs) == 0 {
-		return r.fromText(ctx, text)
+		in, err = r.fromText(ctx, text)
+	} else {
+		in, err = r.fromRef(ctx, refs[0])
+		if err == nil {
+			in.Summary = intakeSummary(in)
+		}
 	}
-	in, err := r.fromRef(ctx, refs[0])
 	if err != nil {
 		return in, err
 	}
-	in.OtherRepos = r.otherRepos(ctx, in)
+	in.Repos = r.mentions(append([]string{text}, in.texts...))
 	in.Summary = intakeSummary(in)
 	return in, nil
 }
 
-// otherRepos is every GitHub repository the thread and the ticket read on
-// the way name that is not the workspace's origin.
-func (r *intakeResolver) otherRepos(ctx context.Context, in Intake) []string {
-	if r.origin == nil {
-		return nil
+// mentions is every repository other than the workspace's own that the
+// texts name, matched against repos: by origin.
+func (r *intakeResolver) mentions(texts []string) []repos.Mention {
+	var out []repos.Mention
+	for _, m := range repos.Mentions(strings.Join(texts, "\n"), r.repos) {
+		if m.Status != repos.StatusWorkspace {
+			out = append(out, m)
+		}
 	}
-	text := in.mentions
-	if in.thread != nil {
-		text += "\n" + strings.Join(in.thread.Texts(), "\n")
-	}
-	if !strings.Contains(strings.ToLower(text), "github.com") {
-		return nil
-	}
-	return ghrepo.Foreign(text, r.origin(ctx))
+	return out
 }
 
 func (r *intakeResolver) fromRef(ctx context.Context, ref intakeRef) (Intake, error) {
@@ -337,7 +344,7 @@ func (r *intakeResolver) fromKey(ctx context.Context, kind, key string) Intake {
 		return in
 	}
 	in.Subject = tt.Title
-	in.mentions = tt.Title + "\n" + tt.Description
+	in.texts = append(in.texts, tt.Title, tt.Description)
 	in.HelpdeskID = tt.HelpdeskRef
 	if m := titleNumber.FindStringSubmatch(tt.Title); m != nil {
 		in.HelpdeskNumber = m[1]
@@ -375,6 +382,7 @@ func (r *intakeResolver) fromHelpdesk(ctx context.Context, kind, number, id stri
 		switch {
 		case err == nil:
 			in.Subject = hd.Subject
+			in.texts = append(in.texts, hd.Subject)
 			if in.HelpdeskID == "" {
 				in.HelpdeskID = hd.ID
 			}
@@ -508,6 +516,7 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 		return in
 	}
 	in.thread = &th
+	in.texts = append(th.Texts(), th.Refs...)
 	in.reader = r.slack
 	in.Slack = &SlackIntake{URL: l.URL, Messages: len(th.Messages), Thread: th.IsThread}
 	label := "Slack message"
@@ -549,6 +558,7 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 	inner.Input = InputSlack
 	inner.Slack = in.Slack
 	inner.thread = in.thread
+	inner.texts = append(append([]string(nil), in.texts...), inner.texts...)
 	inner.reader = in.reader
 	first := IntakeStep{From: label, Source: "slack"}
 	switch found.kind {
@@ -600,7 +610,7 @@ func intakeSummary(in Intake) string {
 			what = "the message"
 		}
 		b.WriteString(in.Via[0].From + " · no ticket yet · will triage " + what)
-		b.WriteString(reposNote(in.OtherRepos))
+		b.WriteString(reposNote(in.Repos))
 		return b.String()
 	}
 	if len(in.Via) == 0 {
@@ -621,17 +631,22 @@ func intakeSummary(in Intake) string {
 		b.WriteString(" · ")
 		b.WriteString(helpdeskLabel(in.HelpdeskNumber, in.HelpdeskID))
 	}
-	b.WriteString(reposNote(in.OtherRepos))
+	b.WriteString(reposNote(in.Repos))
 	return b.String()
 }
 
-// reposNote is the chip's warning that the ticket's code may be elsewhere:
-// " · mentions acme-co/Billing.Service (not this workspace)".
-func reposNote(repos []string) string {
-	if len(repos) == 0 {
-		return ""
+// reposNote is the chip's words for the other repositories the text read
+// on the way names, one " · mentions …" each: " · mentions Acme.Web
+// (companion repo)", " · mentions Billing.Service (not configured — add it
+// under repos:)".
+func reposNote(ms []repos.Mention) string {
+	var b strings.Builder
+	for _, m := range ms {
+		if p := m.Phrase(); p != "" {
+			b.WriteString(" · " + p)
+		}
 	}
-	return " · mentions " + strings.Join(repos, ", ") + " (not this workspace)"
+	return b.String()
 }
 
 // helpdeskLabel is how a helpdesk ticket is named in a chip: its number

@@ -292,6 +292,24 @@ export interface ConfigSummary {
   general: GeneralSummary; budget: BudgetSummary; permissions: PermissionsSummary;
   notes: NotesSummary; mcp: MCPSummary; notify: NotifySummary; webhooks: WebhooksSummary;
   sources: SourcesSummary; me: MeSummary
+  /**
+   * Every repository a session may read: the workspace's own first, then
+   * each companion from `repos:`. Optional only because a server older than
+   * `repos:` sends nothing; treat absent as the workspace alone.
+   */
+  repos?: RepoSummary[]
+}
+/** What a read-only look at a clone says. Nothing fetched it: `behind` is as of `fetchedAt`. */
+export interface RepoFacts {
+  exists: boolean; git: boolean; branch?: string; upstream?: string; behind: number; ahead: number; fetchedAt?: string
+}
+/**
+ * One repository as Settings lists it. `state` is the facts in a few words:
+ * "main · 2 behind origin/main · fetched 3 days ago", "not found", "a plain
+ * directory".
+ */
+export interface RepoSummary {
+  name: string; about?: string; path: string; origin?: string; workspace?: boolean; facts: RepoFacts; state: string
 }
 /**
  * Who the workspace thinks the reader is, and which rule said so. `email` is
@@ -463,9 +481,27 @@ export interface Intake {
    * summary reads "Slack thread · no ticket yet · will triage the thread".
    */
   slackOnly?: boolean
-  /** GitHub repositories the thread or ticket names that are not this workspace's origin. */
-  otherRepos?: string[]
+  /**
+   * The repositories other than the workspace's own that the text read on
+   * the way mentions — the tracker record, the helpdesk subject, the Slack
+   * thread. `summary` already ends with a "· mentions …" for each.
+   */
+  repos?: RepoMention[]
 }
+/**
+ * Where a mention or an ask landed: the workspace's own repository, a
+ * companion from `repos:`, a repository nobody configured, or a name that
+ * matches more than one.
+ */
+export type RepoStatus = 'workspace' | 'companion' | 'unknown' | 'ambiguous'
+/**
+ * One repository some text names: `name` is the configured name when it is
+ * configured, else the repository's own name; `slug` is `owner/name` for a
+ * hosted reference; `ref` is the text that named it.
+ */
+export interface RepoMention { name: string; slug?: string; ref: string; status: RepoStatus }
+/** One repository the operator asked the session to look in: "look in Acme.Web", "check the POS app". */
+export interface RepoAsk { phrase: string; name?: string; status: RepoStatus; candidates?: string[] }
 /**
  * How one ambiguous composer line was read. It is a suggestion: the composer
  * draws it as chips and starts nothing until a person says so.

@@ -153,6 +153,29 @@ in Claude Code is opted in with `mcp.userServers: [slack]` — the link is then 
 it and the chip says `Slack (via MCP)`. [Starting from anything](config.md#starting-from-anything)
 has the details and the order the lookups are tried in.
 
+### More than one repository
+
+The workspace is the repository a fix is made in, but the cause of a ticket often sits in
+another one: the frontend, a mobile app, a service the backend calls. Name those under
+`repos:` and the triage may read them:
+
+```yaml
+repos:
+  - name: Acme.Web
+    path: ~/code/Acme.Web
+    about: Angular frontend
+```
+
+The prompt then lists each one with its purpose, and the session looks in whichever one the
+ticket's pull request, stack trace or file path points at. When a ticket or a Slack thread
+names `acme/Acme.Web#828`, the chip says `· mentions Acme.Web (companion repo)`; a repository
+you have not configured reads `(not configured — add it under repos:)`. You can also ask
+outright — `SBX-1 look in Acme.Web` — and a name nobody configured stops the start rather
+than being skipped. A fix still happens only in the workspace: `sirdar fix` refuses a note
+whose fix is in a companion and tells you which repository to run Sirdar from. `sirdar
+doctor` shows each clone's branch and how stale its last fetch is. See
+[More than one repository](config.md#more-than-one-repository).
+
 ### Start from a Slack thread with no ticket
 
 Support requests often arrive as a Slack message before anyone opens a ticket: a company
@@ -169,7 +192,8 @@ thread's timestamp, so the same thread pasted again lands beside the first run. 
 message is the ticket's title and description, its `Name: value` lines become fields, and
 the whole thread is the conversation; the tracker and helpdesk are not called. If the
 thread links a repository other than this workspace's, the chip says so (`· mentions
-acme-co/Billing.Service (not this workspace)`) and so does the prompt. In the New session
+Billing.Service (not configured — add it under repos:)`, or `(companion repo)` for one under
+`repos:`) and so does the prompt. In the New session
 box the same chip appears under the composer and Enter starts the triage; on the Board the
 card carries Slack's mark. [A Slack thread with no ticket](config.md#a-slack-thread-with-no-ticket)
 lists what goes into the bundle.

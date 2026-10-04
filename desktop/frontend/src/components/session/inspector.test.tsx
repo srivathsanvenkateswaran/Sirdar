@@ -251,6 +251,32 @@ describe('the bundle pane', () => {
     expect(within(conversation).queryByText(/looking now/)).toBeNull()
   })
 
+  it('names the repositories the ticket mentions on the ticket card, in the chip’s words', async () => {
+    const fixture = triageWithAttachments()
+    const section = [
+      '# Repositories',
+      '',
+      'You are running in the workspace repository, acme-api at /src/acme-api. It is the only repository a fix is ever made in.',
+      '',
+      'The ticket, its thread or the operator mention these repositories:',
+      '- mentions Acme.Web (companion repo) — named by acme/Acme.Web#828',
+      '- mentions Billing.Service (not configured — add it under repos:) — named by other/Billing.Service#3',
+      '',
+      'The operator asked you to look in Acme.Web.',
+      '',
+    ].join('\n')
+    const prompt = fixture.prompt.includes('# Ticket')
+      ? fixture.prompt.replace('# Ticket', `${section}\n# Ticket`)
+      : `${section}\n${fixture.prompt}`
+    const t = createFakeTransport({ sessions: { [TRIAGE_RUN_ID]: { ...fixture, prompt } } })
+    render(<BundlePane transport={t} workspaceId="ws1" runId={TRIAGE_RUN_ID} />)
+    const repos = await screen.findByTestId('bundle-repos')
+    expect(repos).toHaveTextContent(
+      'mentions Acme.Web (companion repo) · mentions Billing.Service (not configured — add it under repos:) · look in Acme.Web',
+    )
+    expect(repos).not.toHaveTextContent('/src/')
+  })
+
   it('draws no Slack block for a run that was not started from Slack', async () => {
     render(<BundlePane transport={transport()} workspaceId="ws1" runId={TRIAGE_RUN_ID} />)
     await screen.findByTestId('bundle-view')

@@ -111,6 +111,14 @@ function TicketBlock({
         </h3>
       ) : null}
       {assignee ? <Line label="Assignee">{assignee}</Line> : null}
+      {bundle.repos.length > 0 ? (
+        <Line label="Repos">
+          {/* Repository names read left to right whatever the ticket's language. */}
+          <bdi dir="ltr" data-testid="bundle-repos">
+            {bundle.repos.join(' · ')}
+          </bdi>
+        </Line>
+      ) : null}
       {helpdeskId || contact || customer ? (
         <div className="si-card__sub">
           {helpdeskId ? (

@@ -60,6 +60,9 @@ type TriageInput struct {
 	// written in (config language.customer), or "auto" for the language
 	// of the ticket's first customer message; empty means "auto".
 	CustomerLanguage string
+	// Repositories are the repositories the session may read and the
+	// ones the ticket and the operator named. Empty adds no section.
+	Repositories Repositories
 }
 
 // RCAInput is everything RCA needs to assemble an rca prompt: the same
@@ -147,8 +150,11 @@ func Triage(in TriageInput) string {
 	if s := operatorRequestSection(in.Instruction); s != "" {
 		sections = append(sections, s)
 	}
+	sections = append(sections, languageSection(in.NotesLanguage, in.CustomerLanguage))
+	if s := repositoriesSection(in.Repositories); s != "" {
+		sections = append(sections, s)
+	}
 	sections = append(sections,
-		languageSection(in.NotesLanguage, in.CustomerLanguage),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
@@ -176,8 +182,11 @@ func RCA(in RCAInput) string {
 	if s := operatorRequestSection(in.Instruction); s != "" {
 		sections = append(sections, s)
 	}
+	sections = append(sections, languageSection(in.NotesLanguage, in.CustomerLanguage))
+	if s := repositoriesSection(in.Repositories); s != "" {
+		sections = append(sections, s)
+	}
 	sections = append(sections,
-		languageSection(in.NotesLanguage, in.CustomerLanguage),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),

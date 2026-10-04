@@ -2,6 +2,7 @@ import type {
   AppEvent,
   HookOutcome,
   MeSummary,
+  RepoSummary,
   Quota,
   RunSummary,
   SearchHit,
@@ -99,6 +100,12 @@ export interface AppState {
    * disables Me on.
    */
   meByWorkspace: Record<string, MeSummary>
+  /**
+   * The repositories each workspace's sessions may read, from the same
+   * config summary: the composer resolves "look in Acme.Web" against them.
+   * Absent until the summary has been read.
+   */
+  reposByWorkspace: Record<string, RepoSummary[]>
   /** Workspaces whose tracker cannot list a queue (the API answers 501). */
   queueUnsupported: Record<string, boolean>
   quota: Quota[]
@@ -311,6 +318,7 @@ export function createAppStore(transport: Transport): AppStore {
     ticketsByWorkspace: {},
     sourcesByWorkspace: {},
     meByWorkspace: {},
+    reposByWorkspace: {},
     queueUnsupported: {},
     quota: [],
     toasts: [],
@@ -405,6 +413,7 @@ export function createAppStore(transport: Transport): AppStore {
           ...state.meByWorkspace,
           [workspaceId]: summary.me ?? { email: '', names: [], source: '' },
         },
+        reposByWorkspace: { ...state.reposByWorkspace, [workspaceId]: summary.repos ?? [] },
       })
     } catch {
       // Left absent on purpose.

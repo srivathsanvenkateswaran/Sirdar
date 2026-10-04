@@ -686,11 +686,21 @@ type Config struct {
 	// resolve against before anything else. See Config.Self.
 	Me MeConfig `yaml:"me,omitempty"`
 
+	// Repos names the companion repositories a triage may read beside the
+	// workspace's own: another service, a frontend, a mobile app. Each
+	// one's path joins the read scope the way a permissions.readAlso entry
+	// does, and the prompt lists them with their purpose. A fix still
+	// happens only in the workspace repository. See RepoConfig.
+	Repos []RepoConfig `yaml:"repos,omitempty"`
+
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
 	// git caches the one `git config` read Self falls back to, so a
 	// board that lists runs every couple of seconds does not spawn a
 	// process for each. Set by decode; nil on a Config built by hand.
 	git *gitCache `yaml:"-"`
+	// repos caches Repositories for the same reason: each clone's origin
+	// is read once per loaded configuration.
+	repos *repoCache `yaml:"-"`
 }
 
 // Load reads <root>/.sirdar/config.yaml, applies defaults, and validates the result.
@@ -740,6 +750,7 @@ func decode(root string) (*Config, error) {
 
 	c.Root = root
 	c.git = &gitCache{}
+	c.repos = &repoCache{}
 	applyDefaults(&c)
 	return &c, nil
 }
@@ -901,6 +912,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := validateReadAlso(c.Permissions.ReadAlso); err != nil {
+		return err
+	}
+	if err := validateRepos(c); err != nil {
 		return err
 	}
 

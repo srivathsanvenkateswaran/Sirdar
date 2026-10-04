@@ -69,7 +69,7 @@ providers:
 
 	key := "SLACK-D0FAKEDM01-1791100254"
 	_, stderr := mustRun(t, 0, "triage", "--dry-run", "https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059")
-	if !strings.Contains(stderr, "Slack thread · no ticket yet · will triage the thread · mentions acme-co/Billing.Service (not this workspace)") {
+	if !strings.Contains(stderr, "Slack thread · no ticket yet · will triage the thread · mentions Billing.Service (not configured — add it under repos:)") {
 		t.Errorf("the chip line was not printed:\n%s", stderr)
 	}
 	runs, _ := filepath.Glob(filepath.Join(root, ".sirdar", "runs", key, "*"))

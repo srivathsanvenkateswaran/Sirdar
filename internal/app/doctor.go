@@ -52,6 +52,9 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	if c, ok := userServersCheck(cfg, nil); ok {
 		checks = append(checks, c)
 	}
+	if c, ok := reposCheck(ctx, cfg, time.Now()); ok {
+		checks = append(checks, c)
+	}
 	checks = append(checks, fetchCheck(cfg), transcribeCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
 	return levelled(checks)

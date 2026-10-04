@@ -33,6 +33,37 @@ export interface Bundle {
   slack: BundleMessage[]
   files: string[]
   playbooks: Playbook[]
+  /**
+   * What the `# Repositories` section says about other repositories, in the
+   * chip's words: "mentions Acme.Web (companion repo)", "look in Acme.Web".
+   * Empty when the prompt has no such section.
+   */
+  repos: string[]
+}
+
+/**
+ * The `# Repositories` section's mention lines (`- mentions X (…) — named
+ * by ref`) and its "The operator asked you to look in X." lines.
+ */
+function repos(prompt: string): string[] {
+  const lines = prompt.split('\n')
+  const start = lines.findIndex((l) => /^# Repositories\s*$/.test(l))
+  if (start === -1) return []
+  const out: string[] = []
+  for (const line of lines.slice(start + 1)) {
+    if (/^# /.test(line)) break
+    const mention = /^- (mentions .+?)(?: — named by .*)?$/.exec(line)
+    if (mention) {
+      out.push(mention[1])
+      continue
+    }
+    const asked = /^The operator asked you to look in ([^,.]+(?:\.[^\s,.]+)*)[.,]/.exec(line)
+    if (asked) {
+      const unknown = line.includes('which is not a configured repository')
+      out.push(`look in ${asked[1]}${unknown ? ' (not configured)' : ''}`)
+    }
+  }
+  return out
 }
 
 /** The lines under `# Ticket` up to the first sub-heading, as key–value pairs. */
@@ -155,6 +186,7 @@ export function parseBundle(prompt: string): Bundle {
     slack: slack(prompt),
     files: files(prompt),
     playbooks: playbooks(prompt),
+    repos: repos(prompt),
   }
 }
 

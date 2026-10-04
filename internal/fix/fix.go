@@ -46,6 +46,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/repos"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/worktree"
@@ -218,6 +219,12 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	if !approvedStatuses[tn.status] {
 		return res, fmt.Errorf("fix: the triage note for %s has status %q; a fix runs from a note whose status is triaged or fix-approved. Read %s, and if you agree with its Proposed Fix, set the status back or run `sirdar fix` on a freshly triaged ticket",
 			key, tn.status, tn.path())
+	}
+	// A fix happens only in the workspace repository. A note whose
+	// proposed fix names files in a companion repository (repos:) is
+	// refused here, before any branch or worktree exists.
+	if target, ok := repos.FixTarget(tn.doc.ProposedFix.Files, cfg.Repositories(), cfg.Root); ok {
+		return res, fmt.Errorf("fix: the fix is in %s; run Sirdar from that repository", target.Name)
 	}
 
 	g := git{dir: cfg.Root}
@@ -703,7 +710,8 @@ type triageDoc struct {
 		Hypothesis string `json:"hypothesis"`
 	} `json:"rootCause"`
 	ProposedFix struct {
-		Description string `json:"description"`
+		Description string   `json:"description"`
+		Files       []string `json:"files"`
 	} `json:"proposedFix"`
 }
 

@@ -63,6 +63,9 @@ const LONE_KEY = /^[A-Za-z][A-Za-z0-9]+-\d+$/
 /** A URL, as far as a line of prose goes: up to the first space. */
 const URL_LIKE = /https?:\/\/\S+/g
 
+/** A GitHub reference: owner/name#123. */
+const GITHUB_REF = /[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#\d+\b/g
+
 /** A helpdesk number: a hash and four digits or more. */
 const HELPDESK = /#(\d{4,})\b/g
 
@@ -94,6 +97,16 @@ const ZOHO_HOST = /^desk\.zoho\.[a-z]{2,3}(\.[a-z]{2})?$/
 /** A Slack message permalink, host on a .slack.com dot boundary. */
 const SLACK_LINK =
   /^https:\/\/[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*\.slack\.com\/archives\/[A-Z0-9]{6,}\/p\d{16}(?:[?#]|$)/
+
+/** Whether a URL is on github.com: a pull request, an issue, a file. */
+function isGitHubLink(text: string): boolean {
+  try {
+    const host = new URL(text).hostname.toLowerCase()
+    return host === 'github.com' || host === 'www.github.com'
+  } catch {
+    return false
+  }
+}
 
 /** Whether a URL is a Slack message link the workspace can read. */
 export function isSlackLink(text: string): boolean {
@@ -200,6 +213,17 @@ export function parseIntent(text: string): Intent {
   }
 
   const spans: Span[] = []
+  /**
+   * What stays in the instruction and is read as nothing else: a GitHub
+   * link, and a GitHub reference like acme/web#1234 — a pull request, not
+   * helpdesk ticket #1234, and no mode word either.
+   */
+  const kept: Span[] = []
+  for (const match of text.matchAll(GITHUB_REF)) {
+    const at = match.index ?? 0
+    kept.push({ start: at, end: at + match[0].length })
+  }
+  const taken = (span: Span): boolean => spans.some((s) => overlaps(s, span)) || kept.some((s) => overlaps(s, span))
   /** Every key the line names, with where it was found, so "first" is first in the line. */
   const keys: { at: number; key: string }[] = []
   let helpdeskUrl = ''
@@ -212,6 +236,13 @@ export function parseIntent(text: string): Intent {
   for (const match of text.matchAll(URL_LIKE)) {
     const at = match.index ?? 0
     const raw = match[0].replace(/[.,;:)\]]+$/, '')
+    // A GitHub link is evidence, not a reference: it stays in the
+    // instruction, where the session reads it and the service matches it
+    // to a companion repository.
+    if (isGitHubLink(raw)) {
+      kept.push({ start: at, end: at + raw.length })
+      continue
+    }
     spans.push({ start: at, end: at + raw.length })
     if (isSlackLink(raw)) {
       if (!slack) slack = raw
@@ -241,7 +272,7 @@ export function parseIntent(text: string): Intent {
   for (const match of text.matchAll(KEY)) {
     const at = match.index ?? 0
     const span = { start: at, end: at + match[0].length }
-    if (spans.some((s) => overlaps(s, span))) continue
+    if (taken(span)) continue
     spans.push(span)
     if (!keys.some((k) => k.key === match[0])) keys.push({ at, key: match[0] })
   }
@@ -250,7 +281,7 @@ export function parseIntent(text: string): Intent {
   for (const match of text.matchAll(HELPDESK)) {
     const at = match.index ?? 0
     const span = { start: at, end: at + match[0].length }
-    if (spans.some((s) => overlaps(s, span))) continue
+    if (taken(span)) continue
     spans.push(span)
     const number = match[1] ?? ''
     if (number && !helpdeskNumbers.includes(number)) helpdeskNumbers.push(number)
@@ -264,7 +295,7 @@ export function parseIntent(text: string): Intent {
     for (const match of text.matchAll(pattern)) {
       const at = match.index ?? 0
       const span = { start: at, end: at + match[0].length }
-      if (spans.some((s) => overlaps(s, span))) continue
+      if (taken(span)) continue
       spans.push(span)
       if (!modes.some((m) => m.mode === mode)) modes.push({ at, mode })
     }

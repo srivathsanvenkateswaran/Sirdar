@@ -45,6 +45,7 @@ const selectRuns = (s: AppState): RunSummary[] | undefined => s.runsByWorkspace[
 const selectTickets = (s: AppState): Ticket[] | undefined => s.ticketsByWorkspace[s.currentWorkspaceId]
 const selectSources = (s: AppState) => s.sourcesByWorkspace[s.currentWorkspaceId]
 const selectMe = (s: AppState) => s.meByWorkspace[s.currentWorkspaceId]
+const selectRepos = (s: AppState) => s.reposByWorkspace[s.currentWorkspaceId]
 const selectQueueUnsupported = (s: AppState): boolean => Boolean(s.queueUnsupported[s.currentWorkspaceId])
 const selectWorkspace = (s: AppState) => s.workspaces.find((w) => w.id === s.currentWorkspaceId)
 
@@ -223,6 +224,7 @@ function Shell(): JSX.Element {
   const ticketsOrNone = useAppState(selectTickets)
   const sources = useAppState(selectSources)
   const me = useAppState(selectMe)
+  const repos = useAppState(selectRepos)
   const queueUnsupported = useAppState(selectQueueUnsupported)
   const inbound = useAppState((s) => s.inbound)
   const quota = useAppState((s) => s.quota)
@@ -351,6 +353,7 @@ function Shell(): JSX.Element {
           onSelectWorkspace={(id) => store.setWorkspace(id)}
           onAddWorkspace={() => navigate({ name: 'settings', page: 'general' })}
           runs={runs}
+          repos={repos}
           onStart={startSession}
           onOpenRun={(runId) => navigate({ name: 'run', runId })}
         />

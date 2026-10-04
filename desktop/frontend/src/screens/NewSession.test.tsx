@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RunSummary, Workspace } from '../api/types'
+import type { RepoSummary, RunSummary, Workspace } from '../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
 import { composerPrefs, resetComposerPrefs, setIntentAssist } from '../lib/composerPrefs'
 import { resetRunJobs, setRunJob } from '../lib/jobs'
@@ -46,6 +46,7 @@ function mount(
     workspaces?: Workspace[]
     onSelectWorkspace?: (id: string) => void
     onStart?: (mode: SessionMode, key: string, o: StartOverrides) => Promise<string>
+    repos?: RepoSummary[]
   } = {},
 ) {
   const transport = over.transport ?? createFakeTransport({ tickets: [] })
@@ -62,6 +63,7 @@ function mount(
         workspaces={over.workspaces}
         onSelectWorkspace={over.onSelectWorkspace}
         runs={runs}
+        repos={over.repos}
         onStart={onStart}
         onOpenRun={onOpenRun}
       />
@@ -661,6 +663,67 @@ describe('NewSession', () => {
     })
   })
 
+  describe('repositories', () => {
+    const facts = { exists: true, git: true, behind: 0, ahead: 0 }
+    const REPOS: RepoSummary[] = [
+      { name: 'acme-api', path: '/src/acme-api', origin: 'git@github.com:acme/acme-api.git', workspace: true, facts, state: '' },
+      { name: 'Acme.Web', path: '/src/Acme.Web', origin: 'git@github.com:acme/Acme.Web.git', facts, state: '' },
+      { name: 'Acme.Flutter.POS', path: '/src/Acme.Flutter.POS', facts, state: '' },
+    ]
+
+    it('says which repository the line asks to look in, and carries the words to the run', async () => {
+      const { onStart } = mount({ repos: REPOS })
+      fireEvent.change(bar(), { target: { value: 'SBX-1 check the POS app first' } })
+      expect(screen.getByRole('status')).toHaveTextContent('Triage · SBX-1 · look in Acme.Flutter.POS · with your note')
+      fireEvent.click(sendButton())
+      await waitFor(() =>
+        expect(onStart).toHaveBeenCalledWith(
+          'triage',
+          'SBX-1',
+          expect.objectContaining({ instruction: 'check the POS app first' }),
+        ),
+      )
+    })
+
+    it('names a repository the line mentions, configured or not', () => {
+      mount({ repos: REPOS })
+      fireEvent.change(bar(), { target: { value: 'SBX-1 broke after acme/Acme.Web#828 or other/Billing.Service#3' } })
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Triage · SBX-1 · mentions Acme.Web (companion repo) · mentions Billing.Service (not configured — add it under repos:) · with your note',
+      )
+    })
+
+    it('will not start on a repository nobody configured, and says why', () => {
+      const { onStart } = mount({ repos: REPOS })
+      fireEvent.change(bar(), { target: { value: 'SBX-1 look in Billing.Service' } })
+      expect(screen.getByRole('status')).toHaveTextContent('Billing.Service is not a configured repository')
+      expect(sendButton()).toBeDisabled()
+      expect(screen.getByTestId('primary')).toHaveTextContent('off')
+      fireEvent.keyDown(bar(), { key: 'Enter' })
+      expect(onStart).not.toHaveBeenCalled()
+    })
+
+    it('does not repeat a mention the ticket resolution already named', async () => {
+      const transport = createFakeTransport({
+        tickets: [],
+        intake: {
+          'SBX-1': {
+            input: 'key',
+            key: 'SBX-1',
+            via: [],
+            summary: 'SBX-1 · mentions Acme.Web (companion repo)',
+            repos: [{ name: 'Acme.Web', slug: 'acme/Acme.Web', ref: 'acme/Acme.Web#828', status: 'companion' }],
+          },
+        },
+      })
+      mount({ transport, repos: REPOS })
+      fireEvent.change(bar(), { target: { value: 'SBX-1 see acme/Acme.Web#828' } })
+      expect(
+        await screen.findByText('Triage · SBX-1 · mentions Acme.Web (companion repo) · with your note'),
+      ).toBeInTheDocument()
+    })
+  })
+
   describe('a Slack link', () => {
     const SLACK = 'https://acme.slack.com/archives/C0123ABCD/p1712345678901234'
 
@@ -703,7 +766,7 @@ describe('NewSession', () => {
     it('triages a thread that names no ticket under its Slack key, and says when its PR is in another repository', async () => {
       const DM = 'https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059'
       const summary =
-        'Slack thread · no ticket yet · will triage the thread · mentions acme-co/Billing.Service (not this workspace)'
+        'Slack thread · no ticket yet · will triage the thread · mentions Billing.Service (not configured — add it under repos:)'
       const transport = createFakeTransport({
         tickets: [],
         intake: {
@@ -715,7 +778,14 @@ describe('NewSession', () => {
             subject: 'Coupon totals are wrong on the receipt',
             slack: { url: DM, messages: 2, thread: true },
             slackOnly: true,
-            otherRepos: ['acme-co/Billing.Service'],
+            repos: [
+              {
+                name: 'Billing.Service',
+                slug: 'acme-co/Billing.Service',
+                ref: 'https://github.com/acme-co/Billing.Service/pull/412',
+                status: 'unknown',
+              },
+            ],
           },
         },
       })

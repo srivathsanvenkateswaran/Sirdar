@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/repos"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
@@ -44,6 +45,7 @@ func TestRecognise(t *testing.T) {
 		{"a look-alike Zoho host is a URL and nothing more", "https://desk.zoho.com.evil.example/agent/x/tickets/details/123400000456789", "", ""},
 		{"a UUID is not a key", "ABCDEF12-3456-7890-ABCD-EF1234567890", "", ""},
 		{"a short number is not a helpdesk number", "#12 is the room", "", ""},
+		{"a GitHub reference is not a helpdesk number", "broke after acme/Acme.Web#12345", "", ""},
 		{"prose", "the customer says the export is empty", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -383,17 +385,17 @@ func TestSlackThreadWithNoReference(t *testing.T) {
 // TestSlackThreadWithNoTicketTriagesTheThread is the DM support request: a
 // thread with a CompanyID, a domain and a PR link but no tracker key or
 // helpdesk number. The chip says the thread will be triaged, and that the
-// PR's repository is not this workspace's.
+// PR's repository is not one the workspace has configured.
 func TestSlackThreadWithNoTicketTriagesTheThread(t *testing.T) {
 	r := newTestResolver(t, nil, nil)
-	r.origin = func(context.Context) string { return "acme-co/web-app" }
+	r.repos = []repos.Repo{{Name: "web-app", Path: "/src/web-app", Origin: "git@github.com:acme-co/web-app.git", Workspace: true}}
 	r.slack = &fakeSlack{thread: slack.Thread{IsThread: true, Messages: []slack.Message{
 		{TS: "1791100254.656059", Author: "Rana Example", Text: "*Coupon totals are wrong on the receipt*\n*CompanyID:* 4417\n*Domain:* shop.example.test\nPR: <https://github.com/acme-co/Billing.Service/pull/412|#412>",
 			Files: []slack.File{{Name: "receipt.png"}}},
 		{TS: "1791100300.000100", Author: "Sam Engineer", Text: "looking"},
 	}}}
 	in := resolveOK(t, r, "https://acme.slack.com/archives/D0FAKEDM01/p1791100254656059")
-	want := "Slack thread · no ticket yet · will triage the thread · mentions acme-co/Billing.Service (not this workspace)"
+	want := "Slack thread · no ticket yet · will triage the thread · mentions Billing.Service (not configured — add it under repos:)"
 	if in.Key != "SLACK-D0FAKEDM01-1791100254" || !in.SlackOnly || in.Summary != want || in.Subject != "Coupon totals are wrong on the receipt" {
 		t.Fatalf("intake %+v", in)
 	}
@@ -407,16 +409,16 @@ func TestSlackThreadWithNoTicketTriagesTheThread(t *testing.T) {
 }
 
 // TestRepoMismatchOnATicket: a tracker record naming another repository
-// says so in the chip too.
+// says so in the chip too, and the workspace's own is not worth a word.
 func TestRepoMismatchOnATicket(t *testing.T) {
 	r := newTestResolver(t, nil, nil)
-	r.origin = func(context.Context) string { return "acme-co/web-app" }
-	in := Intake{Key: "SBX-1", mentions: "see https://github.com/acme-co/web-app/pull/3 and https://github.com/acme-co/Billing.Service/pull/412"}
-	if got := r.otherRepos(context.Background(), in); len(got) != 1 || got[0] != "acme-co/Billing.Service" {
-		t.Fatalf("otherRepos = %v", got)
+	r.repos = []repos.Repo{{Name: "web-app", Path: "/src/web-app", Origin: "git@github.com:acme-co/web-app.git", Workspace: true}}
+	got := r.mentions([]string{"see https://github.com/acme-co/web-app/pull/3 and https://github.com/acme-co/Billing.Service/pull/412"})
+	if len(got) != 1 || got[0].Slug != "acme-co/Billing.Service" || got[0].Status != repos.StatusUnknown {
+		t.Fatalf("mentions = %+v", got)
 	}
-	in.OtherRepos = []string{"acme-co/Billing.Service"}
-	if s := intakeSummary(in); s != "SBX-1 · mentions acme-co/Billing.Service (not this workspace)" {
+	in := Intake{Key: "SBX-1", Repos: got}
+	if s := intakeSummary(in); s != "SBX-1 · mentions Billing.Service (not configured — add it under repos:)" {
 		t.Fatalf("summary %q", s)
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/ghrepo"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
@@ -73,8 +72,8 @@ func newResolver(cfg *config.Config, tracker source.Tracker, helpdesk source.Hel
 		slack:        sr,
 		slackErr:     serr,
 		cache:        newIntakeCache(cfg.Root, nil),
+		repos:        cfg.Repositories(),
 		fallback:     fallback,
-		origin:       func(ctx context.Context) string { return ghrepo.Origin(ctx, cfg.Root) },
 	}
 	if cfg.Sources.Helpdesk != nil {
 		r.trackerField = cfg.Sources.Helpdesk.TrackerField
