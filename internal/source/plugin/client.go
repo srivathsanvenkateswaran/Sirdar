@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -255,6 +256,31 @@ func (c *Client) Get(ctx context.Context, key string) (ticket.TrackerTicket, err
 	return tt, err
 }
 
+// GetByID fetches a tracker ticket by the tracker's own id rather than its
+// key: `tracker.get` with `{"id"}` in place of `{"key"}`. An adapter that
+// predates the id parameter answers with an error of its own — a missing
+// key, most likely — and every such answer is reported as Unsupported, so
+// the caller moves on to its next way of finding the ticket.
+func (c *Client) GetByID(ctx context.Context, id string) (ticket.TrackerTicket, error) {
+	var tt ticket.TrackerTicket
+	if err := c.hasRole(ctx, "tracker"); err != nil {
+		return tt, err
+	}
+	err := c.call(ctx, "tracker.get", map[string]string{"id": id}, &tt)
+	if err != nil {
+		var serr *source.Error
+		if errors.As(err, &serr) && serr.Code == source.NotFound {
+			return tt, err
+		}
+		return tt, &source.Error{Code: source.Unsupported, Message: "tracker.get by id: " + err.Error()}
+	}
+	if tt.Key == "" {
+		return tt, &source.Error{Code: source.Unsupported, Message: "tracker.get by id: the adapter answered with no key"}
+	}
+	tt.DeriveTypeAndParent()
+	return tt, nil
+}
+
 // List fetches tracker tickets matching f.
 //
 // Type and ParentKey are filled in from the record's Fields when the
@@ -332,6 +358,7 @@ func (c *Client) WarningsFor(id string) []string { return nil }
 
 var (
 	_ source.Tracker  = (*Client)(nil)
+	_ source.IDGetter = (*Client)(nil)
 	_ source.Helpdesk = helpdeskView{}
 	_ source.Closer   = (*Client)(nil)
 	_ source.Warner   = (*Client)(nil)

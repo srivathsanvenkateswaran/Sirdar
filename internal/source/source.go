@@ -37,9 +37,31 @@ func (e *Error) Error() string { return string(e.Code) + ": " + e.Message }
 
 // ListFilter narrows Tracker.List. Fields left zero are unfiltered; Limit
 // zero means no limit.
+//
+// Query and Order are hints an adapter may ignore. Query is free text to
+// search for — the intake resolver sends a helpdesk number ("#28310") or a
+// helpdesk record id — and Order "newest" asks for the most recently
+// created tickets first. A caller sending either still checks what comes
+// back, because an adapter that ignores them answers with its ordinary list.
+// They carry lower-case JSON names on the exec protocol; the four older
+// fields keep the names they have always been sent under.
 type ListFilter struct {
 	Assignee, Status, Parent string
 	Limit                    int
+	Query                    string `json:"query,omitempty"`
+	Order                    string `json:"order,omitempty"`
+}
+
+// OrderNewest is the ListFilter.Order value for newest first.
+const OrderNewest = "newest"
+
+// IDGetter is implemented by trackers that can fetch a record by the
+// tracker's own internal id (a UUID, say) rather than its key. A helpdesk
+// that stores the tracker's id instead of its key in a custom field is
+// resolved through it. It is optional: an adapter that cannot answers
+// Unsupported, and the caller falls back to searching by number.
+type IDGetter interface {
+	GetByID(ctx context.Context, id string) (ticket.TrackerTicket, error)
 }
 
 // Tracker reads issue-tracker records (e.g. Jira).
