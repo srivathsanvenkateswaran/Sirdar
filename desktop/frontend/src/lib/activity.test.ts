@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { IndexedEvent } from './events'
-import { currentActivity, STALL_MS } from './activity'
+import { currentActivity, readActivity, STALL_MS } from './activity'
 
 // Event shapes from the 2026-10-04 OMNI-3413 rerun's events.jsonl.
 let n = 0
@@ -24,7 +24,14 @@ describe('currentActivity', () => {
       json('29:30', 1, '{"ticket":{"key":'),
       json('30:10', 1, '"OMNI-3413"'),
     ]
-    expect(currentActivity(events, at('30:12'))).toEqual({ what: 'answer', label: 'Writing the answer', since: at('29:27'), chars: 28, stalled: false })
+    expect(currentActivity(events, at('30:12'))).toEqual({
+      what: 'answer',
+      label: 'Writing the answer',
+      since: at('29:27'),
+      silentSince: at('30:10'),
+      chars: 28,
+      stalled: false,
+    })
   })
 
   it('says the model is thinking while a thinking block is open', () => {
@@ -54,5 +61,31 @@ describe('currentActivity', () => {
 
   it('says nothing about a log with no events', () => {
     expect(currentActivity([], at('28:00'))).toBeUndefined()
+  })
+
+  it('measures the stall from the last event, not from the open block — a 66s answer then silence reads under 2 minutes once the silence itself has lasted just past that', () => {
+    const events = [
+      stream('29:13', { type: 'message_start' }),
+      blockStart('29:13', 0, { type: 'thinking' }),
+      blockStop('29:27', 0),
+      blockStart('29:27', 1, { type: 'tool_use', name: 'StructuredOutput' }),
+      json('29:30', 1, 'x'),
+      // The block has been open 66s by 30:33; nothing has arrived since.
+      json('29:33', 1, 'y'),
+    ]
+    // At 30:33 + STALL_MS it is silent for exactly STALL_MS from the 29:33
+    // delta, not from the 29:27 block open — `since` alone would call this
+    // stalled far earlier than the real two minutes of silence.
+    const justUnder = currentActivity(events, at('29:33') + STALL_MS - 1000)
+    expect(justUnder).toMatchObject({ stalled: false, silentSince: at('29:33') })
+    const justOver = currentActivity(events, at('29:33') + STALL_MS + 1000)
+    expect(justOver).toMatchObject({ stalled: true, silentSince: at('29:33') })
+  })
+})
+
+describe('readActivity', () => {
+  it('parses the same shape as currentActivity, minus `stalled`', () => {
+    const events = [stream('29:13', { type: 'message_start' }), blockStart('29:13', 0, { type: 'thinking' })]
+    expect(readActivity(events)).toEqual({ what: 'thinking', label: 'Thinking', since: at('29:13'), silentSince: at('29:13') })
   })
 })

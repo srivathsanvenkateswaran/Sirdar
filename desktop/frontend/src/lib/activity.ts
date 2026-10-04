@@ -19,17 +19,23 @@ export const STALL_MS = 120_000
  * - `waiting`: none of those; the last line was the run's, and the model
  *   has not answered yet.
  *
- * `since` is when that began, for the line's timer. A provider that streams
- * no deltas only ever shows `tool` and `waiting`, which is still more than
- * the nothing the transcript shows between rows.
+ * `since` is when that began, for the line's timer — it can be a minute or
+ * more into a long answer stream. `silentSince` is the last event's own
+ * time, which is what "stalled" and "No output for X" measure from: a run
+ * can be legitimately 66 seconds into an answer and 0 seconds into the
+ * silence that follows it, and the two must not be conflated.
  */
 export interface Activity {
   what: 'answer' | 'thinking' | 'preparing' | 'tool' | 'waiting'
   label: string
   since: number
+  silentSince: number
   chars?: number
   stalled: boolean
 }
+
+/** `Activity` without `stalled`: the part that only changes when the log does. */
+export type ParsedActivity = Omit<Activity, 'stalled'>
 
 /** The structured-answer tools: the note, written as a tool call's input. */
 const ANSWER_TOOLS = new Set(['StructuredOutput'])
@@ -53,7 +59,13 @@ function streamEvent(event: RunEvent): Record<string, unknown> | undefined {
 /** How far back to look: the open block and the open call are near the end. */
 const TAIL = 4000
 
-export function currentActivity(events: IndexedEvent[], now: number): Activity | undefined {
+/**
+ * The parsed half of `currentActivity`: everything that depends only on
+ * `events`, not on the clock. A caller that ticks a clock every second —
+ * `LiveActivity`, say — re-parses the log once per change instead of once
+ * per tick by memoizing this and computing `stalled` separately.
+ */
+export function readActivity(events: IndexedEvent[]): ParsedActivity | undefined {
   if (events.length === 0) return undefined
   const tail = events.slice(-TAIL)
   const lastAt = Date.parse(tail[tail.length - 1].event.t)
@@ -104,20 +116,26 @@ export function currentActivity(events: IndexedEvent[], now: number): Activity |
     }
   }
 
-  const stalled = now - lastAt > STALL_MS
   const open = [...blocks.values()].pop()
   if (open?.type === 'tool_use' && ANSWER_TOOLS.has(open.name)) {
-    return { what: 'answer', label: 'Writing the answer', since: open.since, chars: open.chars, stalled }
+    return { what: 'answer', label: 'Writing the answer', since: open.since, silentSince: lastAt, chars: open.chars }
   }
   if (open?.type === 'thinking' || open?.type === 'redacted_thinking') {
-    return { what: 'thinking', label: 'Thinking', since: open.since, stalled }
+    return { what: 'thinking', label: 'Thinking', since: open.since, silentSince: lastAt }
   }
   if (open?.type === 'tool_use' && open.name) {
-    return { what: 'preparing', label: `Preparing ${toolLabel(open.name)}`, since: open.since, stalled }
+    return { what: 'preparing', label: `Preparing ${toolLabel(open.name)}`, since: open.since, silentSince: lastAt }
   }
   const call = calls[calls.length - 1]
   if (call && !ANSWER_TOOLS.has(call.tool)) {
-    return { what: 'tool', label: `Running ${toolLabel(call.tool)}`, since: call.since, stalled }
+    return { what: 'tool', label: `Running ${toolLabel(call.tool)}`, since: call.since, silentSince: lastAt }
   }
-  return { what: 'waiting', label: 'Waiting for the model', since: lastAt, stalled }
+  return { what: 'waiting', label: 'Waiting for the model', since: lastAt, silentSince: lastAt }
+}
+
+/** `readActivity` plus `stalled`, measured from `silentSince` against `now`. */
+export function currentActivity(events: IndexedEvent[], now: number): Activity | undefined {
+  const parsed = readActivity(events)
+  if (!parsed) return undefined
+  return { ...parsed, stalled: now - parsed.silentSince > STALL_MS }
 }

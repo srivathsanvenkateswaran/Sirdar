@@ -65,6 +65,23 @@ describe('LiveActivity', () => {
     expect(screen.getByTestId('live-activity')).toHaveTextContent(/No output for 2:0\d/)
   })
 
+  it('measures the stalled label from the silence after a long answer stream, not from the stream itself', () => {
+    // The answer block opens at 29:13 and streams for 66s, its last delta
+    // landing at 30:19; then nothing arrives for just over STALL_MS. Had the
+    // stalled label measured from the block's own open time (29:13) rather
+    // than that last delta, "now" here — 30:19 + STALL_MS + 1s — would read
+    // as roughly 3:06 of silence instead of the roughly 2:00 that actually
+    // elapsed since the stream went quiet.
+    vi.setSystemTime(at('30:19') + STALL_MS + 1000)
+    const events = [
+      stream('29:13', { type: 'message_start' }),
+      blockStart('29:13', 0, { type: 'tool_use', name: 'StructuredOutput' }),
+      json('30:19', 0, 'x'),
+    ]
+    render(<LiveActivity events={events} working={true} />)
+    expect(screen.getByTestId('live-activity')).toHaveTextContent(/No output for 2:0\d/)
+  })
+
   it('updates the label when a new event arrives', () => {
     vi.setSystemTime(at('28:50'))
     const base = [blockStart('28:20', 0, { type: 'tool_use', name: 'mcp__metabase__run_query' })]

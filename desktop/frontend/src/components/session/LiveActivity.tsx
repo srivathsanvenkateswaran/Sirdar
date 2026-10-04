@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { IndexedEvent } from '../../lib/events'
-import { currentActivity } from '../../lib/activity'
+import { readActivity, STALL_MS } from '../../lib/activity'
 import { duration, tokens } from '../../lib/format'
 import './live-activity.css'
 
@@ -24,19 +24,22 @@ export default function LiveActivity({ events, working }: LiveActivityProps): JS
     return () => clearInterval(tick)
   }, [working])
 
-  // The log changes far less often than the clock; read it once per change.
-  const read = useMemo(() => (working ? (at: number) => currentActivity(events, at) : undefined), [events, working])
-  const activity = read?.(now)
-  if (!activity) return null
+  // The log changes far less often than the clock; parsing it is the
+  // expensive part, so it only reruns when `events` itself changes. `now`
+  // ticking every second recomputes just the two numbers below it, not the
+  // whole tail-walk `readActivity` does.
+  const parsed = useMemo(() => (working ? readActivity(events) : undefined), [events, working])
+  if (!parsed) return null
 
-  const since = duration(Math.max(0, now - activity.since))
-  const label = activity.stalled ? `No output for ${since}` : activity.label
+  const since = duration(Math.max(0, now - parsed.since))
+  const stalled = now - parsed.silentSince > STALL_MS
+  const label = stalled ? `No output for ${duration(Math.max(0, now - parsed.silentSince))}` : parsed.label
   return (
-    <div className="sd-activity" role="status" aria-live="off" data-what={activity.what} data-stalled={activity.stalled ? '' : undefined} data-testid="live-activity">
+    <div className="sd-activity" role="status" aria-live="off" data-what={parsed.what} data-stalled={stalled ? '' : undefined} data-testid="live-activity">
       <span className="sd-activity__dot" aria-hidden="true" />
       <span className="sd-activity__label">{label}</span>
-      {activity.stalled ? <span className="sd-activity__meta">· still {activity.label.toLowerCase()}</span> : <span className="sd-activity__meta">{since}</span>}
-      {activity.chars ? <span className="sd-activity__meta">· {tokens(activity.chars)} characters</span> : null}
+      {stalled ? <span className="sd-activity__meta">· still {parsed.label.toLowerCase()}</span> : <span className="sd-activity__meta">{since}</span>}
+      {parsed.chars ? <span className="sd-activity__meta">· {tokens(parsed.chars)} characters</span> : null}
     </div>
   )
 }
