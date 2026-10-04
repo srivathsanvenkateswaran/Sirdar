@@ -196,6 +196,53 @@ function ConversationBlock({ bundle }: { bundle: Bundle }): JSX.Element {
   )
 }
 
+/**
+ * The Slack thread the session was started from, under the conversation:
+ * what the reporter wrote in Slack, which is often more than the ticket
+ * says. Drawn only when the run carried one; the same message rows as the
+ * conversation, the last six with the rest one click away.
+ */
+function SlackBlock({ bundle }: { bundle: Bundle }): JSX.Element | null {
+  const [all, setAll] = useState(false)
+  if (bundle.slack.length === 0) return null
+  const shown = all ? bundle.slack : bundle.slack.slice(-MESSAGES_SHOWN)
+  const hidden = bundle.slack.length - shown.length
+  const n = bundle.slack.length
+
+  return (
+    <section className="si-block" aria-label="From Slack" data-sec="slack" data-testid="bundle-slack">
+      <h3 className="si-block__h">
+        From Slack
+        <span className="si-block__n">
+          <bdi>{n}</bdi> {n === 1 ? 'message' : 'messages'}
+        </span>
+      </h3>
+      {hidden > 0 ? (
+        <button type="button" className="si-more" onClick={() => setAll(true)}>
+          Show all <bdi>{n}</bdi>
+        </button>
+      ) : null}
+      <ol className="si-msgs">
+        {shown.map((m, i) => (
+          <li key={`${m.at}-${i}`} className="si-msg" data-role="slack">
+            <p className="si-msg__who sd-bidi" dir="auto">
+              {m.author}
+              {m.at ? (
+                <span className="si-msg__at">
+                  <bdi>{m.at}</bdi>
+                </span>
+              ) : null}
+            </p>
+            <div className="si-msg__body sd-bidi" dir="auto">
+              {plain(m.text)}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )
+}
+
 function AttachmentsBlock({
   files,
   attachments,
@@ -395,6 +442,7 @@ export default function BundlePane({
       ) : null}
       <TicketBlock bundle={bundle} assignee={assignee} helpdeskKey={helpdeskKey} />
       <ConversationBlock bundle={bundle} />
+      <SlackBlock bundle={bundle} />
       <AttachmentsBlock files={bundle.files} attachments={attachments} onOpen={setPreview} />
       <PlaybooksBlock bundle={bundle} />
       {preview ? (
