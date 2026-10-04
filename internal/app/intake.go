@@ -91,7 +91,7 @@ func (in Intake) SlackMarkdown() string {
 
 // SlackNotConfigured is the reason a Slack link gets in a workspace with no
 // sources.slack block.
-const SlackNotConfigured = "Slack is not configured: set sources.slack.token (a Slack user token with channels:history, groups:history) in config.yaml"
+const SlackNotConfigured = "Slack is not configured: set sources.slack.token (a Slack user token with channels:history, groups:history) in config.yaml, or add `slack` to mcp.userServers"
 
 // --- recognising --------------------------------------------------------
 
@@ -424,7 +424,10 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 	if r.slack == nil {
 		in.Reason = SlackNotConfigured
 		if r.slackErr != nil {
-			in.Reason = "the Slack token could not be read: " + r.slackErr.Error()
+			// The token did not resolve, or the slack MCP server the
+			// workspace opted in is gone from the Claude CLI; the error
+			// says which.
+			in.Reason = "Slack could not be read: " + r.slackErr.Error()
 		}
 		return in
 	}
@@ -439,9 +442,13 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 	if th.IsThread {
 		label = "Slack thread"
 	}
+	reason := "the " + label + " names no ticket key, helpdesk number or helpdesk link"
+	if v, ok := r.slack.(interface{ ViaMCP() bool }); ok && v.ViaMCP() {
+		label = "Slack (via MCP)"
+	}
 
 	var found *intakeRef
-	for _, ref := range recognise(strings.Join(th.Texts(), "\n")) {
+	for _, ref := range recognise(strings.Join(append(th.Texts(), th.Refs...), "\n")) {
 		if ref.kind != InputSlack {
 			ref := ref
 			found = &ref
@@ -449,7 +456,7 @@ func (r *intakeResolver) fromSlack(ctx context.Context, l slack.Link) Intake {
 		}
 	}
 	if found == nil {
-		in.Reason = "the " + label + " names no ticket key, helpdesk number or helpdesk link"
+		in.Reason = reason
 		return in
 	}
 	inner, err := r.fromRef(ctx, *found)

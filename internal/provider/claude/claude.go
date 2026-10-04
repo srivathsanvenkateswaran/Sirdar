@@ -251,6 +251,31 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	if binary == "" {
 		binary = defaultBinary
 	}
+	// mcp.userServers: the operator's own CLI servers join the workspace's
+	// in a generated config the session runs strict against, so
+	// --strict-mcp-config still keeps every other user-level server out.
+	// The file is removed once the process has been reaped (Wait), or here
+	// when the session never starts.
+	var removeMCP func()
+	var mcpNotice []provider.Event
+	if spec.MCPStrict && len(spec.UserMCPServers) > 0 {
+		path, cleanup, err := provider.WriteMCPConfig(spec.MCPConfig, spec.UserMCPServers)
+		if err != nil {
+			return nil, fmt.Errorf("claude: %w", err)
+		}
+		spec.MCPConfig, removeMCP = path, cleanup
+		labels := make([]string, 0, len(spec.UserMCPServers))
+		for _, s := range spec.UserMCPServers {
+			labels = append(labels, s.Label())
+		}
+		mcpNotice = append(mcpNotice, systemNotice("mcp.userServers: "+strings.Join(labels, " · ")))
+	}
+	started := false
+	defer func() {
+		if !started && removeMCP != nil {
+			removeMCP()
+		}
+	}()
 	// runCtx is the one cancellation path: Cancel() cancels it, and so does
 	// the caller's ctx. cmd.Cancel turns either into an interrupt, and
 	// WaitDelay escalates to a kill if the process has not exited by then.
@@ -308,6 +333,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		events:    make(chan provider.Event, eventBuffer),
 		readDone:  make(chan struct{}),
 		done:      make(chan struct{}),
+		removeMCP: removeMCP,
 	}
 	if err := cmd.Start(); err != nil {
 		cancelRun()
@@ -315,7 +341,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	}
 	// Sent before the read goroutine starts, so there is no chance of a
 	// send racing its close(s.events) on an already-buffered channel.
-	for _, ev := range envNotices {
+	for _, ev := range append(envNotices, mcpNotice...) {
 		s.events <- ev
 	}
 	go s.read(stdout)
@@ -323,12 +349,15 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		// The session is never handed to the caller, so reap it here
 		// rather than through Cancel/Wait.
 		cancelRun()
+		started = true // the reaper below removes the generated config
 		go func() {
 			<-s.readDone
 			_ = cmd.Wait()
+			s.cleanupMCP()
 		}()
 		return nil, fmt.Errorf("claude prompt: %w", err)
 	}
+	started = true
 	return s, nil
 }
 
@@ -441,6 +470,20 @@ type session struct {
 	meter   usageMeter
 
 	waitOnce sync.Once
+
+	// removeMCP deletes the generated MCP config mcp.userServers needed;
+	// nil when the session runs against the workspace's file or none.
+	removeMCP func()
+	mcpOnce   sync.Once
+}
+
+// cleanupMCP removes the session's generated MCP config, once.
+func (s *session) cleanupMCP() {
+	s.mcpOnce.Do(func() {
+		if s.removeMCP != nil {
+			s.removeMCP()
+		}
+	})
 }
 
 // usageMeter accumulates what the session has spent so far. The CLI
@@ -529,6 +572,7 @@ func (s *session) Wait() (provider.Result, error) {
 		}
 		s.mu.Unlock()
 		s.cancelRun()
+		s.cleanupMCP()
 		close(s.done)
 	})
 	<-s.done

@@ -106,6 +106,17 @@ func fakeCLI(script string) int {
 		fmt.Fprintln(os.Stderr, "fake claude:", err)
 		return 2
 	}
+	// SIRDAR_FAKE_DUMP_MCP names a file the --mcp-config this fake was
+	// started with is copied to, with its own path on the first line, so a
+	// test can read what the session saw after the provider removed it.
+	if dump := os.Getenv("SIRDAR_FAKE_DUMP_MCP"); dump != "" {
+		for i, a := range os.Args {
+			if a == "--mcp-config" && i+1 < len(os.Args) {
+				cfg, _ := os.ReadFile(os.Args[i+1])
+				_ = os.WriteFile(dump, append([]byte(os.Args[i+1]+"\n"), cfg...), 0o600)
+			}
+		}
+	}
 
 	fromSirdar := make(chan string, 64)
 	go func() {
@@ -1343,5 +1354,82 @@ func TestResumeCarriesTheModel(t *testing.T) {
 		if !contains(got, want) {
 			t.Fatalf("missing %q in %v", want, got)
 		}
+	}
+}
+
+// TestUserServersJoinTheWorkspaceConfig is mcp.userServers on the claude
+// path: the session runs strict against a generated file holding the
+// workspace's .mcp.json servers and the opted user entries verbatim, and the
+// file is gone once the session has been reaped.
+func TestUserServersJoinTheWorkspaceConfig(t *testing.T) {
+	ws := t.TempDir()
+	wsFile := filepath.Join(ws, ".mcp.json")
+	if err := os.WriteFile(wsFile, []byte(`{"mcpServers":{"grafana":{"command":"grafana-mcp"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	dump := filepath.Join(t.TempDir(), "dump")
+	spec := fakeSpec(t, "testdata/script-basic.jsonl")
+	spec.Env = append(spec.Env, "SIRDAR_FAKE_DUMP_MCP="+dump)
+	spec.MCPConfig, spec.MCPStrict = wsFile, true
+	spec.UserMCPServers = []provider.UserMCPServer{
+		{Name: "slack", Transport: "http", OAuth: true, Entry: json.RawMessage(`{"type":"http","url":"https://mcp.example/mcp","oauth":{"clientId":"c"}}`)},
+		{Name: "zoho-desk", Transport: "stdio", Entry: json.RawMessage(`{"type":"stdio","command":"node","env":{"K":"v"}}`)},
+	}
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var notice string
+	for ev := range s.Events() {
+		if ev.Kind == provider.EvSystem && strings.HasPrefix(ev.Text, "mcp.userServers") {
+			notice = ev.Text
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(dump)
+	if err != nil {
+		t.Fatalf("the fake never saw an --mcp-config: %v", err)
+	}
+	path, body, _ := strings.Cut(string(b), "\n")
+	if path == wsFile {
+		t.Fatal("the session ran against the workspace file, not a generated one")
+	}
+	var got struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil {
+		t.Fatalf("generated config: %v: %s", err, body)
+	}
+	for _, name := range []string{"grafana", "slack", "zoho-desk"} {
+		if _, ok := got.MCPServers[name]; !ok {
+			t.Errorf("generated config lacks %s: %s", name, body)
+		}
+	}
+	if string(got.MCPServers["slack"]) != `{"type":"http","url":"https://mcp.example/mcp","oauth":{"clientId":"c"}}` {
+		t.Errorf("the slack entry was not copied verbatim: %s", got.MCPServers["slack"])
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("the generated config %s is still on disk after Wait (%v)", path, err)
+	}
+	if notice != "mcp.userServers: slack (http, oauth) · zoho-desk (stdio)" {
+		t.Errorf("notice = %q", notice)
+	}
+}
+
+// TestUserServersClashWithWorkspace refuses a user server named like a
+// workspace one rather than letting either silently win.
+func TestUserServersClashWithWorkspace(t *testing.T) {
+	ws := t.TempDir()
+	wsFile := filepath.Join(ws, ".mcp.json")
+	if err := os.WriteFile(wsFile, []byte(`{"mcpServers":{"slack":{"command":"x"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spec := fakeSpec(t, "testdata/script-basic.jsonl")
+	spec.MCPConfig, spec.MCPStrict = wsFile, true
+	spec.UserMCPServers = []provider.UserMCPServer{{Name: "slack", Transport: "http", Entry: json.RawMessage(`{"type":"http","url":"u"}`)}}
+	if _, err := New().Start(context.Background(), spec); err == nil || !strings.Contains(err.Error(), "also declared") {
+		t.Fatalf("want a clash error, got %v", err)
 	}
 }

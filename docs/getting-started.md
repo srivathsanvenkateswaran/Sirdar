@@ -147,9 +147,11 @@ sirdar triage 'https://acme.slack.com/archives/C0123ABCD/p1712345678901234'
 
 A helpdesk number or link is looked up in the helpdesk record's own fields, then in the
 tracker; a Slack link is read, and the ticket named in its thread is used. A Slack thread
-also goes into the bundle, so the triage reads what the reporter wrote. Slack needs a token
-in `sources.slack.token`; [Starting from anything](config.md#starting-from-anything) has
-the details and the order the lookups are tried in.
+also goes into the bundle, so the triage reads what the reporter wrote. Slack needs either a
+token in `sources.slack.token`, or no token at all when the Slack MCP server you already use
+in Claude Code is opted in with `mcp.userServers: [slack]` — the link is then read through
+it and the chip says `Slack (via MCP)`. [Starting from anything](config.md#starting-from-anything)
+has the details and the order the lookups are tried in.
 
 ## Read the note
 

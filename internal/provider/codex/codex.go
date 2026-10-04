@@ -116,7 +116,7 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 	var home *scratchHome
 	var warnings []string
 	if spec.MCPStrict {
-		h, w, err := newScratchHome(specRoot(spec.Cwd, spec.MCPConfig), sessionEnv(spec))
+		h, w, err := newScratchHome(specRoot(spec.Cwd, spec.MCPConfig), sessionEnv(spec), spec.UserMCPServers)
 		if err != nil {
 			return nil, fmt.Errorf("codex: workspace mcp config: %w", err)
 		}
@@ -1553,7 +1553,7 @@ func mcpCheck(ctx context.Context, binary string, cfg *provider.DoctorConfig) pr
 	root, only := doctorSetting(cfg)
 	prefix := "mcp.workspaceOnly off, the operator's own servers: "
 	if only {
-		h, _, err := newScratchHome(root, os.Environ())
+		h, _, err := newScratchHome(root, os.Environ(), nil)
 		if err != nil {
 			return provider.Check{Name: name, Detail: err.Error()}
 		}

@@ -48,7 +48,11 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	if c, ok := queueTypesCheck(ctx, cfg); ok {
 		checks = append(checks, c)
 	}
-	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg), transcribeCheck(cfg))
+	checks = append(checks, mcpCheck(cfg))
+	if c, ok := userServersCheck(cfg, nil); ok {
+		checks = append(checks, c)
+	}
+	checks = append(checks, fetchCheck(cfg), transcribeCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
 	return levelled(checks)
 }
@@ -264,7 +268,10 @@ func sourceChecks(ctx context.Context, cfg *config.Config) []Check {
 func slackCheck(ctx context.Context, cfg *config.Config, hc *http.Client) Check {
 	const name = "sources.slack"
 	if cfg.Sources.Slack == nil {
-		return Check{Name: name, OK: true, Detail: "not configured; a pasted Slack link says to set sources.slack.token"}
+		if cfg.HasUserServer(slackMCPServer) {
+			return Check{Name: name, OK: true, Detail: "no token; Slack links are read through the slack MCP server in mcp.userServers"}
+		}
+		return Check{Name: name, OK: true, Detail: "not configured; a pasted Slack link says to set sources.slack.token or add slack to mcp.userServers"}
 	}
 	token, err := resolveRef(config.Resolver{Keychain: KeychainFor()}, "token", cfg.Sources.Slack.Token)
 	if err != nil {
@@ -575,6 +582,61 @@ func mcpCheck(cfg *config.Config) Check {
 		check.Detail += "; permissions.mcp is empty, so write-shaped MCP tools are denied by name"
 	}
 	return check
+}
+
+// userServersCheck is the "mcp user servers" row: each server
+// mcp.userServers opts in, its transport, and whether the Claude CLI has it
+// — "slack (http, oauth) · zoho-desk (stdio) · janus (http)". A name the
+// CLI does not have fails the row, which lists the names it does have. No
+// row at all when the workspace opts none in. env is the environment the
+// CLI's user scope is read through; nil is this process's.
+func userServersCheck(cfg *config.Config, env []string) (Check, bool) {
+	names := cfg.MCP.UserServers
+	if len(names) == 0 {
+		return Check{}, false
+	}
+	const name = "mcp user servers"
+	all, err := provider.LoadClaudeUserServers(env)
+	if err != nil {
+		return Check{Name: name, Detail: err.Error()}, true
+	}
+	var parts, missing []string
+	for _, n := range names {
+		s, ok := all[n]
+		if !ok {
+			missing = append(missing, n)
+			parts = append(parts, n+" (not in the Claude CLI)")
+			continue
+		}
+		parts = append(parts, s.Label())
+	}
+	check := Check{Name: name, OK: len(missing) == 0, Detail: strings.Join(parts, " · ")}
+	if len(missing) > 0 {
+		if _, err := provider.PickUserServers(all, missing); err != nil {
+			check.Detail += "; " + err.Error()
+		}
+		return check, true
+	}
+	switch {
+	case !cfg.WorkspaceOnlyMCP():
+		check.Level = string(provider.LevelWarn)
+		check.Detail += "; mcp.workspaceOnly is off, so the session loads every user server anyway"
+	case cfg.Provider != "claude" && cfg.Provider != "codex":
+		check.Level = string(provider.LevelWarn)
+		check.Detail += "; ignored by the " + string(cfg.Provider) + " provider"
+	case cfg.Provider == "codex":
+		var skipped []string
+		for _, n := range names {
+			if s := all[n]; s.Transport != "stdio" && (s.OAuth || !s.Headers) {
+				skipped = append(skipped, n)
+			}
+		}
+		if len(skipped) > 0 {
+			check.Level = string(provider.LevelWarn)
+			check.Detail += "; codex runs without " + strings.Join(skipped, ", ") + " (its auth is a grant the Claude CLI holds)"
+		}
+	}
+	return check, true
 }
 
 // fetchCheck reports where a session may fetch a URL from. An empty list
