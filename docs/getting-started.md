@@ -133,6 +133,24 @@ sirdar triage OMNI-1234
 Add `--dry-run` the first time if you want to see the bundle and the exact prompt Sirdar would
 send, without spending an agent session on it.
 
+### Start from anything
+
+You do not need the tracker key. `sirdar triage`, `rca` and `fix`, and the New session box,
+take whatever you were handed and print how they got to the key:
+
+```sh
+sirdar triage '#28310'                     # a helpdesk number (quote the #)
+sirdar triage 'https://desk.zoho.com/agent/acme/support/tickets/details/123400000456789'
+sirdar triage 'https://acme.slack.com/archives/C0123ABCD/p1712345678901234'
+# sirdar: Slack thread → #28310 → SBX-1 · matched by title
+```
+
+A helpdesk number or link is looked up in the helpdesk record's own fields, then in the
+tracker; a Slack link is read, and the ticket named in its thread is used. A Slack thread
+also goes into the bundle, so the triage reads what the reporter wrote. Slack needs a token
+in `sources.slack.token`; [Starting from anything](config.md#starting-from-anything) has
+the details and the order the lookups are tried in.
+
 ## Read the note
 
 The triage note lands in `notes.dir` and a copy sits in the run directory at

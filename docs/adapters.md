@@ -942,8 +942,8 @@ out-of-order responses.
 | method                 | params                          | result                              |
 |-------------------------|----------------------------------|--------------------------------------|
 | `describe`               | none                              | `{"name","roles","version"}`         |
-| `tracker.get`             | `{"key"}`                          | a `ticket.TrackerTicket`               |
-| `tracker.list`            | `{"assignee","status","parent","limit"}` (any may be absent) | `[]ticket.TrackerTicket`     |
+| `tracker.get`             | `{"key"}`, or `{"id"}` (optional, see below) | a `ticket.TrackerTicket`               |
+| `tracker.list`            | `{"assignee","status","parent","limit","query","order"}` (any may be absent) | `[]ticket.TrackerTicket`     |
 | `helpdesk.get`            | `{"id"}`                           | a `ticket.HelpdeskTicket`              |
 | `helpdesk.threads`        | `{"id"}`                           | a `ticket.Thread` (`[]ticket.Message`) |
 | `helpdesk.attachments`    | `{"id","dir"}`                     | `[]ticket.Attachment`                  |
@@ -983,6 +983,29 @@ equality is the adapter's choice) and capped at `limit` (0 or absent =
 adapter's own default/no cap). An adapter may choose to ignore filters it
 doesn't support rather than error — the reference file adapter ignores
 all of them and always returns its full fixture.
+
+Two hints were added for the [intake resolver](config.md#starting-from-anything), which
+looks up the tracker issue a helpdesk ticket belongs to. Both are optional, both may be
+ignored, and Sirdar checks every ticket that comes back rather than trusting the filter:
+
+- `query` is a free-text search the adapter may ignore. Sirdar sends the helpdesk number
+  as the ticket titles carry it (`"#28310"`), or a helpdesk record id. An adapter that
+  can search should return the tickets whose title, description or `HelpdeskRef` contain
+  it, newest first.
+- `order` is `"newest"` for the most recently created first. Sirdar sends it with
+  `limit: 200` when it falls back to matching the newest tickets itself.
+
+Unlike the four older parameters, which are sent under their Go names (`Assignee`,
+`Status`, `Parent`, `Limit`; a Go adapter decodes them case-insensitively), these two are
+sent lower-case exactly as written here.
+
+`tracker.get` may also be sent `{"id": "<the tracker's own id>"}` in place of `{"key"}`:
+the tracker's internal identifier (a UUID, say) when a helpdesk field stores that instead
+of the key. Supporting it is optional. An adapter that does returns the ticket, with its
+`Key`, exactly as for a key; one that does not may answer `unsupported`, and any error
+other than `not_found` is read as "unsupported" so an adapter written before the
+parameter existed, which answers "key is required", is handled the same way. Sirdar then
+falls back to `tracker.list`.
 
 A returned `TrackerTicket` carries these fields. Only `Key` is required;
 anything an adapter cannot answer it leaves out.

@@ -8,6 +8,21 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
 ## Unreleased
 
 - `sirdar` with no command serves the web UI on loopback and opens it, the same as `sirdar serve --open`.
+- A session starts from whatever the support engineer was handed: a tracker key or URL, a
+  helpdesk number (`#28310`), a Zoho Desk ticket link, or a Slack message link. The intake
+  resolver finds the tracker key — from the helpdesk record's fields (the Zoho Desk
+  adapter now carries every custom field as `cf.<name>`; `sources.helpdesk.trackerField`
+  pins the one that holds the link, `cf_jira_ticket_id` by default for `zohodesk`), by the
+  tracker's own id with `tracker.get {"id"}`, by the tracker's search, or by matching the
+  tracker's newest 200 tickets — and the composer's status line, `sirdar triage`, `rca` and
+  `fix` say which step found it. Pairs are remembered for a day. `POST
+  /api/workspaces/{id}/resolve` and the `Resolve` bridge method serve it; the helpdesk and
+  compose-intent routes stay as aliases.
+- A read-only Slack reader (`sources.slack.token`): a pasted Slack link is read, the ticket
+  its thread names is used, and the thread is carried into the bundle as `slack.md` and
+  shown in the Bundle pane as "From Slack". `sirdar doctor` checks the token.
+- The exec adapter protocol's `tracker.list` takes two optional hints, `query` and
+  `order`, and `tracker.get` optionally takes `{"id"}`.
 
 Sirdar as it stands today, before the first tagged release:
 
