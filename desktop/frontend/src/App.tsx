@@ -324,11 +324,11 @@ function Shell(): JSX.Element {
       const shared = { provider: o.provider, model: o.model, instruction: o.instruction }
       switch (mode) {
         case 'rca':
-          return store.startRCA(key, { ...shared, prUrl: o.prUrl, resolution: o.resolution })
+          return store.startRCA(key, { ...shared, prUrl: o.prUrl, resolution: o.resolution, slack: o.slack })
         case 'fix':
           return store.startFix(key, { ...shared, dryRun: o.dryRun, noPr: o.noPr, local: o.local })
         default:
-          return store.startTriage([key], { ...shared, dryRun: o.dryRun })
+          return store.startTriage([key], { ...shared, dryRun: o.dryRun, slack: o.slack })
       }
     },
     [store],

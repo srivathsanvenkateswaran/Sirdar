@@ -66,6 +66,20 @@ describe('http transport', () => {
     expect(JSON.parse(String(post.mock.calls[0]![1]?.body))).toEqual({ text: 'sort out the rounding' })
   })
 
+  it('posts pasted text to the resolve route', async () => {
+    const intake = {
+      input: 'helpdesk-number',
+      key: 'SBX-1',
+      helpdeskNumber: '28310',
+      via: [{ from: '#28310', to: 'SBX-1', how: 'matched by title', source: 'recent tickets' }],
+      summary: '#28310 → SBX-1 · matched by title',
+    }
+    const post = mockFetch(intake)
+    await expect(createTransport().resolve('ws1', '#28310')).resolves.toEqual(intake)
+    expect(post.mock.calls[0]![0]).toBe('/api/workspaces/ws1/resolve')
+    expect(JSON.parse(String(post.mock.calls[0]![1]?.body))).toEqual({ text: '#28310' })
+  })
+
   it('carries the operator request on every start', async () => {
     for (const [name, call] of [
       ['triage', (t: ReturnType<typeof createTransport>) => t.startTriage('ws1', ['OMNI-1'], { instruction: 'check the rounding' })],
@@ -653,7 +667,18 @@ describe('wails transport', () => {
       provider: '',
       model: '',
       instruction: 'check the tax rounding first',
+      slack: '',
     })
+  })
+
+  it('resolves pasted text through the bound Resolve, with a null via read as none', async () => {
+    const bridge = stubBridge({
+      Resolve: async () => ({ input: 'slack', key: '', via: null, reason: 'Slack is not configured' }),
+    })
+    await expect(
+      createWailsTransport().resolve('ws1', 'https://acme.slack.com/archives/C0123ABCD/p1712345678901234'),
+    ).resolves.toEqual({ input: 'slack', key: '', via: [], reason: 'Slack is not configured' })
+    expect(bridge.Resolve).toHaveBeenCalledWith('ws1', 'https://acme.slack.com/archives/C0123ABCD/p1712345678901234')
   })
 
   it('resolves a helpdesk number and reads an ambiguous line through their bound methods', async () => {

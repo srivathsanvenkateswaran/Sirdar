@@ -21,6 +21,7 @@ import type {
   RunSummary,
   SearchHit,
   HelpdeskLink,
+  Intake,
   Ticket,
   Transport,
   Usage,
@@ -52,6 +53,7 @@ export interface TransportCalls {
   deletePlaybook: { ws: string; name: string }[]
   openPlaybook: { ws: string; name: string }[]
   scaffoldPlaybooks: string[]
+  resolve: { ws: string; text: string }[]
   resolveHelpdesk: { ws: string; number: string }[]
   composeIntent: { ws: string; text: string }[]
   models: { ws: string; provider: string }[]
@@ -405,6 +407,13 @@ export function createFakeTransport(seed: {
   register?: RegisterRow[]
   /** What `search()` picks from: the hits whose excerpt contains the query, case folded. */
   hits?: SearchHit[]
+  /**
+   * What `resolve()` answers, by the text it was given. Text not named here
+   * resolves the way the service would with nothing behind it: a lone key
+   * to itself, a helpdesk number through `helpdesk` above, anything else to
+   * no key and a reason.
+   */
+  intake?: Record<string, Intake>
   /** What `resolveHelpdesk()` answers, by helpdesk number; a number not named here has no tracker issue. */
   helpdesk?: Record<string, HelpdeskLink>
   /** What `composeIntent()` answers. Absent makes the call reject, as a workspace with no provider does. */
@@ -482,6 +491,7 @@ export function createFakeTransport(seed: {
     deletePlaybook: [],
     openPlaybook: [],
     scaffoldPlaybooks: [],
+    resolve: [],
     resolveHelpdesk: [],
     composeIntent: [],
     models: [],
@@ -523,6 +533,37 @@ export function createFakeTransport(seed: {
     workspaces: async () => seed.workspaces ?? [workspace()],
     addWorkspace: async (root) => workspace({ id: 'ws-new', root }),
     removeWorkspace: async () => {},
+    resolve: async (ws, text) => {
+      calls.resolve.push({ ws, text })
+      const seeded = seed.intake?.[text]
+      if (seeded) return seeded
+      const trimmed = text.trim()
+      if (/^[A-Za-z][A-Za-z0-9]+-\d+$/.test(trimmed)) {
+        const key = trimmed.toUpperCase()
+        return { input: 'key', key, via: [], summary: key }
+      }
+      const number = /^#(\d+)$/.exec(trimmed)?.[1]
+      if (number) {
+        const link = seed.helpdesk?.[number]
+        if (link?.key) {
+          return {
+            input: 'helpdesk-number',
+            key: link.key,
+            helpdeskNumber: number,
+            via: [{ from: `#${number}`, to: link.key, how: 'from the helpdesk record' }],
+            summary: `#${number} → ${link.key} · from the helpdesk record`,
+          }
+        }
+        return {
+          input: 'helpdesk-number',
+          key: '',
+          helpdeskNumber: number,
+          via: [],
+          reason: link?.reason ?? `no tracker issue names #${number}`,
+        }
+      }
+      return { input: 'text', key: '', via: [], reason: 'no ticket key, helpdesk number or link in that' }
+    },
     resolveHelpdesk: async (ws, number) => {
       calls.resolveHelpdesk.push({ ws, number })
       return (

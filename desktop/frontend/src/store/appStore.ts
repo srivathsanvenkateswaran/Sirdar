@@ -122,6 +122,8 @@ export interface TriageOptions {
   model?: string
   dryRun?: boolean
   instruction?: string
+  /** The Slack message link the session was started from, carried into the bundle. */
+  slack?: string
 }
 
 export interface RCAOptions {
@@ -130,6 +132,8 @@ export interface RCAOptions {
   provider?: string
   model?: string
   instruction?: string
+  /** The Slack message link the session was started from, carried into the bundle. */
+  slack?: string
 }
 
 export interface FixOptions {

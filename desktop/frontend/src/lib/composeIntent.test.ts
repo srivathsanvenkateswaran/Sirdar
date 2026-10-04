@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { intentChips, keyInURL, parseIntent, type Intent } from './composeIntent'
+import {
+  helpdeskIdInURL,
+  intentChips,
+  intentRef,
+  isSlackLink,
+  keyInURL,
+  parseIntent,
+  type Intent,
+} from './composeIntent'
 
 /** The table: one line in, the whole reading out. */
 const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
@@ -118,6 +126,41 @@ const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
     text: 'triage A1B-22',
     want: { key: 'A1B-22', mode: 'triage', ambiguity: '' },
   },
+  {
+    name: 'a Zoho agent link is a helpdesk link, not prose',
+    text: 'https://desk.zoho.com/agent/acme/support/tickets/details/123400000456789 the export is empty',
+    want: {
+      key: '',
+      helpdeskUrl: 'https://desk.zoho.com/agent/acme/support/tickets/details/123400000456789',
+      instruction: 'the export is empty',
+      ambiguity: '',
+    },
+  },
+  {
+    name: 'a classic Zoho link reads its id out of the fragment',
+    text: 'https://desk.zoho.eu/support/acme/ShowHomePage.do#Cases/dv/123400000456789',
+    want: { helpdeskUrl: 'https://desk.zoho.eu/support/acme/ShowHomePage.do#Cases/dv/123400000456789', ambiguity: '' },
+  },
+  {
+    name: 'a Slack link with Arabic around it',
+    text: 'شوف https://acme.slack.com/archives/C0123ABCD/p1712345678901234?thread_ts=1712345600.000100 لو سمحت',
+    want: {
+      key: '',
+      slack: 'https://acme.slack.com/archives/C0123ABCD/p1712345678901234?thread_ts=1712345600.000100',
+      instruction: 'شوف لو سمحت',
+      ambiguity: '',
+    },
+  },
+  {
+    name: 'a look-alike Slack host is just a URL',
+    text: 'https://acme.slack.com.example.org/archives/C0123ABCD/p1712345678901234',
+    want: { slack: '', ambiguity: 'no-key' },
+  },
+  {
+    name: 'a key with Arabic around it',
+    text: 'العميل يقول SBX-1 لا يعمل',
+    want: { key: 'SBX-1', instruction: 'العميل يقول لا يعمل', ambiguity: '' },
+  },
 ]
 
 describe('parseIntent', () => {
@@ -152,7 +195,33 @@ describe('keyInURL', () => {
   })
 })
 
+describe('intentRef', () => {
+  it('is the reference the workspace is asked about, in the service order', () => {
+    expect(intentRef(parseIntent('triage SBX-1 #28310'))).toBe('SBX-1')
+    expect(intentRef(parseIntent('#28310 is broken again'))).toBe('#28310')
+    expect(
+      intentRef(parseIntent('https://desk.zoho.com/agent/acme/tickets/details/123400000456789 and https://acme.slack.com/archives/C0123ABCD/p1712345678901234')),
+    ).toBe('https://desk.zoho.com/agent/acme/tickets/details/123400000456789')
+    expect(intentRef(parseIntent('https://acme.slack.com/archives/C0123ABCD/p1712345678901234 please'))).toBe(
+      'https://acme.slack.com/archives/C0123ABCD/p1712345678901234',
+    )
+    expect(intentRef(parseIntent('the export is empty'))).toBe('')
+  })
+
+  it('reads a Zoho id only off a Zoho host', () => {
+    expect(helpdeskIdInURL('https://desk.zoho.in/agent/acme/tickets/123400000456789')).toBe('123400000456789')
+    expect(helpdeskIdInURL('https://desk.zoho.com.evil.example/agent/acme/tickets/details/123400000456789')).toBe('')
+    expect(isSlackLink('http://acme.slack.com/archives/C0123ABCD/p1712345678901234')).toBe(false)
+  })
+})
+
 describe('intentChips', () => {
+  it('puts the resolution in the key’s place', () => {
+    expect(
+      intentChips({ mode: 'triage', key: 'SBX-1', instruction: '', resolution: '#28310 → SBX-1 · matched by title' }),
+    ).toEqual(['Triage', '#28310 → SBX-1 · matched by title'])
+  })
+
   it('names the mode and the ticket, and the note only when there is one', () => {
     expect(intentChips({ mode: 'triage', key: 'OMNI-3233', instruction: '' })).toEqual([
       'Triage',

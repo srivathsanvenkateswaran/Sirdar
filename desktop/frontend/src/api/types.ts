@@ -416,8 +416,13 @@ export interface Attachment {
  * recorded on the run. It is not the note, and nothing filed carries it.
  */
 export interface Overrides { provider?: string; model?: string; instruction?: string }
-export interface TriageStart extends Overrides { dryRun?: boolean }
-export interface RCAStart extends Overrides { prUrl?: string; resolution?: string }
+/**
+ * `slack` is the Slack message link the session was started from; the
+ * thread is read again when the job starts and filed in the bundle as
+ * slack.md. Triage and RCA only: a fix reads the triage note, not a bundle.
+ */
+export interface TriageStart extends Overrides { dryRun?: boolean; slack?: string }
+export interface RCAStart extends Overrides { prUrl?: string; resolution?: string; slack?: string }
 /**
  * `noPr` pushes the branch and opens no pull request; `local` stops at the
  * commit — nothing is pushed, the worktree is kept, and the change is read
@@ -430,6 +435,27 @@ export interface FixStart extends Overrides { dryRun?: boolean; noPr?: boolean; 
  * helpdesk, the record does not exist, or the record names no tracker issue.
  */
 export interface HelpdeskLink { number: string; key: string; subject?: string; reason?: string }
+/** What a piece of pasted text was recognised as. */
+export type IntakeInput = 'key' | 'tracker-url' | 'helpdesk-number' | 'helpdesk-url' | 'slack' | 'text'
+/**
+ * One hop of a resolution: `#28310` → `SBX-1`, and how it held — "matched
+ * by title", "from Zoho field cf_jira_ticket_id". `source` is where it was
+ * found: slack, helpdesk record, tracker id, tracker search, recent tickets,
+ * remembered or model.
+ */
+export interface IntakeStep { from: string; to: string; how?: string; source?: string }
+/**
+ * What pasted text resolved to: the tracker key, the helpdesk ticket on the
+ * other side, the hops, and `summary` — the chip, "Slack thread → #28310 →
+ * SBX-1 · matched by title". `key` empty is an ordinary answer with
+ * `reason` on it. `slack` is set when the text was a Slack link that was read.
+ */
+export interface Intake {
+  input: IntakeInput; key: string; helpdeskNumber?: string; helpdeskId?: string; via: IntakeStep[]
+  summary?: string; reason?: string; subject?: string
+  slack?: { url: string; messages: number; thread: boolean }
+  mode?: string; instruction?: string; confidence?: number
+}
 /**
  * How one ambiguous composer line was read. It is a suggestion: the composer
  * draws it as chips and starts nothing until a person says so.
@@ -439,6 +465,12 @@ export interface EvalStart extends Overrides { concurrency?: number; retro?: boo
 export interface Transport {
   workspaces(): Promise<Workspace[]>; addWorkspace(root: string): Promise<Workspace>; removeWorkspace(id: string): Promise<void>;
   queue(ws: string, f?: { assignee?: string; status?: string; limit?: number }): Promise<Ticket[]>;
+  /**
+   * What pasted text points at — a tracker key or URL, a helpdesk number or
+   * link, a Slack link — and the tracker key it leads to. Read-only; text
+   * with no key behind it resolves with `key: ''` and the reason on it.
+   */
+  resolve(ws: string, text: string): Promise<Intake>;
   /**
    * Which tracker issue a helpdesk number belongs to. Read-only: it reads
    * one helpdesk record and starts nothing. A number with no tracker issue
@@ -575,7 +607,7 @@ export interface Transport {
  */
 export const TRANSPORT_METHODS = [
   'workspaces', 'addWorkspace', 'removeWorkspace',
-  'queue', 'resolveHelpdesk', 'composeIntent',
+  'queue', 'resolve', 'resolveHelpdesk', 'composeIntent',
   'runs', 'run', 'deleteRun', 'search', 'events', 'note', 'prompt',
   'attachments', 'attachmentURL',
   'startTriage', 'startRCA', 'startFix', 'startEval',
