@@ -73,7 +73,8 @@ func providerFromConfig(t *testing.T, cfg *config.Config, creds config.Resolver)
 
 // TestTriageThroughTheOpenAIProvider runs a whole triage on the openai
 // provider: config, prompt, the loop's read_file call inside the
-// workspace, the submitted note, and the filed markdown.
+// workspace, the reply in prose, the note submitted in the turn after it,
+// and the filed markdown.
 func TestTriageThroughTheOpenAIProvider(t *testing.T) {
 	var authorization string
 	var turns int
@@ -84,6 +85,11 @@ func TestTriageThroughTheOpenAIProvider(t *testing.T) {
 				Role    string `json:"role"`
 				Content string `json:"content"`
 			} `json:"messages"`
+			Tools []struct {
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			} `json:"tools"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -103,7 +109,15 @@ func TestTriageThroughTheOpenAIProvider(t *testing.T) {
 			_, _ = w.Write([]byte(chatToolCall("t1", "read_file", `{"path":"README.md"}`)))
 			return
 		}
-		_, _ = w.Write([]byte(chatToolCall("t2", "submit_note", triageDoc)))
+		// The note turn is the one offered submit_note; the reply turn
+		// answers in prose.
+		for _, tool := range req.Tools {
+			if tool.Function.Name == "submit_note" {
+				_, _ = w.Write([]byte(chatToolCall("t2", "submit_note", triageDoc)))
+				return
+			}
+		}
+		_, _ = w.Write([]byte(chatProse("The export fails for large orders.")))
 	}))
 	defer srv.Close()
 
@@ -131,8 +145,11 @@ func TestTriageThroughTheOpenAIProvider(t *testing.T) {
 	if authorization != "Bearer model-key-1" {
 		t.Errorf("Authorization = %q, want the resolved key", authorization)
 	}
-	if turns != 2 {
-		t.Errorf("the loop took %d turns, want 2", turns)
+	if turns != 3 {
+		t.Errorf("the endpoint saw %d turns, want the read, the reply and the note", turns)
+	}
+	if got := readFile(t, filepath.Join(runDir(t, cfg, out), "answer.md")); got != "The export fails for large orders.\n" {
+		t.Errorf("answer.md = %q", got)
 	}
 
 	note := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
@@ -185,6 +202,22 @@ func chatToolCall(id, name, args string) string {
 	return string(b)
 }
 
+// chatProse is one Chat Completions response that answers in prose.
+func chatProse(text string) string {
+	b, err := json.Marshal(map[string]any{
+		"model": "qwen/qwen3-coder",
+		"choices": []map[string]any{{
+			"message":       map[string]any{"role": "assistant", "content": text},
+			"finish_reason": "stop",
+		}},
+		"usage": map[string]int{"prompt_tokens": 1200, "completion_tokens": 80},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
 // TestOpenAISchemaRetryHappensOnTheSameSession is the interaction the
 // loop's end-of-session barrier exists for: the runner sends the retry
 // while it is still draining the events of the note that failed
@@ -219,7 +252,7 @@ func TestOpenAISchemaRetryHappensOnTheSameSession(t *testing.T) {
 	creds := config.Resolver{Env: func(string) (string, bool) { return "model-key-1", true }}
 	r := newRunner(cfg, providerFromConfig(t, cfg, creds), stubTracker{}, stubHelpdesk{})
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}

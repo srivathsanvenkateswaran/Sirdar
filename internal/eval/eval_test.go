@@ -740,3 +740,38 @@ func TestIndexRejectsATrailingTypo(t *testing.T) {
 		t.Errorf(`index("2") = %d, %v`, got, err)
 	}
 }
+
+// TestEvalRunsAreNoteOnly: an eval replay scores the note, so it runs the
+// way every triage ran before reply-first: one session, held to the schema
+// from the start, with no reply turn ahead of it spending the budget the
+// score is measured against.
+func TestEvalRunsAreNoteOnly(t *testing.T) {
+	cfg := newWorkspace(t)
+	golden := newGolden(t, "OMNI-1", `{"classification": "code"}`, "")
+	specs := make(chan provider.SessionSpec, 4)
+
+	report, err := Run(t.Context(), newDeps(t, cfg, &stubProvider{doc: triageDoc, specs: specs}), nil, Options{GoldenDir: golden})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	res := report.Results[0]
+	if res.State != "completed" {
+		t.Fatalf("the replay did not complete: %+v", res)
+	}
+	if n := len(specs); n != 1 {
+		t.Fatalf("the replay started %d sessions, want one", n)
+	}
+	if spec := <-specs; len(spec.OutputSchema) == 0 {
+		t.Error("the replay's session was not held to the schema")
+	}
+	_, state, err := store.Open(cfg.Root, res.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.ReplyFirst {
+		t.Error("the replay ran reply-first")
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, ".sirdar", "runs", "OMNI-1", res.RunID, "answer.md")); !os.IsNotExist(err) {
+		t.Errorf("the replay wrote a reply: %v", err)
+	}
+}

@@ -40,7 +40,10 @@ func triageThen(t *testing.T, cfg *config.Config, r *Runner, p *stubProvider) Ou
 		provider.Event{Kind: provider.EvUsage, Turns: 3, InputTok: 100, OutputTok: 20, CostUSD: 0.42},
 		finalEvent(triageDoc),
 	)
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	// Note-only, so the steers below continue a run whose answer is its
+	// note: a steer on a reply-first run is conversation, which is a
+	// different path with tests of its own.
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}

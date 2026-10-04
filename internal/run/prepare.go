@@ -193,8 +193,11 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		// the HTTP route, the Wails bridge — hands over whatever was
 		// typed, and a request of nothing but spaces is no request.
 		Instruction: strings.TrimSpace(o.Instruction),
-		// A session answers the operator in chat and files no note.
-		ReplyFirst: kind == store.KindSession,
+		// A session answers the operator in chat and files no note; a
+		// triage or rca answers in chat first and files its note after,
+		// unless the caller wants the note alone, as eval does.
+		ReplyFirst: kind == store.KindSession ||
+			((kind == store.KindTriage || kind == store.KindRCA) && !o.NoteOnly),
 	}
 	if kind == store.KindSession {
 		p.state.Access = o.Access
@@ -203,6 +206,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		}
 	}
 	p.reply = p.state.ReplyFirst
+	p.noteAfter = p.state.ReplyFirst && kind != store.KindSession
 	// The historical checkout, before anything else the run does: a
 	// commit that does not exist, or a repository that refuses the
 	// worktree, should stop the run before a ticket is fetched.
@@ -286,13 +290,21 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 
 	switch kind {
 	case store.KindTriage:
-		p.promptText = prompt.Triage(in)
+		if p.reply {
+			p.promptText = prompt.TriageReply(in)
+		} else {
+			p.promptText = prompt.Triage(in)
+		}
 	case store.KindRCA:
 		rcaIn, err := r.rcaInput(ctx, p, in, rca)
 		if err != nil {
 			return p, err
 		}
-		p.promptText = prompt.RCA(rcaIn)
+		if p.reply {
+			p.promptText = prompt.RCAReply(rcaIn)
+		} else {
+			p.promptText = prompt.RCA(rcaIn)
+		}
 	case store.KindSession:
 		sin := prompt.SessionInput{
 			Instruction:      p.state.Instruction,

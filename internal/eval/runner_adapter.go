@@ -99,6 +99,9 @@ func (r runAtCommit) TriageAt(ctx context.Context, key string, o TriageAt) (Stag
 		BundleDir:   o.BundleDir,
 		Eval:        true,
 		At:          o.Commit,
+		// The stage scores the note, so it is filed in one schema'd
+		// session with no reply turn ahead of it.
+		NoteOnly: true,
 	})
 	what := "triage at " + short(o.Commit)
 	if err == nil && len(outs) == 0 {
@@ -163,6 +166,8 @@ func (r runAtCommit) RCAAt(ctx context.Context, key string, o RCAAt) (Stage, err
 			BundleDir: o.BundleDir,
 			Eval:      true,
 			At:        o.Commit,
+			// As TriageAt: the stage scores the note, not a reply.
+			NoteOnly: true,
 		},
 		TriageNote: o.TriageNote,
 	})

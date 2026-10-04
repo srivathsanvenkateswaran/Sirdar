@@ -123,7 +123,7 @@ func TestFallbackModelsAreTriedInOrder(t *testing.T) {
 	}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}

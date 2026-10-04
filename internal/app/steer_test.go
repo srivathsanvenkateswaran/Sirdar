@@ -18,10 +18,10 @@ import (
 // screen sees the instruction on the run.
 func TestSteerContinuesTheSameRun(t *testing.T) {
 	root := newWorkspace(t)
-	p := &stubProvider{script: replay(
-		provider.Event{Kind: provider.EvUsage, Turns: 3, CostUSD: 0.42},
-		finalEvent(triageDoc),
-	)}
+	p := &stubProvider{script: replyThenNote([]provider.Event{
+		{Kind: provider.EvUsage, Turns: 3, CostUSD: 0.42},
+		{Kind: provider.EvFinal, Text: "The export job times out."},
+	}, finalEvent(triageDoc))}
 	svc := newService(t, root, stubBuilder(p, stubTracker{}, stubHelpdesk{}))
 	events, unsubscribe := svc.Subscribe()
 	defer unsubscribe()
@@ -93,7 +93,8 @@ func TestSteerContinuesTheSameRun(t *testing.T) {
 		}
 		kinds = append(kinds, ev.Kind)
 	}
-	if got := strings.Join(kinds, ","); got != "usage,final,steer:resume,usage,final" {
+	// The triage's reply turn, its note turn, then the steer.
+	if got := strings.Join(kinds, ","); got != "usage,final,final,steer:resume,usage,final" {
 		t.Fatalf("events: %s", got)
 	}
 }
@@ -171,10 +172,15 @@ func TestLiveSteerDeliveredThroughTheService(t *testing.T) {
 	p := &stubProvider{}
 	p.script = func(spec provider.SessionSpec, s *stubSession) {
 		defer s.finish()
+		// The note turn, once the reply turn has answered the steer.
+		if len(spec.OutputSchema) > 0 {
+			s.emit(finalEvent(steered))
+			return
+		}
 		s.emit(provider.Event{Kind: provider.EvUsage, Turns: 3})
 		running <- filepath.Base(spec.RunDir)
 		waitForInbox(spec.RunDir)
-		if !s.emit(finalEvent(triageDoc)) {
+		if !s.emit(provider.Event{Kind: provider.EvFinal, Text: "The export job times out."}) {
 			return
 		}
 		select {
@@ -183,7 +189,7 @@ func TestLiveSteerDeliveredThroughTheService(t *testing.T) {
 			return
 		}
 		s.emit(provider.Event{Kind: provider.EvUsage, Turns: 4})
-		s.emit(finalEvent(steered))
+		s.emit(provider.Event{Kind: provider.EvFinal, Text: "The pager drops the last page."})
 	}
 	svc := newService(t, root, stubBuilder(p, stubTracker{}, stubHelpdesk{}))
 	events, unsubscribe := svc.Subscribe()
@@ -221,8 +227,10 @@ func TestLiveSteerDeliveredThroughTheService(t *testing.T) {
 	p.mu.Lock()
 	n := len(p.sessions)
 	p.mu.Unlock()
-	if n != 1 {
-		t.Fatalf("%d sessions, want one", n)
+	// One session carried the reply and the steer; the note turn is the
+	// second.
+	if n != 2 {
+		t.Fatalf("%d sessions, want the reply session and the note turn", n)
 	}
 }
 

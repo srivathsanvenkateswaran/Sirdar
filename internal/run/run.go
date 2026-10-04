@@ -451,7 +451,10 @@ func (r *Runner) Resume(ctx context.Context, runID string, o ResumeOptions) (Out
 		return Outcome{}, err
 	}
 
-	p := &prepared{run: rn, state: state, kind: state.Kind, bundle: bundle, reply: state.ReplyFirst}
+	p := &prepared{run: rn, state: state, kind: state.Kind, bundle: bundle, reply: state.ReplyFirst,
+		// A reply-first triage or rca blocked in its reply turn still owes
+		// its note once the reply lands.
+		noteAfter: state.ReplyFirst && state.Kind != store.KindSession}
 	// A blocked --at run kept its worktree, and the resumed session has to
 	// stand where the first one stood. A worktree that is no longer there —
 	// the operator removed it, or the run was kept from an older Sirdar —

@@ -126,7 +126,7 @@ func TestReportedModelIsWrittenWhileTheRunIsStillGoing(t *testing.T) {
 	}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{Model: "sonnet"}); err != nil {
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{Model: "sonnet", NoteOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 	seen := <-midRun

@@ -45,10 +45,10 @@ func newService(t *testing.T, root string, build DepsBuilder) *Service {
 
 func TestStartTriageRunsToCompletion(t *testing.T) {
 	root := newWorkspace(t)
-	p := &stubProvider{script: replay(
-		provider.Event{Kind: provider.EvUsage, Turns: 3, InputTok: 100, OutputTok: 20, CostUSD: 0.42},
-		finalEvent(triageDoc),
-	)}
+	p := &stubProvider{script: replyThenNote([]provider.Event{
+		{Kind: provider.EvUsage, Turns: 3, InputTok: 100, OutputTok: 20, CostUSD: 0.42},
+		{Kind: provider.EvFinal, Text: "The export job times out."},
+	}, finalEvent(triageDoc))}
 	svc := newService(t, root, stubBuilder(p, stubTracker{}, stubHelpdesk{}))
 	events, unsubscribe := svc.Subscribe()
 	defer unsubscribe()
@@ -85,7 +85,7 @@ func TestStartTriageRunsToCompletion(t *testing.T) {
 	if run.Provider != "claude" || run.Usage.Turns != 3 || run.Usage.CostUSD != 0.42 {
 		t.Fatalf("run %+v", run)
 	}
-	if run.StartedAt == "" || len(run.Notes) == 0 {
+	if run.StartedAt == "" || len(run.Notes) == 0 || !run.ReplyFirst || run.Phase != "" || run.NoteWarning != "" {
 		t.Fatalf("run %+v", run)
 	}
 
@@ -115,11 +115,15 @@ func TestStartTriageRunsToCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(recorded) != 2 || next != 2 {
+	// The reply turn's usage and reply, then the note turn's note.
+	if len(recorded) != 3 || next != 3 {
 		t.Fatalf("events %d next %d", len(recorded), next)
 	}
-	if recorded[1].Kind != string(provider.EvFinal) {
-		t.Fatalf("last event %+v", recorded[1])
+	if recorded[1].Kind != string(provider.EvFinal) || recorded[1].Payload.Phase != "" {
+		t.Fatalf("reply event %+v", recorded[1])
+	}
+	if recorded[2].Kind != string(provider.EvFinal) || recorded[2].Payload.Phase != "note" {
+		t.Fatalf("last event %+v", recorded[2])
 	}
 	rest, next2, err := svc.Events(wsID, run.RunID, next)
 	if err != nil || len(rest) != 0 || next2 != next {
