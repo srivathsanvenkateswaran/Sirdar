@@ -126,6 +126,12 @@ type Options struct {
 	// and put in front of the session under the conversation. Empty
 	// changes nothing; a replayed BundleDir keeps whatever slack.md it has.
 	Slack string
+
+	// Reported replaces the fetch with a bundle built from where the
+	// ticket was reported: a Slack thread that names no tracker key or
+	// helpdesk number. The tracker and helpdesk are not called, and the
+	// run is filed under the bundle's synthetic key. It takes one key.
+	Reported *ReportedBundle
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull
@@ -318,6 +324,9 @@ func (r *Runner) Triage(ctx context.Context, keys []string, o Options) ([]Outcom
 	outs := make([]Outcome, len(keys))
 	if len(keys) == 0 {
 		return outs, nil
+	}
+	if o.Reported != nil && len(keys) != 1 {
+		return nil, fmt.Errorf("run: a bundle built from a Slack thread is triaged alone, not beside %d other keys", len(keys)-1)
 	}
 
 	workers := o.Concurrency
@@ -632,6 +641,9 @@ func bundleTitle(b ticket.Bundle) string {
 	if b.Helpdesk != nil {
 		return b.Helpdesk.Subject
 	}
+	if b.Reported != nil {
+		return b.Reported.Title
+	}
 	return ""
 }
 
@@ -641,6 +653,9 @@ func bundleDateReported(b ticket.Bundle) string {
 	}
 	if b.Tracker != nil && !b.Tracker.CreatedAt.IsZero() {
 		return b.Tracker.CreatedAt.Format(dateLayout)
+	}
+	if b.Reported != nil && !b.Reported.At.IsZero() {
+		return b.Reported.At.Format(dateLayout)
 	}
 	return ""
 }

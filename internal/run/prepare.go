@@ -212,7 +212,14 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return p, err
 	}
 
+	others, origin := otherRepos(ctx, cfg.Root, bundle, slackMD)
+	if len(others) > 0 {
+		p.state.Warnings = append(p.state.Warnings, "the ticket names "+strings.Join(others, ", ")+", not this workspace's repository ("+origin+")")
+	}
+
 	in := prompt.TriageInput{
+		OtherRepos:          others,
+		Origin:              origin,
 		Instruction:         p.state.Instruction,
 		Bundle:              bundle,
 		BundleDir:           rn.BundleDir(),
@@ -326,6 +333,12 @@ func (r *Runner) releaseWorktree(ctx context.Context, p *prepared, status store.
 // whatever the run that produced it recorded — so an eval run reasons over
 // exactly the evidence the original session saw.
 func (r *Runner) stageBundle(ctx context.Context, key string, p *prepared, o Options) (ticket.Bundle, error) {
+	if o.Reported != nil {
+		if got := o.Reported.Bundle.Key(); got != key {
+			return ticket.Bundle{}, fmt.Errorf("run: the reported bundle is for %s, not %s", got, key)
+		}
+		return r.stageReported(ctx, p, o.Reported)
+	}
 	if o.BundleDir == "" {
 		f := &Fetcher{
 			Config:   r.Config,
