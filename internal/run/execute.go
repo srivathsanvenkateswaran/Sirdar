@@ -550,7 +550,11 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		// guarantee failed. handleFinal refuses to file after a breach,
 		// so on the ordinary path there is no note to disown here. A
 		// breach in the note turn ends that turn too, so the run is no
-		// longer filing anything.
+		// longer filing anything. An Update note it ends filed nothing,
+		// so the run goes on naming the note still on disk.
+		if p.state.Phase == store.PhaseNote {
+			keepRefiled(p)
+		}
 		p.state.Phase = ""
 		return r.finish(ctx, p, store.StatusFailed, ex.breach, note.DigestRow{})
 	case p.state.Phase == store.PhaseNote:
@@ -683,12 +687,22 @@ func (r *Runner) finishNote(ctx context.Context, p *prepared, ex *execution, res
 // on naming that note and its old warning, and the failure is a warning of
 // its own. Anything else has no note, and says so in NoteWarning.
 func noteNotFiled(p *prepared, reason string) {
-	if old := p.refiled; old != nil && len(old.notes) > 0 && len(p.state.Notes) == 0 {
-		p.state.Notes, p.state.NoteWarning = old.notes, old.warning
+	if keepRefiled(p) {
 		p.state.Warnings = append(p.state.Warnings, "note not updated: "+reason)
 		return
 	}
 	p.state.NoteWarning = "note not filed: " + reason
+}
+
+// keepRefiled puts back the note an Update note was replacing, and its
+// warning, when the note turn filed none, and reports whether it did.
+func keepRefiled(p *prepared) bool {
+	old := p.refiled
+	if old == nil || len(old.notes) == 0 || len(p.state.Notes) != 0 {
+		return false
+	}
+	p.state.Notes, p.state.NoteWarning = old.notes, old.warning
+	return true
 }
 
 // afterAnswerWarnings records, as warnings on a run that has already filed

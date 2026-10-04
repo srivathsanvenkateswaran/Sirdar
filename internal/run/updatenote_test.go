@@ -265,6 +265,46 @@ func TestFailedUpdateNoteKeepsTheNoteItWasReplacing(t *testing.T) {
 	}
 }
 
+// TestBreachDuringUpdateNoteKeepsTheNoteItWasReplacing: a breach in an Update
+// note's note turn fails the run, but files nothing, so the run goes on naming
+// the note still on disk, with the warning it had.
+func TestBreachDuringUpdateNoteKeepsTheNoteItWasReplacing(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	first := replyFirstTriage(t, cfg, r, p, replyThenNote("The export job times out.", finalEvent(triageDoc)))
+	dir := runDir(t, cfg, first)
+	noteBefore := readFile(t, filepath.Join(dir, "note.md"))
+
+	p.script = replay(breachEvent("read-only breach: write_to_file /work/src/a.go"), finalEvent(triageDoc))
+	out, err := r.UpdateNote(context.Background(), first.State.RunID, UpdateNoteOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusFailed || out.State.Reason != "read-only breach: write_to_file /work/src/a.go" {
+		t.Fatalf("status %q reason %q, want the breach", out.State.Status, out.State.Reason)
+	}
+	if out.State.Phase != "" {
+		t.Errorf("phase %q after a breach ended the note turn", out.State.Phase)
+	}
+	if strings.Join(out.State.Notes, ",") != strings.Join(first.State.Notes, ",") || len(out.State.Notes) != 2 {
+		t.Errorf("notes %v, want the note still on disk %v", out.State.Notes, first.State.Notes)
+	}
+	if out.State.NoteWarning != first.State.NoteWarning {
+		t.Errorf("note warning %q, want %q", out.State.NoteWarning, first.State.NoteWarning)
+	}
+	_, st, err := store.Open(cfg.Root, first.State.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(st.Notes, ",") != strings.Join(first.State.Notes, ",") {
+		t.Errorf("notes on disk %v, want %v", st.Notes, first.State.Notes)
+	}
+	if readFile(t, filepath.Join(dir, "note.md")) != noteBefore {
+		t.Error("a breached Update note changed note.md")
+	}
+}
+
 // failingStart is a provider whose sessions never start.
 type failingStart struct{ *stubProvider }
 
