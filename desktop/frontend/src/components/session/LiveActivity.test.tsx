@@ -1,0 +1,78 @@
+import { act, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { IndexedEvent } from '../../lib/events'
+import { STALL_MS } from '../../lib/activity'
+import LiveActivity from './LiveActivity'
+
+// Event shapes from the 2026-10-04 OMNI-3413 rerun's events.jsonl, the same
+// ones `activity.test.ts` builds its fixtures from.
+let n = 0
+function row(t: string, kind: string, payload: Record<string, unknown>): IndexedEvent {
+  n += 1
+  return { index: n, event: { t: `2026-10-04T10:${t}Z`, kind, payload } }
+}
+const stream = (t: string, event: Record<string, unknown>) => row(t, 'system', { text: 'stream_event', raw: { type: 'stream_event', event } })
+const blockStart = (t: string, i: number, block: Record<string, unknown>) => stream(t, { type: 'content_block_start', index: i, content_block: block })
+const json = (t: string, i: number, partial: string) => stream(t, { type: 'content_block_delta', index: i, delta: { type: 'input_json_delta', partial_json: partial } })
+const at = (t: string) => Date.parse(`2026-10-04T10:${t}Z`)
+
+describe('LiveActivity', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('renders nothing when the run is not working', () => {
+    vi.setSystemTime(at('30:12'))
+    const events = [stream('29:13', { type: 'message_start' }), blockStart('29:13', 0, { type: 'thinking' })]
+    render(<LiveActivity events={events} working={false} />)
+    expect(screen.queryByTestId('live-activity')).toBeNull()
+  })
+
+  it('shows the answer streaming, its elapsed time ticking, and its size', () => {
+    vi.setSystemTime(at('30:12'))
+    // tokens() (lib/format.ts) rounds a k-count of 10 or more to the nearest
+    // thousand, so 21,900 characters reads as "22k" — the same rule that
+    // already holds tokens(12_400) to "12k" in format.test.ts.
+    const padding = '0'.repeat(21_900)
+    const events = [
+      stream('29:13', { type: 'message_start' }),
+      blockStart('29:13', 0, { type: 'thinking' }),
+      stream('29:27', { type: 'content_block_stop', index: 0 }),
+      blockStart('29:27', 1, { type: 'tool_use', name: 'StructuredOutput' }),
+      json('29:30', 1, padding),
+    ]
+    render(<LiveActivity events={events} working={true} />)
+    expect(screen.getByTestId('live-activity')).toHaveTextContent('Writing the answer')
+    expect(screen.getByTestId('live-activity')).toHaveTextContent('0:45')
+    expect(screen.getByTestId('live-activity')).toHaveTextContent('22k characters')
+
+    act(() => vi.advanceTimersByTime(1000))
+    expect(screen.getByTestId('live-activity')).toHaveTextContent('0:46')
+  })
+
+  it('calls a long silence a stall after STALL_MS and sets data-stalled', () => {
+    vi.setSystemTime(at('28:43'))
+    const events = [row('28:42', 'tool_started', { tool: 'Bash' }), row('28:43', 'tool_finished', { tool: 'Bash', text: 'ok' })]
+    render(<LiveActivity events={events} working={true} />)
+    expect(screen.getByTestId('live-activity')).not.toHaveAttribute('data-stalled')
+
+    act(() => vi.advanceTimersByTime(STALL_MS + 1000))
+    expect(screen.getByTestId('live-activity')).toHaveAttribute('data-stalled')
+    // STALL_MS plus the test's own 1s margin; "No output for 2:0x" either way.
+    expect(screen.getByTestId('live-activity')).toHaveTextContent(/No output for 2:0\d/)
+  })
+
+  it('updates the label when a new event arrives', () => {
+    vi.setSystemTime(at('28:50'))
+    const base = [blockStart('28:20', 0, { type: 'tool_use', name: 'mcp__metabase__run_query' })]
+    const { rerender } = render(<LiveActivity events={base} working={true} />)
+    expect(screen.getByTestId('live-activity')).toHaveTextContent('Preparing metabase/run_query')
+
+    const withCall = [...base, stream('28:41', { type: 'content_block_stop', index: 0 }), row('28:41', 'tool_started', { tool: 'mcp__metabase__run_query' })]
+    rerender(<LiveActivity events={withCall} working={true} />)
+    expect(screen.getByTestId('live-activity')).toHaveTextContent('Running metabase/run_query')
+  })
+})

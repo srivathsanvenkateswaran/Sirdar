@@ -1,0 +1,60 @@
+/*
+ * The live activity line: one quiet row above the composer while a run
+ * works. It is meta-sized ink-3 text with a pulsing dot in the live hue,
+ * turning to the blocked hue when the run has gone silent long enough to
+ * be worth a look. Every value is a token and every side is logical.
+ */
+
+.sd-activity {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+}
+
+.sd-activity__dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--sd-st-live);
+  animation: sd-activity-pulse 1.4s ease-in-out infinite;
+}
+
+.sd-activity__label {
+  color: var(--sd-ink-2);
+}
+
+.sd-activity__meta {
+  font-family: var(--sd-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.sd-activity[data-stalled] .sd-activity__dot {
+  background: var(--sd-st-blocked);
+  animation: none;
+}
+
+.sd-activity[data-stalled] .sd-activity__label {
+  color: var(--sd-st-blocked);
+}
+
+@keyframes sd-activity-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-activity__dot {
+    animation: none;
+  }
+}

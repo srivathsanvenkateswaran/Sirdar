@@ -299,6 +299,7 @@ function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document'
         runId={runId}
         detail={detail}
         data={data}
+        events={events}
         title={title}
         notesDir={notesDir}
         sources={sources}

@@ -4,6 +4,7 @@ import BundlePane from '../../components/session/BundlePane'
 import ChangesView from '../../components/session/ChangesView'
 import ComposerStrip from '../../components/session/ComposerStrip'
 import { BundleIcon, OpenIcon, ToolsIcon } from '../../components/session/icons'
+import LiveActivity from '../../components/session/LiveActivity'
 import type { SessionModel } from '../../components/session/model'
 import NoteDocument, { MetaCell } from '../../components/session/NoteDocument'
 import ToolsPane from '../../components/session/ToolsPane'
@@ -43,7 +44,7 @@ function reveal(el: Element | null | undefined): void {
  * change, with C markers tying each hunk to the edit that wrote it.
  */
 export default function SessionDocument(props: SessionLayoutProps): JSX.Element {
-  const { transport, workspaceId, detail, data, title, notesDir, live, actions, pending, actionError, steerRefusal, sent, canCancel } = props
+  const { transport, workspaceId, detail, data, events, title, notesDir, live, actions, pending, actionError, steerRefusal, sent, canCancel } = props
   const { model, note, bundle, changes, drops, everything, setEverything } = data
   // The record's model, else the one the log names, so the strip never says "model unknown" for a run that did say.
   const named = useMemo(() => (detail.model || !model.model ? detail : { ...detail, model: model.model }), [detail, model.model])
@@ -306,6 +307,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
           <div className="sn-doc__scroll sn-scroll" ref={docRef}>
             {document}
           </div>
+          <LiveActivity events={events} working={detail.status === 'running'} />
           <ComposerStrip
             state={composerState}
             detail={named}

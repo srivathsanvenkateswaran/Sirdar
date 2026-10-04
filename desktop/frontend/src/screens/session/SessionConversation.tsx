@@ -18,6 +18,7 @@ import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
 import { LIVE, TERMINAL, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
+import LiveActivity from '../../components/session/LiveActivity'
 import ModelLimitBanner from '../../components/session/ModelLimitBanner'
 import { askedQuestion, modelLimited, notePathFor } from '../../lib/events'
 import { deriveEvidenceMarkers, stepLikeOf } from '../../lib/evidence'
@@ -789,6 +790,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                 }}
               />
             ) : null}
+            <LiveActivity events={events} working={status === 'running'} />
             <Composer
               mode={mode}
               busy={sendBusy}
