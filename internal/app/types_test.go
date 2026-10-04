@@ -170,6 +170,55 @@ func TestConversionsCarryTheState(t *testing.T) {
 	}
 }
 
+// TestSummaryCarriesSessionFields pins the four session fields across both
+// the Go value SummaryOf returns and the JSON it marshals to: the
+// frontend reads them by these exact names.
+func TestSummaryCarriesSessionFields(t *testing.T) {
+	state := store.State{
+		RunID: "r1", Key: "ASK-1", Kind: store.KindSession, Status: store.StatusRunning,
+		ReplyFirst: true, Phase: store.PhaseNote, Access: store.AccessReadOnly,
+		NoteWarning: "note not filed: x",
+	}
+	summary := SummaryOf(state)
+	if !summary.ReplyFirst || summary.Phase != "note" || summary.Access != "read-only" ||
+		summary.NoteWarning != "note not filed: x" {
+		t.Fatalf("summary = %+v", summary)
+	}
+
+	data, err := json.Marshal(summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire map[string]json.RawMessage
+	if err := json.Unmarshal(data, &wire); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"phase", "access", "noteWarning", "replyFirst"} {
+		if _, ok := wire[key]; !ok {
+			t.Errorf("wire summary is missing %q: %s", key, data)
+		}
+	}
+}
+
+// TestSessionSummaryTitleIsTheInstructionsFirstLine is the one place a
+// session run's title differs from every other run's: it is what the
+// operator typed, not the ticket's own title, even when the run has a
+// bundle with one. A triage or RCA run keeps the ticket's title.
+func TestSessionSummaryTitleIsTheInstructionsFirstLine(t *testing.T) {
+	dir := fakeRunDir(t, `{"Tracker":{"Key":"OMNI-1","Title":"Refund"}}`)
+	instruction := "Why is the refund stuck?\nmore detail"
+
+	session := store.State{RunID: "r", Key: "OMNI-1", Kind: store.KindSession, Instruction: instruction}
+	if got := SummaryAt(dir, session).Title; got != "Why is the refund stuck?" {
+		t.Fatalf("session title = %q, want the instruction's first line", got)
+	}
+
+	triage := store.State{RunID: "r", Key: "OMNI-1", Kind: store.KindTriage, Instruction: instruction}
+	if got := SummaryAt(dir, triage).Title; got != "Refund" {
+		t.Fatalf("triage title = %q, want the ticket's title", got)
+	}
+}
+
 func TestJobsRejectBadArguments(t *testing.T) {
 	root := newWorkspace(t)
 	svc := New(newRegistry(t, root), stubBuilder(&stubProvider{script: replay()}, stubTracker{}, stubHelpdesk{}), Options{})

@@ -55,7 +55,7 @@ func (r *Runner) pickUpSteers(p *prepared, log *eventLog) {
 		return
 	}
 	for _, q := range added {
-		if err := log.Append("steer_queued", eventPayload{Text: q.Text}); err != nil {
+		if err := log.Append("steer_queued", eventPayload{Text: q.Text, Phase: p.state.Phase}); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
 		}
 		fmt.Fprintf(r.stderr(), "[%s] steer queued: %s\n", p.state.Key, firstLine(q.Text))
@@ -72,11 +72,13 @@ func pendingSteer(q store.QueuedSteer) bool {
 }
 
 // liveDeliverable says whether q can go into the running session: it is
-// still pending, and it asks for no model other than the one the session
-// is on — a different model is a different session, which only a steer
-// after the run settles can start.
+// still pending, the run is not filing its note, and it asks for no model
+// other than the one the session is on — a different model is a different
+// session, which only a steer after the run settles can start. The note
+// turn writes down a finished investigation, so a follow-up typed during it
+// is held and answered once the run settles.
 func liveDeliverable(q store.QueuedSteer, s store.State) bool {
-	if !pendingSteer(q) {
+	if !pendingSteer(q) || s.Phase == store.PhaseNote {
 		return false
 	}
 	m := strings.TrimSpace(q.Model)
@@ -100,6 +102,11 @@ func joinSteers(qs []store.QueuedSteer) string {
 // and filed again. It reports whether it sent one — false leaves the
 // session to be ended as usual and the instructions queued, to be held.
 func (r *Runner) deliverSteers(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution) bool {
+	// The note turn's boundary is the end of the run's work, not a turn a
+	// follow-up can join: what is queued is held for the settled run.
+	if p.state.Phase == store.PhaseNote {
+		return false
+	}
 	r.pickUpSteers(p, log)
 	var idx []int
 	var batch []store.QueuedSteer
@@ -113,7 +120,13 @@ func (r *Runner) deliverSteers(ctx context.Context, p *prepared, sess provider.S
 		return false
 	}
 	text := joinSteers(batch)
-	if err := sess.Send(ctx, steerPrompt(text, p.kind)); err != nil {
+	// A run that answers in chat takes a follow-up as conversation: the
+	// operator gets an answer to what they asked, not the document again.
+	msg := steerPrompt(text, p.kind)
+	if p.reply {
+		msg = conversationPrompt(text)
+	}
+	if err := sess.Send(ctx, msg); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] the session takes no message mid-run (%v); the steer waits for the run to settle\n",
 			p.state.Key, firstLine(err.Error()))
 		return false
@@ -131,14 +144,14 @@ func (r *Runner) deliverSteers(ctx context.Context, p *prepared, sess provider.S
 	// The answer just filed is what the steered turn is measured
 	// against: the same document back leaves the note as it stands.
 	p.previousFinal = append([]byte(nil), ex.final...)
-	if err := log.Append("steer", eventPayload{Text: text, Continuation: ContinueLive, Turns: turn}); err != nil {
+	if err := log.Append("steer", eventPayload{Text: text, Continuation: ContinueLive, Turns: turn, Phase: p.state.Phase}); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
 	}
 	fmt.Fprintf(r.stderr(), "[%s] steer delivered at turn %d: %s\n", p.state.Key, turn, firstLine(text))
 
 	// A new turn, owed a new answer: everything that judged the last one
 	// starts again.
-	ex.final = nil
+	ex.final, ex.reply = nil, ""
 	ex.row, ex.completeErr = note.DigestRow{}, nil
 	ex.retried, ex.emptyTurns, ex.schemaError = false, 0, ""
 	ex.finalNarration = ""
@@ -163,7 +176,7 @@ func (r *Runner) holdSteers(p *prepared, log *eventLog) {
 		}
 		q.Status = store.SteerHeld
 		held = true
-		if err := log.Append("steer_held", eventPayload{Text: q.Text}); err != nil {
+		if err := log.Append("steer_held", eventPayload{Text: q.Text, Phase: p.state.Phase}); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
 		}
 	}

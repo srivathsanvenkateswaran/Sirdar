@@ -267,6 +267,18 @@ func replay(events ...provider.Event) func(provider.SessionSpec, *stubSession) {
 	}
 }
 
+// replyThenNote plays reply in a reply-first run's reply turn, the one
+// started with no schema, and note in the note turn that follows it.
+func replyThenNote(reply []provider.Event, note ...provider.Event) func(provider.SessionSpec, *stubSession) {
+	return func(spec provider.SessionSpec, s *stubSession) {
+		if len(spec.OutputSchema) == 0 {
+			replay(reply...)(spec, s)
+			return
+		}
+		replay(note...)(spec, s)
+	}
+}
+
 // block starts a session that produces nothing and only ends when the
 // runner cancels it. started is signalled once the session is under way.
 func block(started chan struct{}) func(provider.SessionSpec, *stubSession) {

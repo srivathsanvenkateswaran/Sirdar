@@ -492,3 +492,86 @@ func TestLatestNoteErrorsWhenNoneCompleted(t *testing.T) {
 		t.Fatalf("error should name key and kind, got %v", err)
 	}
 }
+
+// TestStateRoundTripsSessionFields is the session run's record: whether it
+// answers the operator in chat, which turn it is in, what it may do to the
+// workspace's files, and whether its note turn failed. A round trip through
+// WriteState and ReadState must carry every one of them unchanged.
+func TestStateRoundTripsSessionFields(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 10, 4, 10, 15, 0, 0, time.UTC)
+	run, err := Create(root, "ASK-1", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := testState(filepath.Base(run.Dir), "ASK-1", KindSession, StatusRunning, now)
+	want.ReplyFirst = true
+	want.Phase = PhaseNote
+	want.Access = AccessReadOnly
+	want.NoteWarning = "note not filed: x"
+	if err := run.WriteState(want); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := run.ReadState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.StartedAt, want.StartedAt = time.Time{}, time.Time{}
+	got.UpdatedAt, want.UpdatedAt = time.Time{}, time.Time{}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("round trip mismatch:\ngot  %+v\nwant %+v", got, want)
+	}
+}
+
+// TestStateOmitsUnsetSessionFields keeps a state written before these
+// fields existed reading back the same: none of them appear in the JSON
+// unless they are set.
+func TestStateOmitsUnsetSessionFields(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 10, 4, 10, 15, 0, 0, time.UTC)
+	run, err := Create(root, "ASK-2", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := testState(filepath.Base(run.Dir), "ASK-2", KindSession, StatusCompleted, now)
+	if err := run.WriteState(plain); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(run.Dir, "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, absent := range []string{"ReplyFirst", "Phase", "Access", "NoteWarning"} {
+		if strings.Contains(string(raw), absent) {
+			t.Errorf("a state with none of the session fields set writes %q:\n%s", absent, raw)
+		}
+	}
+}
+
+// TestCreateSessionDirHasNoBundle is the difference from CreateID: a
+// session started from an instruction with no ticket reference has
+// nothing to put in a bundle directory, so CreateSessionDir does not make
+// one.
+func TestCreateSessionDirHasNoBundle(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 10, 4, 10, 15, 0, 0, time.UTC)
+	run, err := CreateSessionDir(root, "ASK-3", NewRunID(now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(run.Dir); err != nil {
+		t.Fatalf("run directory does not exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(run.Dir, "bundle")); !os.IsNotExist(err) {
+		t.Fatalf("expected no bundle directory, stat err = %v", err)
+	}
+}
+
+func TestCreateSessionDirRejectsBadKey(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 10, 4, 10, 15, 0, 0, time.UTC)
+	if _, err := CreateSessionDir(root, "../x", NewRunID(now)); err == nil {
+		t.Fatal("expected an error for an unsafe key")
+	}
+}

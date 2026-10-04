@@ -73,6 +73,25 @@ func assertError(t *testing.T, w *httptest.ResponseRecorder, want int, code stri
 	}
 }
 
+// assertErrorMessage is assertError plus a check that the message is the
+// one the brief fixes verbatim, not merely non-empty.
+func assertErrorMessage(t *testing.T, w *httptest.ResponseRecorder, want int, code, message string) {
+	t.Helper()
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	decodeJSON(t, w, want, &body)
+	if body.Error.Code != code {
+		t.Fatalf("code %q, want %q", body.Error.Code, code)
+	}
+	if !strings.Contains(body.Error.Message, message) {
+		t.Fatalf("message %q, want it to contain %q", body.Error.Message, message)
+	}
+}
+
 func TestListWorkspaces(t *testing.T) {
 	f := newFake()
 	w := do(t, f, "GET", "/api/workspaces", "")
@@ -390,6 +409,86 @@ func TestStartRCA(t *testing.T) {
 
 func TestStartRCANoKey(t *testing.T) {
 	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/rca", `{"prUrl":"x"}`), 400, "bad_request")
+}
+
+func TestStartSessionRoute(t *testing.T) {
+	f := newFake()
+	f.started = SessionStarted{JobID: "job-1", RunID: "r1", Key: "OMNI-1"}
+	w := do(t, f, "POST", "/api/workspaces/"+knownWS+"/sessions",
+		`{"instruction":"Why is the refund stuck?","reference":"OMNI-1","provider":"claude","model":"opus"}`)
+
+	var got SessionStarted
+	decodeJSON(t, w, 202, &got)
+	if got != f.started {
+		t.Fatalf("got %+v, want %+v", got, f.started)
+	}
+	want := SessionOptions{Instruction: "Why is the refund stuck?", Reference: "OMNI-1", Provider: "claude", Model: "opus"}
+	if f.gotSession != want {
+		t.Fatalf("options %+v, want %+v", f.gotSession, want)
+	}
+}
+
+func TestStartSessionRouteNeedsAnInstruction(t *testing.T) {
+	f := newFake()
+	assertErrorMessage(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/sessions", `{"instruction":"  "}`),
+		400, "bad_request", "type what you want done")
+	if f.gotSession != (SessionOptions{}) {
+		t.Fatalf("the service was asked to start a session: %+v", f.gotSession)
+	}
+}
+
+func TestStartSessionRouteBadSessionIs400(t *testing.T) {
+	f := newFake()
+	f.sessionErr = fmt.Errorf("%w: access must be read-only or worktree", app.ErrBadSession)
+	assertErrorMessage(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/sessions", `{"instruction":"Fix it","access":"worktree"}`),
+		400, "bad_request", "access must be read-only or worktree")
+}
+
+func TestUpdateNoteRoute(t *testing.T) {
+	f := newFake()
+	var got jobResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/note", `{}`), 202, &got)
+	if got.JobID != knownJob || f.gotUpdateNoteRun != knownRun {
+		t.Fatalf("job %q run %q", got.JobID, f.gotUpdateNoteRun)
+	}
+}
+
+func TestUpdateNoteRouteConflict(t *testing.T) {
+	f := newFake()
+	f.updateNoteErr = fmt.Errorf("%w: the run is still going", app.ErrNoteRefused)
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/note", `{}`), 409, "conflict")
+}
+
+func TestSaveNoteRoute(t *testing.T) {
+	f := newFake()
+	f.savePath = "/notes/Sessions/x.md"
+	var got pathResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/save", `{}`), 200, &got)
+	if got.Path != "/notes/Sessions/x.md" || f.gotSaveNoteRun != knownRun {
+		t.Fatalf("got %+v run %q", got, f.gotSaveNoteRun)
+	}
+}
+
+// TestSessionRoutesAreGuarded: the three new routes sit behind the same
+// cross-site guard as every other mutating one.
+func TestSessionRoutesAreGuarded(t *testing.T) {
+	for _, route := range []struct{ name, target, body string }{
+		{"sessions", "/api/workspaces/" + knownWS + "/sessions", `{"instruction":"go"}`},
+		{"note", "/api/workspaces/" + knownWS + "/runs/" + knownRun + "/note", `{}`},
+		{"save", "/api/workspaces/" + knownWS + "/runs/" + knownRun + "/save", `{}`},
+	} {
+		t.Run(route.name, func(t *testing.T) {
+			f := newFake()
+			w := send(t, loopback(f), "POST", route.target, route.body, map[string]string{
+				"Content-Type": "application/json",
+				"Origin":       "https://evil.example",
+			})
+			assertError(t, w, http.StatusForbidden, "forbidden")
+			if f.gotSession != (SessionOptions{}) || f.gotUpdateNoteRun != "" || f.gotSaveNoteRun != "" {
+				t.Fatalf("a refused request still reached the service: %+v", f)
+			}
+		})
+	}
 }
 
 func TestResume(t *testing.T) {

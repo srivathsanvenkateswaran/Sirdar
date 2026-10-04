@@ -1358,3 +1358,17 @@ func TestInitLineReportsModel(t *testing.T) {
 		t.Fatalf("models reported %q, want exactly one %q", reported, "gemini-3.6-flash-low")
 	}
 }
+
+// TestArgsOmitJSONSchemaWithoutASchema covers a session run, which has no
+// schema and answers in prose: the flag is left off rather than passed
+// empty.
+func TestArgsOmitJSONSchemaWithoutASchema(t *testing.T) {
+	got := strings.Join(New().(*Provider).args(provider.SessionSpec{}, ""), " ")
+	if strings.Contains(got, "--json-schema") {
+		t.Fatalf("--json-schema passed without a schema: %v", got)
+	}
+	withSchema := strings.Join(New().(*Provider).args(provider.SessionSpec{OutputSchema: []byte(`{}`)}, ""), " ")
+	if !strings.Contains(withSchema, "--json-schema") {
+		t.Fatal("--json-schema dropped from a run that has a schema")
+	}
+}

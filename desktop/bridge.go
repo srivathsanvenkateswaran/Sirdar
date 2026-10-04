@@ -328,5 +328,24 @@ func (b *Bridge) Steer(ws, runId, text, model string) (string, error) {
 	return string(id), err
 }
 
+// StartSession starts a session: an instruction, with or without a ticket
+// reference. The reply comes back in chat, not as a filed note.
+func (b *Bridge) StartSession(ws string, o app.SessionOptions) (app.SessionStarted, error) {
+	return b.svc.StartSession(context.Background(), ws, o)
+}
+
+// UpdateNote runs one more note turn on a triage or RCA run that has
+// already replied, and files its note and register row again.
+func (b *Bridge) UpdateNote(ws, runId string) (string, error) {
+	id, err := b.svc.UpdateNote(context.Background(), ws, runId)
+	return string(id), err
+}
+
+// SaveNote writes a session run's reply into the workspace's notes
+// directory and answers with the path it wrote.
+func (b *Bridge) SaveNote(ws, runId string) (string, error) {
+	return b.svc.SaveNote(ws, runId)
+}
+
 // Cancel stops a job this process started.
 func (b *Bridge) Cancel(jobId string) error { return b.svc.Cancel(app.JobID(jobId)) }

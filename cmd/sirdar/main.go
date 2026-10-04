@@ -59,12 +59,14 @@ commands:
   doctor      check CLIs, logins, adapters, notes directory
   triage      run triage for one or more ticket keys
   rca         produce the RCA note and Resolution draft
+  ask         ask about anything, with or without a ticket; the answer comes back as chat
   fix         implement an approved triage note's fix on a branch and open a PR
   eval        replay the golden bundles and score the notes they produce
   golden      manage the golden set (add, list)
   mcp         list MCP servers, judge their tools, call one by hand
   resume      continue a blocked or interrupted run
   steer       give a finished run a follow-up instruction; the same run continues
+  note        file the note again for a triage or RCA run that has a reply
   runs        list runs and states; 'runs diff RUN_ID' reviews a fix run's change
   register    print the register
   serve       serve the web UI and API on loopback

@@ -74,11 +74,15 @@ func TestAskOffInConfig(t *testing.T) {
 func resumeWith(t *testing.T, r *Runner, p *stubProvider, runID string, o ResumeOptions) (Outcome, provider.SessionSpec) {
 	t.Helper()
 	p.script = replay(finalEvent(triageDoc))
+	first := p.startCount()
 	out, err := r.Resume(context.Background(), runID, o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return out, p.spec(p.startCount() - 1)
+	// The session that carries the answer is the first the resume starts;
+	// a reply-first triage starts its note turn after it, under a policy
+	// of its own.
+	return out, p.spec(first)
 }
 
 func rgInput(cmd string) json.RawMessage {

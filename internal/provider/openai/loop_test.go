@@ -1286,3 +1286,50 @@ func TestTranscriptClosesUnansweredToolCalls(t *testing.T) {
 		t.Errorf("closeOpenToolCalls rewrote an answered call: %+v", got)
 	}
 }
+
+// TestLoopEndsOnProseWithoutASchema covers a session run: it has no schema,
+// so it is offered no submit_note, is told to answer in markdown, and its
+// one prose reply is the final answer rather than something to nudge.
+func TestLoopEndsOnProseWithoutASchema(t *testing.T) {
+	const answer = "**The export times out** because the query scans every order.\n\nEvidence: `export.go:41`."
+	cs := newChatServer(t, scripted(textReply(answer, 10, 5)))
+	// An empty, non-nil schema: newSession fills in a nil one.
+	sess := newSession(t, cs, LoopConfig{}, provider.SessionSpec{Cwd: t.TempDir(), OutputSchema: []byte{}})
+
+	events := drain(t, sess)
+	var finals []provider.Event
+	for _, ev := range events {
+		if ev.Kind == provider.EvFinal {
+			finals = append(finals, ev)
+		}
+		if ev.Kind == provider.EvError {
+			t.Errorf("error event: %s", ev.Text)
+		}
+	}
+	if len(finals) != 1 {
+		t.Fatalf("finals = %d in %v", len(finals), summary(events))
+	}
+	if finals[0].Text != answer || finals[0].Final != nil {
+		t.Errorf("final Text %q Final %s", finals[0].Text, finals[0].Final)
+	}
+
+	requests := cs.captured()
+	if len(requests) != 1 {
+		t.Fatalf("the loop took %d turns, want 1", len(requests))
+	}
+	for _, tool := range requests[0].Tools {
+		if tool.Function.Name == submitNoteTool {
+			t.Errorf("%s was offered to a session with no schema", submitNoteTool)
+		}
+	}
+	system := requests[0].Messages[0]
+	if system.Role != "system" || strings.Contains(system.Content, submitNoteTool) ||
+		!strings.Contains(system.Content, "answer the operator in markdown, verdict first") {
+		t.Errorf("system message = %+v", system)
+	}
+
+	res, _ := sess.Wait()
+	if res.ExitErr != nil || res.Text != answer {
+		t.Errorf("Result ExitErr %v Text %q", res.ExitErr, res.Text)
+	}
+}

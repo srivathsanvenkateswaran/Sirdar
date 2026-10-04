@@ -43,7 +43,7 @@ func TestLiveSteerDeliveredAtTheTurnBoundary(t *testing.T) {
 		s.emit(finalEvent(steeredDoc))
 	}
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestLiveSteerHeldWhenTheSessionTakesNoMessage(t *testing.T) {
 		}
 		s.emit(finalEvent(triageDoc))
 	}
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestLiveSteerOnAnotherModelWaitsForTheRunToSettle(t *testing.T) {
 		}
 		s.emit(finalEvent(triageDoc))
 	}
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}

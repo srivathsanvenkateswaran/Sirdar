@@ -216,7 +216,10 @@ func TestServeEndToEnd(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if done.Usage.Turns != 3 {
+	// The fake CLI reports three turns per invocation, and the run is two:
+	// the reply and the note. The budget covers both, so the run's usage
+	// is their sum.
+	if done.Usage.Turns != 6 {
 		t.Errorf("run usage %+v", done.Usage)
 	}
 
@@ -230,11 +233,16 @@ func TestServeEndToEnd(t *testing.T) {
 		Next   int            `json:"next"`
 	}
 	getJSON(t, base+"/api/workspaces/"+wsID+"/runs/"+done.RunID+"/events?after=0", &page)
+	// The reply turn's lines, then the note turn's, each marked as such.
 	kinds := make([]string, 0, len(page.Events))
 	for _, e := range page.Events {
-		kinds = append(kinds, e.Kind)
+		kind := e.Kind
+		if e.Payload.Phase != "" {
+			kind = e.Payload.Phase + ":" + kind
+		}
+		kinds = append(kinds, kind)
 	}
-	if strings.Join(kinds, ",") != "system,usage,final" {
+	if strings.Join(kinds, ",") != "system,usage,final,note:system,note:usage,note:final" {
 		t.Errorf("event kinds %v", kinds)
 	}
 	// `next` is what a following call passes as `after`, so it is the index

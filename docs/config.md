@@ -65,6 +65,7 @@ rather than being silently ignored.
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |
 | `notes.filenames.rca` | string | `"{key} RCA {slug}.md"` | Filename pattern for RCA notes |
 | `notes.filenames.resolution` | string | `"{key} RES {slug}.md"` | Filename pattern for resolution notes |
+| `notes.filenames.session` | string | `"Sessions/{key} {slug}.md"` | Filename pattern for a session's reply saved with Save as note; `{slug}` comes from the instruction's first line |
 | `language.notes` | string | `en` | Language code the engineer's note is written in, including the translated complaint; see Languages below |
 | `language.customer` | string | `auto` | Language code for anything the customer reads (the triage note's reply draft, the RCA's customer summary); `auto` means the language of the ticket's first customer message |
 | `language.rtlMarkup` | bool | `true` | Wrap a right-to-left paragraph the built-in templates emit in `<div dir="rtl">`, which Obsidian renders; ignored while `notes.templates` is set |

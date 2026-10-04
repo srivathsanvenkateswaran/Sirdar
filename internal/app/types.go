@@ -88,6 +88,21 @@ type RunSummary struct {
 	Usage       Usage    `json:"usage"`
 	Notes       []string `json:"notes"`
 
+	// Phase is "" for the ordinary course of a run, or "note" while a
+	// reply-first triage or RCA run that has already answered is filing
+	// its note. Status stays "running" through that turn.
+	Phase string `json:"phase,omitempty"`
+	// Access is "read-only" or "worktree", and applies to session runs
+	// only: what the run may do to the workspace's files.
+	Access string `json:"access,omitempty"`
+	// NoteWarning is set when a reply-first run's note turn failed to
+	// file a note: "note not filed: <reason>". The run is not failed by
+	// it — the operator already has their answer.
+	NoteWarning string `json:"noteWarning,omitempty"`
+	// ReplyFirst says the run answers the operator in chat: every session
+	// run, and a triage or RCA run started by anything but eval.
+	ReplyFirst bool `json:"replyFirst,omitempty"`
+
 	// Source is where the run's ticket came from when it was not a
 	// tracker or helpdesk: "slack" for a thread triaged with no ticket,
 	// which the Board marks with a Slack glyph. Empty otherwise.
@@ -272,6 +287,11 @@ type EventPayload struct {
 	Action string `json:"action,omitempty"`
 	Path   string `json:"path,omitempty"`
 	Hunk   *int   `json:"hunk,omitempty"`
+
+	// Phase carries "note" on every line written while the run's phase is
+	// PhaseNote, so a reader can tell the note turn's events apart from
+	// the reply turn's without reading the run's state.
+	Phase string `json:"phase,omitempty"`
 }
 
 // RunEvent is one line of a run's events.jsonl.
@@ -386,6 +406,25 @@ type RegisterRow struct {
 
 // JobID identifies a run this process started, so it can be cancelled.
 type JobID string
+
+// SessionOptions is what starts a session run: an instruction, with or
+// without a ticket reference.
+type SessionOptions struct {
+	Reference   string `json:"reference"`
+	Instruction string `json:"instruction"`
+	Access      string `json:"access"`
+	Provider    string `json:"provider"`
+	Model       string `json:"model"`
+}
+
+// SessionStarted answers a started session: the job to track, the run it
+// became, and the key its run directory sits under — both known before the
+// job itself runs.
+type SessionStarted struct {
+	JobID JobID  `json:"jobId"`
+	RunID string `json:"runId"`
+	Key   string `json:"key"`
+}
 
 // QueueFilter narrows the tracker query behind Queue. Zero fields are
 // unfiltered; Limit zero means no limit.
@@ -555,6 +594,10 @@ func SummaryOf(s store.State) RunSummary {
 			CostUSD:      s.Usage.CostUSD,
 		},
 		Notes:        notes,
+		Phase:        s.Phase,
+		Access:       s.Access,
+		NoteWarning:  s.NoteWarning,
+		ReplyFirst:   s.ReplyFirst,
 		QueuedSteers: queuedSteersOf(s.QueuedSteers),
 		Question:     questionOf(s),
 	}
@@ -587,6 +630,10 @@ func SummaryFor(dir string, s store.State, self config.Identity) RunSummary {
 	out := SummaryOf(s)
 	b := bundleAt(dir)
 	out.Title = titleOf(b, s.Notes)
+	if s.Kind == store.KindSession && strings.TrimSpace(s.Instruction) != "" {
+		line, _, _ := strings.Cut(s.Instruction, "\n")
+		out.Title = strings.TrimSpace(line)
+	}
 	out.HelpdeskKey = helpdeskKeyOf(b)
 	out.Assignee = assigneeOf(b)
 	out.Mine = self.Matches(out.Assignee)

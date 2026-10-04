@@ -101,6 +101,9 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/diff/drop", s.dropHunk)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/triage", s.startTriage)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/rca", s.startRCA)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/sessions", s.startSession)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/note", s.updateNote)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/save", s.saveNote)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/fix", s.startFix)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/eval", s.startEval)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/eval", s.evalReports)
@@ -382,6 +385,12 @@ type jobResponse struct {
 	JobID JobID `json:"jobId"`
 }
 
+// pathResponse is what Save as note answers with: the absolute path it
+// wrote.
+type pathResponse struct {
+	Path string `json:"path"`
+}
+
 func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Keys         []string `json:"keys"`
@@ -446,6 +455,69 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, jobResponse{id})
+}
+
+// startSession is POST /api/workspaces/{id}/sessions: an instruction, with
+// or without a ticket reference, started as a reply-first run that answers
+// in chat rather than filing a note.
+func (s *server) startSession(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Instruction string `json:"instruction"`
+		Reference   string `json:"reference"`
+		Access      string `json:"access"`
+		Provider    string `json:"provider"`
+		Model       string `json:"model"`
+	}
+	if !decode(w, r, &body, false) {
+		return
+	}
+	if strings.TrimSpace(body.Instruction) == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "type what you want done")
+		return
+	}
+	if !validProvider(w, body.Provider) {
+		return
+	}
+	started, err := s.svc.StartSession(r.Context(), r.PathValue("id"), SessionOptions{
+		Instruction: body.Instruction, Reference: body.Reference,
+		Access: body.Access, Provider: body.Provider, Model: body.Model,
+	})
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, started)
+}
+
+// updateNote is POST /api/workspaces/{id}/runs/{runId}/note: run one more
+// note turn on a triage or RCA run that has already replied, and file its
+// note and register row again.
+func (s *server) updateNote(w http.ResponseWriter, r *http.Request) {
+	var body struct{}
+	if !decode(w, r, &body, true) {
+		return
+	}
+	id, err := s.svc.UpdateNote(r.Context(), r.PathValue("id"), r.PathValue("runId"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, jobResponse{id})
+}
+
+// saveNote is POST /api/workspaces/{id}/runs/{runId}/save: write a session
+// run's reply into the workspace's notes directory.
+func (s *server) saveNote(w http.ResponseWriter, r *http.Request) {
+	var body struct{}
+	if !decode(w, r, &body, true) {
+		return
+	}
+	path, err := s.svc.SaveNote(r.PathValue("id"), r.PathValue("runId"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pathResponse{path})
 }
 
 func (s *server) resume(w http.ResponseWriter, r *http.Request) {

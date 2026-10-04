@@ -282,6 +282,7 @@ type stubSession struct {
 	sends      []string
 	cancels    int
 	inputClose int
+	waits      int
 	cancelOnce sync.Once
 	finishOnce sync.Once
 }
@@ -316,8 +317,19 @@ func (s *stubSession) Send(ctx context.Context, userText string) error {
 	return nil
 }
 
-func (s *stubSession) Wait() (provider.Result, error) { return s.result, nil }
-func (s *stubSession) Handle() string                 { return s.handle }
+func (s *stubSession) Wait() (provider.Result, error) {
+	s.mu.Lock()
+	s.waits++
+	s.mu.Unlock()
+	return s.result, nil
+}
+
+func (s *stubSession) waitCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.waits
+}
+func (s *stubSession) Handle() string { return s.handle }
 
 func (s *stubSession) Cancel() {
 	s.mu.Lock()
@@ -653,9 +665,11 @@ func TestTriageHappyPath(t *testing.T) {
 		{Kind: provider.EvToolFinished, Tool: "Bash"},
 		{Kind: provider.EvPermission, Tool: "Write", Decision: "deny"},
 		{Kind: provider.EvUsage, Turns: 3, InputTok: 100, OutputTok: 20, CostUSD: 0.42},
-		finalEvent(triageDoc),
+		{Kind: provider.EvFinal, Text: "The export fails for large orders."},
 	}
-	p := &stubProvider{script: replay(events...), stderrTail: []string{"warning: mcp server slow", "done"}}
+	// The reply turn investigates and answers; the note turn files the
+	// note from it.
+	p := &stubProvider{script: replyEventsThenNote(events, finalEvent(triageDoc)), stderrTail: []string{"warning: mcp server slow", "done"}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
@@ -700,8 +714,8 @@ func TestTriageHappyPath(t *testing.T) {
 	}
 
 	logged := strings.Count(strings.TrimRight(readFile(t, filepath.Join(dir, "events.jsonl")), "\n"), "\n") + 1
-	if logged != len(events) {
-		t.Fatalf("events.jsonl lines %d want %d", logged, len(events))
+	if logged != len(events)+1 {
+		t.Fatalf("events.jsonl lines %d want %d, the reply turn's and the note", logged, len(events)+1)
 	}
 
 	promptText := readFile(t, filepath.Join(dir, "prompt.md"))
@@ -774,7 +788,7 @@ func TestSchemaRetryThenFail(t *testing.T) {
 	}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -817,7 +831,7 @@ func TestSchemaRetryResumesAfterSendFails(t *testing.T) {
 	}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1444,7 +1458,7 @@ func TestInterruptAfterFinalKeepsNote(t *testing.T) {
 	}()
 	defer cancel()
 
-	outs, err := r.Triage(ctx, []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(ctx, []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2216,7 +2230,7 @@ func TestNoteIsWrittenBeforeTheSessionEnds(t *testing.T) {
 	}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 	got := <-seen
@@ -2250,7 +2264,7 @@ func TestBudgetAfterTheNoteDoesNotLoseIt(t *testing.T) {
 	)}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2467,7 +2481,7 @@ func TestUsageKeepsTheHighestReport(t *testing.T) {
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 	r.CloseGrace = 50 * time.Millisecond
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2714,7 +2728,7 @@ func TestSchemaRetryNamesTheRequiredTopLevelKeys(t *testing.T) {
 	// The triage note the rca run reviews.
 	p := &stubProvider{name: "acp", script: replay(finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
-	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2742,7 +2756,7 @@ func TestSchemaRetryNamesTheRequiredTopLevelKeys(t *testing.T) {
 		s.emit(finalEvent(rcaDoc))
 	}
 
-	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Options: Options{NoteOnly: true}, Resolution: "Streamed the export."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2811,11 +2825,12 @@ func TestWorkspaceLanguagesReachThePrompt(t *testing.T) {
 	p := &stubProvider{script: replay(finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
-	if err != nil {
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
 		t.Fatal(err)
 	}
-	promptText := readFile(t, filepath.Join(runDir(t, cfg, outs[0]), "prompt.md"))
+	// The note is written in the note turn, so that is the prompt that
+	// names the note's language.
+	promptText := p.spec(1).Prompt
 	for _, want := range []string{
 		"# Language",
 		"Write the note in en (language.notes: en)",
@@ -2834,11 +2849,10 @@ func TestDefaultWorkspaceStillStatesBothLanguages(t *testing.T) {
 	p := &stubProvider{script: replay(finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
-	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
-	if err != nil {
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
 		t.Fatal(err)
 	}
-	promptText := readFile(t, filepath.Join(runDir(t, cfg, outs[0]), "prompt.md"))
+	promptText := p.spec(1).Prompt
 	if !strings.Contains(promptText, "language.notes: en") || !strings.Contains(promptText, "language.customer: auto") {
 		t.Fatalf("default prompt does not state both languages:\n%s", promptText)
 	}
@@ -3355,7 +3369,7 @@ func TestProviderNarrationIsNotTheAnswer(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{name: "qwen", script: replay(finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
-	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3378,7 +3392,7 @@ func TestProviderNarrationIsNotTheAnswer(t *testing.T) {
 			}
 		}
 	}
-	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Options: Options{NoteOnly: true}, Resolution: "Streamed the export."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3412,7 +3426,7 @@ func TestPlainTextAnswerOnTheResultLineIsRead(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{name: "qwen", script: replay(finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
-	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{NoteOnly: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3422,7 +3436,7 @@ func TestPlainTextAnswerOnTheResultLineIsRead(t *testing.T) {
 		Text: prose,
 		Raw:  json.RawMessage(`{"type":"result","subtype":"success"}`),
 	})
-	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Options: Options{NoteOnly: true}, Resolution: "Streamed the export."})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3448,9 +3462,9 @@ func TestAssistantTextIsRecordedWithItsStreamingMarkers(t *testing.T) {
 		{Kind: provider.EvAssistantText, Text: "The return ", Delta: true},
 		{Kind: provider.EvAssistantText, Text: "is counted twice.", Delta: true},
 		{Kind: provider.EvAssistantText, Text: "The return is counted twice.", Replace: true},
-		finalEvent(triageDoc),
+		{Kind: provider.EvFinal, Text: "The return is counted twice."},
 	}
-	p := &stubProvider{script: replay(events...)}
+	p := &stubProvider{script: replyEventsThenNote(events, finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
@@ -3512,7 +3526,7 @@ func TestTriageRecordsTheOperatorsRequestAndPutsItInThePrompt(t *testing.T) {
 		t.Errorf("state instruction %q, want %q", out.State.Instruction, asked)
 	}
 	prompt := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
-	if !strings.Contains(prompt, "# Operator's request") || !strings.Contains(prompt, asked) {
+	if !strings.Contains(prompt, "# Task") || !strings.Contains(prompt, "They asked:") || !strings.Contains(prompt, asked) {
 		t.Errorf("the prompt does not carry the request:\n%s", prompt)
 	}
 }

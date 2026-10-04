@@ -1433,3 +1433,16 @@ func TestUserServersClashWithWorkspace(t *testing.T) {
 		t.Fatalf("want a clash error, got %v", err)
 	}
 }
+
+// TestArgsOmitJSONSchemaWithoutASchema covers a session run: it has no
+// schema and answers in prose, so --json-schema is not passed at all rather
+// than passed empty, which the CLI would hold the answer to.
+func TestArgsOmitJSONSchemaWithoutASchema(t *testing.T) {
+	got := args(provider.SessionSpec{Model: "m1"})
+	if contains(got, "--json-schema") {
+		t.Fatalf("--json-schema passed without a schema: %v", got)
+	}
+	if !contains(args(provider.SessionSpec{OutputSchema: []byte(`{}`)}), "--json-schema") {
+		t.Fatal("--json-schema dropped from a run that has a schema")
+	}
+}

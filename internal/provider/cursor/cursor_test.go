@@ -1116,3 +1116,15 @@ func TestDoctorStatusFailureReportsTheErrorOnly(t *testing.T) {
 	}
 	t.Error("no status row")
 }
+
+// TestNoSchemaInstructionWithoutASchema pins what a session run relies on:
+// with no schema the prompt goes out as the caller wrote it, with no JSON
+// instruction appended to it.
+func TestNoSchemaInstructionWithoutASchema(t *testing.T) {
+	if got := schemaPrompt(provider.SessionSpec{Prompt: "Why is the refund stuck?"}); got != "Why is the refund stuck?" {
+		t.Errorf("prompt without a schema = %q", got)
+	}
+	if got := schemaPrompt(provider.SessionSpec{Prompt: "x", OutputSchema: []byte(`{}`)}); !strings.Contains(got, "JSON Schema") {
+		t.Errorf("prompt with a schema lost the instruction: %q", got)
+	}
+}

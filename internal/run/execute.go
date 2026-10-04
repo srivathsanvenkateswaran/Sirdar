@@ -54,6 +54,16 @@ var noWireSchemaEnforcement = map[string]bool{
 	"qwen":   true,
 }
 
+// cumulativeResumeCost names the providers whose resumed session reports
+// its cost as a running total for the whole conversation, not for the one
+// invocation. A live probe of claude 2.1.283 showed total_cost_usd rising
+// $0.0340, $0.0405, $0.0438 across three `--resume` calls of one session,
+// while num_turns and the token counts restarted with each call. Every
+// other provider either reports no cost or counts it per process.
+var cumulativeResumeCost = map[string]bool{
+	"claude": true,
+}
+
 // maxEmptyTurns is how many turns may end with no answer before the run is
 // given up on. A turn that says nothing is not a wrong answer but a session
 // that stopped — an ACP agent ends its turn on the spot when a tool call is
@@ -72,6 +82,11 @@ const closeGrace = 10 * time.Second
 type execution struct {
 	final    []byte // the validated JSON note
 	rawFinal string // the last candidate, kept when validation failed
+
+	// reply is the answer a reply turn ended with, already written to
+	// answer.md. A steer delivered after it clears it: the next turn owes
+	// the operator a new one.
+	reply string
 
 	// row and completeErr are the outcome of filing the note, which
 	// happens the moment the note validates rather than after the
@@ -112,6 +127,14 @@ type execution struct {
 	// budget it spent the first time.
 	base, seen store.Usage
 
+	// costOffset is the part of what the sessions being read now report as
+	// cost that base already counts: the conversation they resume had
+	// reported that much before they began (see cumulativeResumeCost). It
+	// is zero for a fresh session. rawCost is the highest cost the
+	// conversation has reported, offset included, which becomes the run's
+	// HandleCostUSD and the next resume's offset.
+	costOffset, rawCost float64
+
 	question    string
 	rateLimited bool
 
@@ -142,6 +165,33 @@ type execution struct {
 	overBudget  string
 	interrupted bool
 	failure     string
+
+	// noteErr is why a reply-first run's note turn could not file its
+	// note: a refused tool, a question, a schema that failed twice. It is
+	// kept apart from failure because the reply already stands, so what
+	// would fail a run elsewhere is only a warning on this one.
+	noteErr string
+
+	// noteSess is the session carrying the note turn, once one has
+	// started. In the note phase only its events are judged: the reply
+	// session is still draining when the note turn begins, and a result
+	// line it repeats, or a refusal it reports on the way out, belongs to
+	// the reply rather than to the note.
+	noteSess provider.Session
+
+	// sessions is every session this execute has read from, in the order
+	// they started, and folded is how many of them had ended their part in
+	// the run when the note turn began. Their usage was folded into base
+	// then, so the reaping loop does not count it a second time.
+	sessions []provider.Session
+	folded   int
+
+	// started is when this execute's first session started, and timedOut
+	// says the wall-clock timer has fired. Both are read when the note
+	// turn starts, which is after the timer may already have cancelled
+	// the session the reply came from.
+	started  time.Time
+	timedOut atomic.Bool
 
 	// breach is set when the provider reported that a read-only session
 	// did something a read-only session cannot do. It is kept apart from
@@ -379,6 +429,15 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	ex.live.set(sess)
 	ex.tried = map[string]bool{}
 	ex.markTried(p.state.RequestedModel())
+	if resume != "" && cumulativeResumeCost[r.providerName()] {
+		ex.costOffset = p.resumeCost
+	}
+	ex.rawCost = ex.costOffset
+	// An Update note opens in the note phase, so its first session is the
+	// note turn's and its events are the ones judged.
+	if p.state.Phase == store.PhaseNote {
+		ex.noteSess = sess
+	}
 
 	// A steer's instruction goes into the transcript ahead of the session
 	// it started, with who is answering it: the session that wrote the
@@ -387,7 +446,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	// that carries it, in the operator's voice, so the transcript says who
 	// let the call through.
 	if a := p.answered; a != nil {
-		if err := log.Append("grant", eventPayload{Text: a.text, Decision: a.verdict, Tool: a.tool}); err != nil {
+		if err := log.Append("grant", eventPayload{Text: a.text, Decision: a.verdict, Tool: a.tool, Phase: p.state.Phase}); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
 		}
 		fmt.Fprintf(r.stderr(), "[%s] %s\n", p.state.Key, a.text)
@@ -395,7 +454,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	}
 
 	if s := p.steer; s != nil {
-		if err := log.Append("steer", eventPayload{Text: s.Text, Continuation: s.Continuation}); err != nil {
+		if err := log.Append("steer", eventPayload{Text: s.Text, Continuation: s.Continuation, Phase: p.state.Phase}); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
 		}
 		fmt.Fprintf(r.stderr(), "[%s] steer (%s): %s\n", p.state.Key, s.Continuation, firstLine(s.Text))
@@ -409,7 +468,8 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	// Anything typed while the run was preparing is in the inbox already.
 	r.pickUpSteers(p, log)
 
-	var timedOut atomic.Bool
+	ex.started = started
+	timedOut := &ex.timedOut
 	if mins := r.Config.Budget.MaxMinutes; mins > 0 {
 		timer := time.AfterFunc(remainingWallClock(mins, ex.base.ElapsedSeconds), func() {
 			timedOut.Store(true)
@@ -444,7 +504,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	// result is the run's: a schema retry that had to open a fresh session
 	// carries the answer.
 	var res provider.Result
-	for _, s := range sessions {
+	for i, s := range sessions {
 		got, _ := s.Wait()
 		res = got
 		if got.Handle != "" {
@@ -452,19 +512,25 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		} else if h := s.Handle(); h != "" {
 			p.state.Handle = h
 		}
+		if len(got.StderrTail) > 0 {
+			p.state.StderrTail = got.StderrTail
+		}
+		// A session that ended before the note turn began has its usage
+		// in base already; its counters are not the note turn's.
+		if i < ex.folded {
+			continue
+		}
 		if got.Usage.Turns > ex.seen.Turns {
 			ex.seen.Turns = got.Usage.Turns
 			ex.seen.InputTokens = got.Usage.InputTok
 			ex.seen.OutputTokens = got.Usage.OutputTok
 		}
-		if got.Usage.CostUSD > ex.seen.CostUSD {
-			ex.seen.CostUSD = got.Usage.CostUSD
-		}
-		if len(got.StderrTail) > 0 {
-			p.state.StderrTail = got.StderrTail
+		if c := ex.costOf(got.Usage.CostUSD); c > ex.seen.CostUSD {
+			ex.seen.CostUSD = c
 		}
 	}
 	p.state.Usage = usagePlus(ex.base, ex.seen)
+	p.state.HandleCostUSD = ex.rawCost
 	// The wall clock this execute spent joins what the run had already
 	// spent, so a later steer's minute budget counts against the total.
 	p.state.Usage.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(started).Seconds()
@@ -482,8 +548,16 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		// that watched a write complete cannot file one, and the answer
 		// it was about to give is worth less than the fact that the
 		// guarantee failed. handleFinal refuses to file after a breach,
-		// so on the ordinary path there is no note to disown here.
+		// so on the ordinary path there is no note to disown here. A
+		// breach in the note turn ends that turn too, so the run is no
+		// longer filing anything.
+		p.state.Phase = ""
 		return r.finish(ctx, p, store.StatusFailed, ex.breach, note.DigestRow{})
+	case p.state.Phase == store.PhaseNote:
+		// The reply was written before the note turn began, so however
+		// the note turn ended the run has answered. Only a breach, above,
+		// outranks that.
+		return r.finishNote(ctx, p, ex, res, timedOut.Load(), stallFor)
 	case ex.blind != "":
 		// Ahead of the note for the same reason as the breach above, and
 		// behind it because a breach is the worse fact about the same
@@ -499,29 +573,18 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		if ex.completeErr != nil {
 			return r.finish(ctx, p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
 		}
-		if res.ExitErr != nil {
-			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
-		}
-		if ex.interrupted {
-			p.state.Warnings = append(p.state.Warnings, "interrupted after the note was produced")
-		}
-		if ex.failure != "" {
-			// Whatever went wrong after the note landed is still worth
-			// reading — it is the only account of a provider that died
-			// mid-sentence — but it does not make the run a failure.
-			p.state.Warnings = append(p.state.Warnings, ex.failure+", after the note was written")
-		}
-		if timedOut.Load() {
-			p.state.Warnings = append(p.state.Warnings,
-				fmt.Sprintf("the session was still running when the %d minute budget expired, after the note was written", r.Config.Budget.MaxMinutes))
-		}
-		if ex.overBudget != "" {
-			p.state.Warnings = append(p.state.Warnings, ex.overBudget+", after the note was written")
-		}
-		if ex.stall.fired() {
-			p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+", after the note was written")
-		}
+		r.afterAnswerWarnings(p, ex, res, timedOut.Load(), stallFor, "note")
 		return r.finish(ctx, p, store.StatusCompleted, "", ex.row)
+	case ex.reply != "" && len(ex.final) == 0:
+		// A reply that landed is the run's answer, written the moment it
+		// arrived, and what happened to the session afterwards is a
+		// warning on a completed run for the same reason it is after a
+		// note.
+		if ex.completeErr != nil {
+			return r.finish(ctx, p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
+		}
+		r.afterAnswerWarnings(p, ex, res, timedOut.Load(), stallFor, "reply")
+		return r.finish(ctx, p, store.StatusCompleted, "", note.DigestRow{Issue: firstLine(p.state.Instruction)})
 	case timedOut.Load():
 		return r.finish(ctx, p, store.StatusOverBudget,
 			fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes), note.DigestRow{})
@@ -562,10 +625,99 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		return r.finish(ctx, p, store.StatusFailed, stallReason(stallFor), note.DigestRow{})
 	default:
 		reason := "the session ended without a JSON note"
+		if p.reply {
+			reason = "the session ended without a reply"
+		}
 		if res.ExitErr != nil {
 			reason = fmt.Sprintf("provider exited: %v", res.ExitErr)
 		}
 		return r.finish(ctx, p, store.StatusFailed, reason, note.DigestRow{})
+	}
+}
+
+// finishNote ends a run whose reply was written and whose note turn has ended, one way or
+// the other. The reply stands either way: a note turn that did not file is a warning on a
+// completed run, never a failed run.
+func (r *Runner) finishNote(ctx context.Context, p *prepared, ex *execution, res provider.Result, timedOut bool, stallFor time.Duration) Outcome {
+	p.state.Phase = ""
+	if len(ex.final) > 0 && ex.completeErr == nil {
+		p.state.NoteWarning = ""
+		r.afterAnswerWarnings(p, ex, res, timedOut, stallFor, "note")
+		return r.finish(ctx, p, store.StatusCompleted, "", ex.row)
+	}
+	// The first account of what stopped the note, most specific first:
+	// a note that validated but could not be written, then what the note
+	// turn itself did, then the limits that cut it short.
+	var reason string
+	switch {
+	case ex.completeErr != nil:
+		reason = ex.completeErr.Error()
+	case ex.noteErr != "":
+		reason = ex.noteErr
+	case ex.overBudget != "":
+		reason = ex.overBudget
+	case timedOut:
+		reason = fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes)
+	case ex.interrupted:
+		reason = "interrupted"
+	case ex.stall.fired():
+		reason = stallReason(stallFor)
+	case ex.rateLimited:
+		reason = "rate limited"
+		if !ex.resetsAt.IsZero() {
+			reason += ", resets at " + ex.resetsAt.Format(time.RFC3339)
+		}
+	case ex.ask != nil:
+		reason = askReason(ex.ask)
+	case ex.failure != "":
+		reason = ex.failure
+	default:
+		reason = "the note turn ended without a JSON note"
+	}
+	noteNotFiled(p, reason)
+	return r.finish(ctx, p, store.StatusCompleted, "", note.DigestRow{})
+}
+
+// noteNotFiled records why the note turn filed nothing. An Update note that
+// files nothing leaves the note it was replacing in place, so the run goes
+// on naming that note and its old warning, and the failure is a warning of
+// its own. Anything else has no note, and says so in NoteWarning.
+func noteNotFiled(p *prepared, reason string) {
+	if old := p.refiled; old != nil && len(old.notes) > 0 && len(p.state.Notes) == 0 {
+		p.state.Notes, p.state.NoteWarning = old.notes, old.warning
+		p.state.Warnings = append(p.state.Warnings, "note not updated: "+reason)
+		return
+	}
+	p.state.NoteWarning = "note not filed: " + reason
+}
+
+// afterAnswerWarnings records, as warnings on a run that has already filed
+// its answer, whatever happened to the session afterwards: a bad exit, an
+// interrupt, a failure, a budget or a stall. noun names the answer, "note"
+// or "reply", and one helper serves both so the two lists cannot drift.
+func (r *Runner) afterAnswerWarnings(p *prepared, ex *execution, res provider.Result, timedOut bool, stallFor time.Duration, noun string) {
+	after := ", after the " + noun + " was written"
+	if res.ExitErr != nil {
+		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
+	}
+	if ex.interrupted {
+		p.state.Warnings = append(p.state.Warnings, "interrupted after the "+noun+" was produced")
+	}
+	if ex.failure != "" {
+		// Whatever went wrong after the answer landed is still worth
+		// reading — it is the only account of a provider that died
+		// mid-sentence — but it does not make the run a failure.
+		p.state.Warnings = append(p.state.Warnings, ex.failure+after)
+	}
+	if timedOut {
+		p.state.Warnings = append(p.state.Warnings,
+			fmt.Sprintf("the session was still running when the %d minute budget expired", r.Config.Budget.MaxMinutes)+after)
+	}
+	if ex.overBudget != "" {
+		p.state.Warnings = append(p.state.Warnings, ex.overBudget+after)
+	}
+	if ex.stall.fired() {
+		p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+after)
 	}
 }
 
@@ -585,8 +737,9 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// this run was told answered: a steer that pinned the reported
 		// id would quietly stop honouring a configuration that named an
 		// alias on purpose.
-		Model:        p.state.RequestedModel(),
-		OutputSchema: schemaFor(p.kind),
+		Model: p.state.RequestedModel(),
+		// A reply turn has no schema: it answers the operator in prose.
+		OutputSchema: specSchema(p),
 		Policy: &provider.PermissionPolicy{
 			BashAllow:  cfg.Permissions.Bash,
 			MCPAllow:   cfg.Permissions.MCP,
@@ -646,6 +799,18 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 	spec.Policy.Ask = cfg.AskOperator() && !p.state.Eval
 	spec.Policy.Grants = sessionGrants(p)
 
+	// The note turn writes down what the reply turn already found. It is
+	// held to the note's schema and may read its own run directory and
+	// nothing else: no shell, no MCP server, no fetch, no question to the
+	// operator, and none of the grants the reply turn was given. It comes
+	// after the lines above so that nothing there can widen it again.
+	if p.state.Phase == store.PhaseNote {
+		spec.OutputSchema = schemaFor(p.kind)
+		spec.Policy = notePolicy(p)
+		spec.MCPConfig, spec.MCPStrict, spec.UserMCPServers = "", true, nil
+		spec.Mode = provider.ModeTriage
+	}
+
 	// Claude Code reads image files from the bundle directory itself.
 	// Codex has to be handed them on the command line, the openai loop
 	// names them in its first user message, and an ACP agent takes them as
@@ -655,6 +820,11 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		spec.Images = imageAttachments(p)
 	}
 	return spec
+}
+
+// notePolicy is the note turn's policy: it may read the run directory and nothing else.
+func notePolicy(p *prepared) *provider.PermissionPolicy {
+	return &provider.PermissionPolicy{Root: p.run.Dir, ReadRoots: []string{p.run.Dir}}
 }
 
 // userServers reads the servers mcp.userServers names from the Claude CLI's
@@ -751,6 +921,15 @@ func imageAttachments(p *prepared) []string {
 	return out
 }
 
+// specSchema is the schema the session about to start is held to: none for
+// a reply turn, else the run kind's.
+func specSchema(p *prepared) []byte {
+	if p.replyTurn() {
+		return nil
+	}
+	return schemaFor(p.kind)
+}
+
 func schemaFor(kind store.Kind) []byte {
 	switch kind {
 	case store.KindRCA:
@@ -792,20 +971,28 @@ func noteKind(kind store.Kind) note.Kind {
 // that carried it, whose events are consumed the same way and into the same
 // execution state.
 func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, pl *pool, ex *execution) []provider.Session {
-	sessions := []provider.Session{sess}
+	ex.sessions = []provider.Session{sess}
 	for {
 		r.consumeSession(ctx, p, sess, log, pl, ex)
 		if ex.retrySession == nil {
-			return sessions
+			return ex.sessions
 		}
 		sess, ex.retrySession = ex.retrySession, nil
 		ex.live.set(sess)
+		// The wall-clock timer and the stall guard cancel whichever
+		// session is live when they fire, and fire once. One that fired
+		// while the session before this one was still draining has
+		// already spent itself, so the session that follows is cancelled
+		// here rather than left to run past the budget.
+		if ex.timedOut.Load() || ex.stall.fired() {
+			sess.Cancel()
+		}
 		// The retry session is live: the hold handleFinal put on for
 		// Provider.Start is over, and the countdown resumes rather than
 		// staying suspended. reset would not do this — the guard is
 		// still held at this point — so this is rearm, not reset.
 		ex.stall.rearm()
-		sessions = append(sessions, sess)
+		ex.sessions = append(ex.sessions, sess)
 	}
 }
 
@@ -876,6 +1063,11 @@ type eventPayload struct {
 	// saying whether the session that answers the instruction is the one
 	// that wrote the note or a fresh one handed it.
 	Continuation string `json:"continuation,omitempty"`
+
+	// Phase is "note" on every line written while a reply-first run files
+	// its note, so a reader can tell the note turn from the reply it
+	// follows. It is empty, and left out, everywhere else.
+	Phase string `json:"phase,omitempty"`
 }
 
 func (r *Runner) record(p *prepared, log *eventLog, ev provider.Event) {
@@ -889,6 +1081,7 @@ func (r *Runner) record(p *prepared, log *eventLog, ev provider.Event) {
 		Model:    ev.Model,
 		Delta:    ev.Delta,
 		Replace:  ev.Replace,
+		Phase:    p.state.Phase,
 	}
 	if ev.Raw != nil {
 		payload.Raw = ev.Raw
@@ -991,6 +1184,18 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 	if ev.Kind != provider.EvError {
 		ex.malformed = 0
 	}
+	if p.state.Phase == store.PhaseNote {
+		// The reply session drains after the note turn has begun. What it
+		// says on the way out is recorded but not judged as the note
+		// turn's, except a breach, which outranks everything whichever
+		// session it came from.
+		if sess != ex.noteSess && ev.Kind != provider.EvBreach {
+			return
+		}
+		if r.handleNoteEvent(p, sess, ex, ev) {
+			return
+		}
+	}
 
 	switch ev.Kind {
 	case provider.EvUsage:
@@ -1010,7 +1215,7 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		ex.seen.Turns = max(ex.seen.Turns, ev.Turns)
 		ex.seen.InputTokens = max(ex.seen.InputTokens, ev.InputTok)
 		ex.seen.OutputTokens = max(ex.seen.OutputTokens, ev.OutputTok)
-		ex.seen.CostUSD = max(ex.seen.CostUSD, ev.CostUSD)
+		ex.seen.CostUSD = max(ex.seen.CostUSD, ex.costOf(ev.CostUSD))
 		elapsed := p.state.Usage.ElapsedSeconds
 		p.state.Usage = usagePlus(ex.base, ex.seen)
 		p.state.Usage.ElapsedSeconds = elapsed
@@ -1124,6 +1329,43 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 	}
 }
 
+// handleNoteEvent takes the events the note turn answers differently from a
+// reply or a note-only run, and reports whether it took ev. Whatever would
+// block or fail the run elsewhere — a refused tool, a question, a model
+// limit — ends only the note turn here, because the reply already stands
+// and nobody is waiting on this turn to answer a question. A blind verdict
+// is ignored: the note turn is meant to read nothing.
+func (r *Runner) handleNoteEvent(p *prepared, sess provider.Session, ex *execution, ev provider.Event) bool {
+	switch ev.Kind {
+	case provider.EvPermission:
+		// The note policy asks nobody, so a question about a call is as
+		// much a refusal as a deny is.
+		if ev.Decision != "deny" && ev.Decision != "ask" {
+			return false
+		}
+		r.endNoteTurn(sess, ex, "the note turn tried "+ev.Tool+", which it may not use")
+	case provider.EvQuestion:
+		r.endNoteTurn(sess, ex, "the note turn asked: "+firstLine(ev.Text))
+	case provider.EvModelLimit:
+		r.endNoteTurn(sess, ex, modelLimitReason(limitedModel(ev)))
+	case provider.EvBlind:
+	default:
+		return false
+	}
+	return true
+}
+
+// endNoteTurn stops the note turn on the first reason it gives. The stall
+// guard stops with it, as it does beside every deliberate cancel, so its
+// timer cannot fire behind the cancel and name a different reason.
+func (r *Runner) endNoteTurn(sess provider.Session, ex *execution, reason string) {
+	if ex.noteErr == "" {
+		ex.noteErr = reason
+	}
+	ex.stall.stop()
+	sess.Cancel()
+}
+
 // modelAliases are the shorthands a workspace configures in place of a
 // model id. The CLI resolves one to a dated id of its own choosing, so a
 // run configured with an alias knows no more about which model answered
@@ -1225,6 +1467,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
+	// A note turn already stopped for a reason of its own files nothing:
+	// a note that arrives after a refused call was cancelled, and was only
+	// in flight when the cancel landed.
+	if p.state.Phase == store.PhaseNote && ex.noteErr != "" {
+		return
+	}
+
 	// A session that read nothing has an answer about a codebase it never
 	// opened. Filing it would put a note on disk, a row in the register
 	// and a line in the digest at whatever confidence the agent claimed,
@@ -1237,6 +1486,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 			raw = strings.TrimSpace(ev.Text)
 		}
 		ex.rawFinal = raw
+		return
+	}
+
+	// A reply is prose, and prose is the answer rather than narration
+	// around one, so answerDoc and the schema check are not applied to it.
+	if p.replyTurn() {
+		r.handleReply(ctx, p, sess, log, ex, ev)
 		return
 	}
 
@@ -1340,15 +1596,16 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		// without an answer" is true of a CLI that failed the run for
 		// answering in prose, and says nothing an operator can act on.
 		ex.schemaError = firstProblem(err)
-		ex.failure = errEmptyAnswer.Error()
+		reason := errEmptyAnswer.Error()
 		if ex.finalNarration != "" {
-			ex.failure += ": " + firstLine(ex.finalNarration)
+			reason += ": " + firstLine(ex.finalNarration)
 		}
+		ex.failTurn(p, reason)
 		sess.Cancel()
 		return
 	case !empty && ex.retried:
 		ex.schemaError = firstProblem(err)
-		ex.failure = "schema validation failed twice: " + ex.schemaError
+		ex.failTurn(p, "schema validation failed twice: "+ex.schemaError)
 		sess.Cancel()
 		return
 	}
@@ -1413,15 +1670,222 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// the stall window must not fail a run that is about to carry on
 	// normally. consume rearms it once the retry session is live; on
 	// failure here the run is ending anyway; held is where it stays.
+	if ex.retrySession != nil {
+		// A session is already waiting to carry the run on; starting a
+		// second would orphan it, unread and unreaped.
+		return
+	}
 	ex.stall.hold()
 	next, startErr := r.resumeForRetry(ctx, p, sess, msg)
 	if startErr != nil {
-		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v; resuming for it failed: %v", sendErr, startErr)
+		ex.failTurn(p, fmt.Sprintf("the schema retry could not be sent: %v; resuming for it failed: %v", sendErr, startErr))
 		sess.Cancel()
 		return
 	}
 	fmt.Fprintf(r.stderr(), "[%s] schema retry in a resumed session\n", p.state.Key)
 	ex.retrySession = next
+	if p.state.Phase == store.PhaseNote {
+		ex.noteSess = next
+	}
+}
+
+// costOf is what a session's reported cost adds to this execute's own, and
+// records the report as the conversation's latest total.
+func (ex *execution) costOf(reported float64) float64 {
+	ex.rawCost = max(ex.rawCost, reported)
+	return max(0, reported-ex.costOffset)
+}
+
+// failTurn records why the turn could not produce its note: the run's
+// failure ordinarily, and only the note step's in a note turn, where the
+// reply already stands.
+func (ex *execution) failTurn(p *prepared, reason string) {
+	if p.state.Phase == store.PhaseNote {
+		ex.noteErr = reason
+		return
+	}
+	ex.failure = reason
+}
+
+// replyNudge is what a reply turn that ended with nothing in it is sent:
+// the empty-turn nudge handleFinal sends a schema'd run, asking for the
+// answer in the form a reply takes.
+const replyNudge = "Your previous turn ended without an answer. A refused tool call does not end the " +
+	"task: carry on from what you have already done, and finish by answering the operator in markdown."
+
+// handleReply takes a reply turn's final: the text is the answer, written to
+// answer.md the moment it arrives, and the turn boundary after it is where a
+// queued steer goes in or the note turn starts. A turn that ended with no
+// text is asked to carry on, under the same limit handleFinal puts on a
+// schema'd run's empty turns.
+func (r *Runner) handleReply(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, ev provider.Event) {
+	// A provider that repeats its result line on the way out is answering
+	// once; only a steer, which clears the reply, makes room for another.
+	if ex.reply != "" {
+		return
+	}
+	text := strings.TrimSpace(ev.Text)
+	if text == "" && len(bytes.TrimSpace(ev.Final)) > 0 {
+		// A provider that still produced structured output has still
+		// answered, and its document is the only text there is.
+		text = strings.TrimSpace(string(ev.Final))
+	}
+
+	if text == "" {
+		if ex.emptyTurns >= maxEmptyTurns {
+			ex.failure = errEmptyAnswer.Error()
+			if ex.finalNarration != "" {
+				ex.failure += ": " + firstLine(ex.finalNarration)
+			}
+			sess.Cancel()
+			return
+		}
+		ex.emptyTurns++
+		sendErr := sess.Send(ctx, replyNudge)
+		if sendErr == nil {
+			return
+		}
+		// The same fallback the schema retry takes, for the same reason:
+		// a session past taking another message is resumed by handle, and
+		// the stall guard is held while the fresh process starts.
+		if ex.retrySession != nil {
+			return
+		}
+		ex.stall.hold()
+		next, startErr := r.resumeForRetry(ctx, p, sess, replyNudge)
+		if startErr != nil {
+			ex.failure = fmt.Sprintf("the nudge to answer could not be sent: %v; resuming for it failed: %v", sendErr, startErr)
+			sess.Cancel()
+			return
+		}
+		ex.retrySession = next
+		return
+	}
+
+	ex.reply = text
+	ex.completeErr = r.completeSession(p, text)
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+	if ex.completeErr != nil {
+		// The reply is not on disk, so there is nothing to file a note
+		// from or to follow up on: the run fails as a session run does.
+		ex.stall.stop()
+		r.endSession(p, sess)
+		return
+	}
+	if r.deliverSteers(ctx, p, sess, log, ex) {
+		return
+	}
+	if p.noteAfter {
+		r.startNoteTurn(ctx, p, sess, log, ex)
+		return
+	}
+	ex.stall.stop()
+	r.endSession(p, sess)
+}
+
+// startNoteTurn ends the reply session and continues it with the note instructions and the
+// schema, on the provider's resume handle when it has one and in a primed session otherwise.
+func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution) {
+	// Written at once rather than when the run ends: the watcher turns
+	// this write into the run.updated that shows the note being filed,
+	// and every event line from here on carries the phase.
+	p.state.Phase = store.PhaseNote
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+
+	// The note turn is judged afresh: an empty turn or a retry spent on
+	// the reply is not one the note has used.
+	ex.retried, ex.emptyTurns, ex.schemaError, ex.finalNarration = false, 0, "", ""
+
+	// The budget covers both turns together. What the reply turn spent
+	// becomes part of the base: the caps judge the note turn's usage on
+	// top of it, and the note session is told only what is left. The
+	// minutes are the wall clock so far, which the run's own timer is
+	// already counting.
+	ex.base = usagePlus(ex.base, ex.seen)
+	ex.seen = store.Usage{}
+	ex.folded = len(ex.sessions)
+	p.usageBase = ex.base
+	p.usageBase.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(ex.started).Seconds()
+
+	r.endSession(p, sess)
+
+	// A clock that has already run out cancelled the reply session and
+	// will not fire again for a new one, and an interrupt means nobody
+	// wants more work done: the note turn does not start, and the run ends
+	// with the reply and the reason.
+	if ctx.Err() != nil {
+		ex.interrupted = true
+	}
+	if ex.timedOut.Load() || ex.stall.fired() || ex.interrupted {
+		return
+	}
+
+	// Held across Provider.Start for the reason the schema retry holds it:
+	// starting a process is not a live session going quiet. consume rearms
+	// it once the note session is live.
+	ex.stall.hold()
+
+	// A provider that cannot continue a run at all (cursor, agy) refuses
+	// because a follow-up could lead to tool calls nothing judges before
+	// they run. The note turn leads to none: it runs under the note
+	// policy, which reads the run directory and nothing else. So it is
+	// primed in a fresh session, as for a provider without resume.
+	cont, _ := provider.PlanSteer(r.Provider)
+	var spec provider.SessionSpec
+	if handle := sess.Handle(); cont == provider.ContinueResume && handle != "" {
+		// The note session resumes the reply's conversation, whose cost
+		// is in base now, so what it reports on top of that is all that
+		// is new.
+		if cumulativeResumeCost[r.providerName()] {
+			ex.costOffset = ex.rawCost
+		}
+		spec = r.sessionSpec(p, handle)
+		spec.Prompt = r.notePrompt(p)
+	} else {
+		// A fresh conversation: everything it reports is its own.
+		ex.costOffset, ex.rawCost = 0, 0
+		original, err := os.ReadFile(filepath.Join(p.run.Dir, "prompt.md"))
+		if err != nil {
+			ex.noteErr = "the note turn could not start: " + err.Error()
+			return
+		}
+		spec = r.sessionSpec(p, "")
+		spec.Prompt = primedNotePrompt(string(original), ex.reply, r.notePrompt(p))
+	}
+	next, err := r.Provider.Start(ctx, spec)
+	if err != nil {
+		ex.noteErr = "the note turn could not start: " + err.Error()
+		return
+	}
+	fmt.Fprintf(r.stderr(), "[%s] filing the note\n", p.state.Key)
+	ex.retrySession, ex.noteSess = next, next
+}
+
+// notePrompt is the note turn's opening message for this run's kind.
+func (r *Runner) notePrompt(p *prepared) string {
+	in := prompt.NoteTurnInput{NotesLanguage: r.Config.NotesLanguage(), CustomerLanguage: r.Config.CustomerLanguage()}
+	if p.kind == store.KindRCA {
+		return prompt.RCANoteTurn(in)
+	}
+	return prompt.TriageNoteTurn(in)
+}
+
+// primedNotePrompt is the opening of a fresh session standing in for the one that replied:
+// the reply turn's prompt, the reply, and the note instructions.
+func primedNotePrompt(original, reply, notePrompt string) string {
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(original))
+	b.WriteString("\n\n---\n\n## Your reply\n\nA previous session investigated the task above and answered the operator with this reply. You are continuing its work in a new session, so read it as your own:\n\n")
+	b.WriteString(reply)
+	b.WriteString("\n\n")
+	b.WriteString(notePrompt)
+	return b.String()
 }
 
 // modelLimitReason is the terminal reason of a run stopped by a per-model
@@ -1510,7 +1974,7 @@ func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Ses
 	}
 
 	next := r.nextModel(ex)
-	if next == "" {
+	if next == "" || ex.retrySession != nil {
 		r.endSession(p, sess)
 		return
 	}
@@ -1525,7 +1989,7 @@ func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Ses
 	if spec.Resume != "" {
 		// The transcript is already there; what the session needs is the
 		// instruction to finish, not the whole prompt again.
-		spec.Prompt = resumeContinue
+		spec.Prompt = continuePrompt(p)
 	}
 	fresh, err := r.Provider.Start(ctx, spec)
 	if err != nil {

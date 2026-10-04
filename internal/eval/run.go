@@ -153,6 +153,9 @@ func replay(ctx context.Context, r *runner.Runner, root, key string, o Options) 
 		Concurrency: 1,
 		BundleDir:   g.BundleDir,
 		Eval:        true,
+		// What a replay scores is the note, so the run files it in one
+		// schema'd session with no reply turn ahead of it.
+		NoteOnly: true,
 	})
 	if err != nil || len(outs) == 0 {
 		if err != nil {
