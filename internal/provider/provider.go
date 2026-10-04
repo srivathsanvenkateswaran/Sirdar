@@ -72,6 +72,14 @@ type SessionSpec struct {
 	// workspace that has written no .mcp.json. With MCPStrict false the
 	// session inherits whatever the operator has configured globally.
 	MCPStrict bool
+
+	// UserMCPServers are the operator's own Claude CLI user-scope servers
+	// the workspace opted into with mcp.userServers, verbatim. A strict
+	// session sees them beside MCPConfig's: Claude Code through a
+	// generated --mcp-config file, Codex through its generated
+	// config.toml (stdio and header-auth http only). Other providers
+	// ignore them, and the run says so.
+	UserMCPServers []UserMCPServer
 }
 
 // EventKind identifies the kind of a Session event.
