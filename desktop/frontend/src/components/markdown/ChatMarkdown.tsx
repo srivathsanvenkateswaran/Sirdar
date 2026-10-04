@@ -42,9 +42,13 @@ function isElement(node: ElementContent): node is Element {
 const defaultComponents: Components = {
   pre: ({ node, children }) => {
     const code = node?.children.find(isElement)
-    const language = code?.tagName === 'code' ? languageOf(code) : undefined
-    if (!code || !language) return <pre>{children}</pre>
-    return <CodeBlock code={textOf(code).replace(/\n$/, '')} language={language} />
+    // A fence with no language still gets `CodeBlock` — it already draws the
+    // plain, unhighlighted block its missing language leaves it with — so
+    // every `pre > code` on a chat surface gets the same frame and Copy
+    // button, and none of them fall through to `.cmd code`'s single-line
+    // inline style the way a bare `<pre>{children}</pre>` would have.
+    if (code?.tagName !== 'code') return <pre>{children}</pre>
+    return <CodeBlock code={textOf(code).replace(/\n$/, '')} language={languageOf(code)} />
   },
   table: ({ children }) => <TableWrapper>{children}</TableWrapper>,
   a: ({ children, ...props }) => (

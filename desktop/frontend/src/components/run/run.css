@@ -1200,18 +1200,8 @@ section:first-child > .turn-rule {
   border-radius: 2px;
 }
 
-.md pre {
-  padding-block: 9px;
-  padding-inline: 11px;
-  border: 1px solid var(--sd-rule);
-  border-radius: 3px;
-  overflow-x: auto;
-}
-
-.md pre code {
-  background: transparent;
-  padding: 0;
-}
+/* Fenced and indented code blocks render through ChatMarkdown's own
+   `CodeBlock`, which frames itself; a `pre` rule here would double it. */
 
 .md blockquote {
   margin-block: 0 0.85em;
