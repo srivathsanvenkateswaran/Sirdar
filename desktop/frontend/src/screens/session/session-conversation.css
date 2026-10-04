@@ -234,9 +234,14 @@
 }
 
 /*
- * The filed-note row belongs to the reply above it, so it sits closer to
- * that reply than the flow's own gap puts one row to the next.
+ * The filed-note row belongs to the reply above it: it starts where the
+ * reply's text does, past the provider mark, and sits closer to it than
+ * the flow's own gap puts one row to the next.
  */
+.sc-flow > .sd-filed {
+  padding-inline-start: calc(22px + var(--sd-space-3));
+}
+
 .sc-reply + .sd-filed {
   margin-block-start: calc(-1 * var(--sd-space-2));
 }

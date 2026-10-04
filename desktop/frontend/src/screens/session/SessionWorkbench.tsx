@@ -463,7 +463,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     ? 'A note for the agent goes with Allow or Deny. Sent alone, it allows nothing'
     : mode.kind === 'answer'
       ? `Type an answer${question && question.options.length > 0 ? ', or pick an option above' : ''} — the run resumes from turn ${turns}`
-      : `Follow up — the run resumes from turn ${turns}${isFix ? ' in the same worktree' : ' with the note in context'}`
+      : `Follow up — the run resumes from turn ${turns}${isFix ? ' in the same worktree' : detail.kind === 'session' ? ' with the transcript in context' : ' with the note in context'}`
 
   const tabs: { id: Tab; label: string; n?: string; off?: boolean }[] = [
     { id: 'answer', label: 'Answer', off: replyRun ? !replyText : !answer && !report && !answerText },

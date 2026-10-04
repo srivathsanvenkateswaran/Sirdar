@@ -979,6 +979,18 @@ a.sn-head__other:hover {
   padding-block: 26px 40px;
 }
 
+/* A reply run's filed-note row, under the reply that is the document. */
+.sn-note > .sd-filed {
+  margin-block-start: var(--sd-space-4);
+}
+
+/* The way back from the filed note to the reply, on the note's own edge. */
+.sn-note__back {
+  inline-size: min(100%, 960px);
+  margin-inline: auto;
+  padding-block-start: var(--sd-space-4);
+}
+
 /* The activity line sits in `.sn-doc` directly, outside the scroller that
    carries the 44/40 inset, so it needs its own copy of that inset plus the
    960 cap to land on the same left edge as `.sn-note` above it: a box

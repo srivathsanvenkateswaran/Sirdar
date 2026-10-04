@@ -961,6 +961,36 @@ describe('SessionConversation', () => {
       expect(within(screen.getByRole('form')).getByText(/Session · writes in worktree/)).toBeInTheDocument()
     })
 
+    it('says a session resumes with the transcript, not a note', async () => {
+      const f = fake({ detail: SESSION, events: replyEvents() })
+      renderScene(f, { runId: SESSION.runId })
+      await screen.findByTestId('assistant-reply')
+      expect(screen.getByRole('textbox', { name: 'Steer' })).toHaveAttribute(
+        'placeholder',
+        'Steer the run or ask a follow-up — it resumes with the transcript in context',
+      )
+    })
+
+    it('opens a session’s inspector on Tools, since it files no note', async () => {
+      const f = fake({ detail: SESSION, events: replyEvents() })
+      renderScene(f, { runId: SESSION.runId })
+      await screen.findByTestId('assistant-reply')
+      expect(screen.getByRole('tab', { name: /Tools/ })).toHaveAttribute('aria-selected', 'true')
+    })
+
+    it('offers Save as note on a failed session that replied', async () => {
+      const f = fake({ detail: { ...SESSION, status: 'failed', reason: 'provider exited' }, events: replyEvents() })
+      renderScene(f, { runId: SESSION.runId })
+      expect(await screen.findByRole('button', { name: 'Save as note' })).toBeInTheDocument()
+    })
+
+    it('offers no Save as note on a session with no reply', async () => {
+      const f = fake({ detail: { ...SESSION, status: 'failed', reason: 'provider exited' }, events: [init(t(1), ROOT)] })
+      renderScene(f, { runId: SESSION.runId })
+      await screen.findByTestId('finish-line')
+      expect(screen.queryByRole('button', { name: 'Save as note' })).toBeNull()
+    })
+
     it('says the note is being filed', async () => {
       const f = fake({ detail: { ...TRIAGE, status: 'running', phase: 'note' }, events: replyEvents() })
       renderScene(f, { runId: TRIAGE.runId })

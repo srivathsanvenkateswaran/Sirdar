@@ -1,5 +1,6 @@
-import { useState, type JSX } from 'react'
-import type { RunSummary } from '../../api/types'
+import { useCallback, useEffect, useState, type JSX } from 'react'
+import type { RunSummary, Transport } from '../../api/types'
+import { setRunJob } from '../../lib/jobs'
 import { noteStem } from '../../lib/replyRun'
 import { withoutCode } from './useSessionModel'
 import './filed-note.css'
@@ -66,6 +67,33 @@ export default function FiledNoteRow({ run, onOpenNote, onUpdateNote, updating, 
     )
   }
   return null
+}
+
+/**
+ * Update note as every layout runs it: one note turn under a job the shell
+ * tracks, its progress and refusal held here so each layout's filed-note
+ * row says the same thing. A different run starts clean.
+ */
+export function useUpdateNote(transport: Transport, workspaceId: string, runId: string): { updating: boolean; error: string; update: () => Promise<void> } {
+  const [updating, setUpdating] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => {
+    setUpdating(false)
+    setError('')
+  }, [runId])
+  const update = useCallback(async () => {
+    setUpdating(true)
+    setError('')
+    try {
+      const started = await transport.updateNote(workspaceId, runId)
+      if (started?.jobId) setRunJob(runId, started.jobId)
+    } catch (err: unknown) {
+      setError(withoutCode(err))
+    } finally {
+      setUpdating(false)
+    }
+  }, [transport, workspaceId, runId])
+  return { updating, error, update }
 }
 
 export interface SaveNoteRowProps {

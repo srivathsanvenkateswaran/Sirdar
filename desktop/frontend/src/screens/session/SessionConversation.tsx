@@ -18,7 +18,7 @@ import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
 import { LIVE, TERMINAL, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
-import FiledNoteRow, { SaveNoteRow } from '../../components/session/FiledNoteRow'
+import FiledNoteRow, { SaveNoteRow, useUpdateNote } from '../../components/session/FiledNoteRow'
 import LiveActivity from '../../components/session/LiveActivity'
 import ModelLimitBanner from '../../components/session/ModelLimitBanner'
 import { askedQuestion, modelLimited, notePathFor } from '../../lib/events'
@@ -151,9 +151,8 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const [paneOpen, setPaneOpen] = useState(() => !readStoredFlag(PANE_COLLAPSED_KEY))
   const [pending, setPending] = useState('')
   const [actionError, setActionError] = useState('')
-  /** Update note's own state: it answers in the filed-note row, not the composer. */
-  const [noteUpdating, setNoteUpdating] = useState(false)
-  const [noteError, setNoteError] = useState('')
+  /** Update note answers in the filed-note row, not the composer. */
+  const noteUpdate = useUpdateNote(transport, workspaceId, runId)
   const [steerRefusal, setSteerRefusal] = useState('')
   /** Steers this window queued on the working run, until the run's record carries them. */
   const [localQueued, setLocalQueued] = useState<QueuedSteer[]>([])
@@ -199,8 +198,6 @@ export default function SessionConversation(props: SessionConversationProps): JS
 
   useEffect(() => {
     setActionError('')
-    setNoteUpdating(false)
-    setNoteError('')
     setSteerRefusal('')
     setTab(null)
     setChanged(null)
@@ -331,7 +328,8 @@ export default function SessionConversation(props: SessionConversationProps): JS
     return ['triage']
   }, [detail?.kind])
   const notePath = notePathFor(noteKinds[0], detail?.notes)
-  const shownTab: Tab = tab ?? (isFix ? 'changes' : 'note')
+  // A session files no note, so its inspector opens on what it did instead.
+  const shownTab: Tab = tab ?? (isFix ? 'changes' : detail?.kind === 'session' ? 'tools' : 'note')
 
   const onDiffLoaded = useCallback((diff: RunDiff | null) => {
     setChanged(diff ? diff.files.length : null)
@@ -428,20 +426,6 @@ export default function SessionConversation(props: SessionConversationProps): JS
       setPending('')
     }
   }, [jobId, transport, runId])
-
-  /** Files a reply run's note again: one note turn, under a job the shell tracks. */
-  const updateNote = useCallback(async () => {
-    setNoteUpdating(true)
-    setNoteError('')
-    try {
-      const started = await transport.updateNote(workspaceId, runId)
-      if (started?.jobId) setRunJob(runId, started.jobId)
-    } catch (err: unknown) {
-      setNoteError(withoutCode(err))
-    } finally {
-      setNoteUpdating(false)
-    }
-  }, [transport, workspaceId, runId])
 
   const openNote = useCallback(() => {
     setTab('note')
@@ -729,7 +713,9 @@ export default function SessionConversation(props: SessionConversationProps): JS
       ? 'Answer the question — the run resumes with your message'
       : isFix
         ? 'Ask for a change to the fix — it resumes in the same worktree'
-        : 'Steer the run or ask a follow-up — it resumes with the note and the transcript in context'
+        : detail.kind === 'session'
+          ? 'Steer the run or ask a follow-up — it resumes with the transcript in context'
+          : 'Steer the run or ask a follow-up — it resumes with the note and the transcript in context'
 
   /** The closing line: when, how many turns, what it cost, what it left. */
   const finishLine = (): JSX.Element | null => {
@@ -760,15 +746,17 @@ export default function SessionConversation(props: SessionConversationProps): JS
   /*
    * The line under a reply run's replies: where a triage or RCA note went,
    * or, for a session, the offer to keep the reply as a note. Neither is
-   * drawn while the run works; the activity line speaks for it then.
+   * drawn while the run works; the activity line speaks for it then. A
+   * session can be saved once it has settled with a reply, however it
+   * ended: the service refuses only a live run or one with no reply.
    */
   const noteRow = (): JSX.Element | null => {
     if (detail.kind === 'session') {
-      if (status !== 'completed') return null
+      if (!terminal || model.answerIndex < 0) return null
       return <SaveNoteRow key={runId} onSave={() => transport.saveNote(workspaceId, runId)} />
     }
     if (detail.kind !== 'triage' && detail.kind !== 'rca') return null
-    return <FiledNoteRow run={detail} onOpenNote={openNote} onUpdateNote={updateNote} updating={noteUpdating} error={noteError} />
+    return <FiledNoteRow run={detail} onOpenNote={openNote} onUpdateNote={noteUpdate.update} updating={noteUpdate.updating} error={noteUpdate.error} />
   }
 
   return (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import ChatMarkdown from '../../components/markdown/ChatMarkdown'
 import AnswerCard from '../../components/session/AnswerCard'
 import BundlePane from '../../components/session/BundlePane'
+import FiledNoteRow, { SaveNoteRow, useUpdateNote } from '../../components/session/FiledNoteRow'
 import ChangesView from '../../components/session/ChangesView'
 import ComposerStrip from '../../components/session/ComposerStrip'
 import { BundleIcon, OpenIcon, ToolsIcon } from '../../components/session/icons'
@@ -22,6 +23,9 @@ import type { SessionLayoutProps } from './layoutProps'
 import '../../components/session/session.css'
 
 type DrawerName = 'bundle' | 'tools' | null
+
+/** A run in one of these has stopped for good, so a session's reply can be saved. */
+const SETTLED: ReadonlySet<string> = new Set(['completed', 'failed', 'over_budget'])
 
 /** The steps a marker names, in path order. */
 function stepsOf(model: SessionModel, id: string): number[] {
@@ -59,6 +63,9 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
   const isFix = detail.kind === 'fix'
   const replyRun = isReplyRun(detail)
   const reply = useMemo(() => (replyRun ? latestReply(events.map((e) => e.event)) : ''), [replyRun, events])
+  /** A reply run reads as its reply; the filed note is a page the reader opens from the row under it. */
+  const [readingNote, setReadingNote] = useState(false)
+  const noteUpdate = useUpdateNote(transport, workspaceId, detail.runId)
   const toolRows = useMemo(() => rowsOf(model.steps), [model.steps])
   // Only the desktop shell can reveal a folder, so a browser gets no item
   // at all and the pane never shows a path it cannot act on.
@@ -73,6 +80,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
     setOpen(new Set())
     setHot(undefined)
     setSelectedStep(undefined)
+    setReadingNote(false)
   }, [props.runId])
 
   // The call the run is waiting on stays expanded, as the mock's S2 shows.
@@ -147,6 +155,22 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
   const sendBusy = pending === 'answer' || pending === 'steer'
   const composerState = steerRefusal ? ({ kind: 'disabled', reason: steerRefusal } as const) : model.composer
 
+  /*
+   * The line under a reply: where a triage or RCA note went, or a settled
+   * session's offer to keep its reply as a note. Nothing while the run
+   * works; the activity line says what it is doing.
+   */
+  let noteRow: JSX.Element | null = null
+  if (replyRun && !live) {
+    if (detail.kind === 'session') {
+      if (SETTLED.has(detail.status)) noteRow = <SaveNoteRow key={detail.runId} onSave={() => transport.saveNote(workspaceId, detail.runId)} />
+    } else if (detail.kind === 'triage' || detail.kind === 'rca') {
+      noteRow = (
+        <FiledNoteRow run={detail} onOpenNote={() => setReadingNote(true)} onUpdateNote={noteUpdate.update} updating={noteUpdate.updating} error={noteUpdate.error} />
+      )
+    }
+  }
+
   let document: JSX.Element
   if (isFix) {
     document = (
@@ -174,8 +198,17 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
         pendingCommand={model.composer.kind === 'reply' ? model.composer.pending?.command : undefined}
       />
     )
-  } else if (note.parsed) {
+  } else if (replyRun && reply && !(readingNote && note.parsed)) {
+    // A reply run answers in markdown: its newest reply is the document,
+    // and a filed note stays one click away rather than taking its place.
     document = (
+      <article className="sn-note" data-testid="document-reply">
+        <ChatMarkdown>{reply}</ChatMarkdown>
+        {noteRow}
+      </article>
+    )
+  } else if (note.parsed) {
+    const noteDocument = (
       <NoteDocument
         note={note.parsed}
         detail={detail}
@@ -192,14 +225,19 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
         contact={contact}
       />
     )
-  } else if (replyRun && reply) {
-    // A reply run answers in markdown: its newest reply is the document
-    // until a note is filed, and a session never files one.
-    document = (
-      <article className="sn-note" data-testid="document-reply">
-        <ChatMarkdown>{reply}</ChatMarkdown>
-      </article>
-    )
+    document =
+      replyRun && reply ? (
+        <>
+          <div className="sd-filed sn-note__back">
+            <button type="button" className="sd-filed__btn" onClick={() => setReadingNote(false)}>
+              ← Back to the reply
+            </button>
+          </div>
+          {noteDocument}
+        </>
+      ) : (
+        noteDocument
+      )
   } else if (model.answer) {
     // The answer arrived but the note has not been filed (or could not be read): the answer is the document.
     document = (

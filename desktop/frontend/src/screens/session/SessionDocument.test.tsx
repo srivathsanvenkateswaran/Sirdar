@@ -434,4 +434,22 @@ describe('a reply run', () => {
     expect(doc.querySelector('strong')).toHaveTextContent('The refund is stuck.')
     expect(screen.queryByTestId('answer-card')).toBeNull()
   })
+
+  it('keeps a triage reply as the document once its note is filed, the note one click away', async () => {
+    const fixture = triageFixture({ replyFirst: true })
+    fixture.events = [
+      { t: at(TRIAGE_START, 30), kind: 'final', payload: { text: '**The refund is stuck.**' } },
+      { t: at(TRIAGE_START, 60), kind: 'final', payload: { text: '{"title":"x"}', phase: 'note' } },
+    ]
+    mount([fixture], TRIAGE_RUN_ID)
+    const doc = await screen.findByTestId('document-reply')
+    expect(doc.querySelector('strong')).toHaveTextContent('The refund is stuck.')
+    expect(screen.queryByTestId('note-document')).toBeNull()
+    const row = within(doc).getByTestId('filed-note')
+    expect(row).toHaveTextContent('Filed as a note →')
+    fireEvent.click(within(row).getByRole('button', { name: 'SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice' }))
+    expect(await screen.findByTestId('note-document')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '← Back to the reply' }))
+    expect(screen.getByTestId('document-reply')).toBeInTheDocument()
+  })
 })
