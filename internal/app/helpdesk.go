@@ -104,6 +104,42 @@ func (s *Service) Resolve(ctx context.Context, wsID, text string) (Intake, error
 	return r.resolve(ctx, text)
 }
 
+// checkSlackLink refuses a start whose Slack field is not a Slack link,
+// before any job exists.
+func checkSlackLink(raw string) error {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	if _, ok := slack.FindLink(raw); !ok {
+		return fmt.Errorf("%w: %q is not a Slack message link", ErrInvalidArgument, raw)
+	}
+	return nil
+}
+
+// slackMarkdown reads the Slack link a start carries and renders the thread
+// for the bundle's slack.md. Empty when the start carries none.
+func (s *Service) slackMarkdown(ctx context.Context, cfg *config.Config, raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", nil
+	}
+	l, ok := slack.FindLink(raw)
+	if !ok {
+		return "", fmt.Errorf("%w: %q is not a Slack message link", ErrInvalidArgument, raw)
+	}
+	sr, err := s.slackFor(cfg)
+	if err != nil {
+		return "", fmt.Errorf("the Slack token could not be read: %w", err)
+	}
+	if sr == nil {
+		return "", fmt.Errorf("%s", SlackNotConfigured)
+	}
+	th, err := sr.Read(ctx, l)
+	if err != nil {
+		return "", fmt.Errorf("the Slack link could not be read: %w", err)
+	}
+	return slack.Markdown(th), nil
+}
+
 func (s *Service) slackFor(cfg *config.Config) (SlackReader, error) {
 	if s.opts.Slack != nil {
 		return s.opts.Slack(cfg)

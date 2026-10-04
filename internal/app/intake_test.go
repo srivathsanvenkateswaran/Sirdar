@@ -426,3 +426,41 @@ func TestServiceResolveUsesTheWorkspaceSources(t *testing.T) {
 		t.Fatalf("empty text: %v", err)
 	}
 }
+
+// TestStartTriageCarriesTheSlackThread is the start half: a triage started
+// from a Slack link reads the thread again and files it as bundle/slack.md.
+func TestStartTriageCarriesTheSlackThread(t *testing.T) {
+	root := newWorkspace(t)
+	wsID := WorkspaceID(root)
+	fs := &fakeSlack{thread: slack.Thread{Messages: []slack.Message{{TS: "1712345678.901234", Author: "sam", Text: "OMNI-1 export is empty"}}}}
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	svc := New(newRegistry(t, root), stubBuilder(p, stubTracker{}, stubHelpdesk{}), Options{
+		Interval: 20 * time.Millisecond,
+		Slack:    func(*config.Config) (SlackReader, error) { return fs, nil },
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	svc.Start(ctx)
+	t.Cleanup(svc.Stop)
+	events, unsubscribe := svc.Subscribe()
+	defer unsubscribe()
+
+	if _, err := svc.StartTriage(context.Background(), wsID, []string{"OMNI-1"}, TriageOptions{Slack: "https://example.org/not-slack"}); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("a link that is not Slack's: %v", err)
+	}
+	if _, err := svc.StartTriage(context.Background(), wsID, []string{"OMNI-1"}, TriageOptions{Slack: "https://acme.slack.com/archives/C0123ABCD/p1712345678901234"}); err != nil {
+		t.Fatal(err)
+	}
+	done := waitFor(t, events, "job.finished", func(e Event) bool { return e.Kind == KindJobFinished })
+	if len(done.Outcomes) != 1 || done.Outcomes[0].RunID == "" {
+		t.Fatalf("outcomes %+v", done.Outcomes)
+	}
+	detail, err := svc.Run(wsID, done.Outcomes[0].RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(detail.BundleDir + "/slack.md")
+	if err != nil || !strings.Contains(string(data), "OMNI-1 export is empty") {
+		t.Fatalf("slack.md: %q %v", data, err)
+	}
+}

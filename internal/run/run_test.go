@@ -3516,3 +3516,26 @@ func TestTriageRecordsTheOperatorsRequestAndPutsItInThePrompt(t *testing.T) {
 		t.Errorf("the prompt does not carry the request:\n%s", prompt)
 	}
 }
+
+// TestTriageCarriesTheSlackThreadIntoTheBundle pins slack.md: the thread a
+// session was started from is written beside thread.md and put in front of
+// the session under the conversation, code blocks and all.
+func TestTriageCarriesTheSlackThreadIntoTheBundle(t *testing.T) {
+	const md = "# Slack thread\n\nLink: https://acme.slack.com/archives/C0123ABCD/p1712345678901234\nMessages: 1\n\n## 2026-09-02T09:00:00Z · slack · سارة\n\nالعميل يقول التصدير فارغ\n```\nerror 500\n```\n"
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{Slack: md})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := runDir(t, cfg, outs[0])
+	if got := readFile(t, filepath.Join(dir, "bundle", "slack.md")); got != md {
+		t.Errorf("slack.md = %q", got)
+	}
+	prompt := readFile(t, filepath.Join(dir, "prompt.md"))
+	if !strings.Contains(prompt, "## From Slack") || !strings.Contains(prompt, "````\n# Slack thread") || !strings.Contains(prompt, "العميل يقول التصدير فارغ") {
+		t.Errorf("the prompt does not carry the Slack thread in its own fence:\n%s", prompt)
+	}
+}
