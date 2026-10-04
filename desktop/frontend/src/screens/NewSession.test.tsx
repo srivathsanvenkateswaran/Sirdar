@@ -353,56 +353,23 @@ describe('NewSession', () => {
     await waitFor(() => expect(onStart).toHaveBeenCalledWith('rca', 'OMNI-2', expect.anything()))
   })
 
-  it('offers worktree access for a session only', () => {
+  it('shows worktree access for a session as not available yet, and keeps read-only', () => {
     mount()
     fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
     expect(accessChip()).toBeEnabled()
     fireEvent.click(accessChip())
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Worktree/ }))
-    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
-    expect(screen.getByRole('status')).toHaveTextContent('Session · writes in worktree')
+    const worktree = screen.getByRole('menuitemradio', { name: /^Worktree/ })
+    expect(worktree).toHaveAttribute('aria-disabled', 'true')
+    expect(worktree).toHaveAttribute('title', 'Not available yet')
+    expect(within(worktree).getByText('Not available yet')).toBeInTheDocument()
+    fireEvent.click(worktree)
+    expect(accessChip()).toHaveAccessibleName('Access: Read-only')
+    expect(screen.getByRole('status')).toHaveTextContent('Session · read-only')
 
-    // A fix's posture is the mode's own, not a pick a session leaves behind.
+    // A fix's posture is the mode's own, fixed rather than offered.
     fireEvent.change(bar(), { target: { value: '/fix OMNI-1' } })
     expect(accessChip()).toBeDisabled()
     expect(accessChip()).toHaveAccessibleName('Access: Worktree. Fixed by the mode')
-  })
-
-  it('drops a pinned access once the start it was for has gone out', async () => {
-    const { onStart } = mount({ onStart: vi.fn(async () => '') })
-    fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
-    fireEvent.click(accessChip())
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Worktree/ }))
-    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
-
-    fireEvent.click(sendButton())
-    await waitFor(() => expect(onStart).toHaveBeenCalled())
-    expect(accessChip()).toHaveAccessibleName('Access: Read-only')
-  })
-
-  it('drops a pinned access when the workspace changes', () => {
-    const transport = createFakeTransport({ tickets: [] })
-    const onStart = vi.fn(async () => 'job-1')
-    const tree = (ws: Workspace) => (
-      <PrimaryActionProvider>
-        <NewSession
-          transport={transport}
-          workspaceId={ws.id}
-          workspace={ws}
-          runs={[]}
-          onStart={onStart}
-          onOpenRun={() => {}}
-        />
-      </PrimaryActionProvider>
-    )
-    const view = render(tree(workspace({ id: 'ws1' })))
-    fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
-    fireEvent.click(accessChip())
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Worktree/ }))
-    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
-
-    view.rerender(tree(workspace({ id: 'ws2' })))
-    expect(accessChip()).toHaveAccessibleName('Access: Read-only')
   })
 
   it('opens the session once its run appears', async () => {
@@ -986,7 +953,7 @@ describe('NewSession', () => {
         composed: { key: 'OMNI-3233', mode: 'fix', instruction: 'the rounding', confidence: 0.8 },
       })
       const { onStart } = mount({ transport, runs: [run({ key: 'OMNI-3233', kind: 'triage', status: 'completed' })] })
-      fireEvent.change(bar(), { target: { value: 'is it OMNI-3233 or OMNI-1, fix the rounding' } })
+      fireEvent.change(bar(), { target: { value: '/fix is it OMNI-3233 or OMNI-1, the rounding' } })
       expect(screen.getByRole('status')).toHaveTextContent(
         'Two ticket keys in there — press Enter and I will work out which you meant',
       )
@@ -995,7 +962,7 @@ describe('NewSession', () => {
       fireEvent.click(sendButton())
       await waitFor(() =>
         expect(transport.calls.composeIntent).toEqual([
-          { ws: 'ws1', text: 'is it OMNI-3233 or OMNI-1, fix the rounding' },
+          { ws: 'ws1', text: '/fix is it OMNI-3233 or OMNI-1, the rounding' },
         ]),
       )
       // The reading is shown, and nothing has started on it.
@@ -1048,7 +1015,29 @@ describe('NewSession', () => {
       await waitFor(() => expect(transport.calls.composeIntent).toHaveLength(1))
       expect(onStart).not.toHaveBeenCalled()
       expect(await screen.findByText('Confirm')).toBeInTheDocument()
-      expect(screen.getByRole('status')).toHaveTextContent('Triage · OMNI-2')
+      expect(screen.getByRole('status')).toHaveTextContent('Session · OMNI-2 · read-only')
+    })
+
+    it('keeps a question a session when the reading of its two keys says triage', async () => {
+      const transport = createFakeTransport({
+        tickets: [],
+        composed: { key: 'OMNI-2', mode: 'triage', instruction: '', confidence: 0.7 },
+      })
+      const { onStart } = mount({ transport })
+      fireEvent.change(bar(), { target: { value: 'is OMNI-1 the same bug as OMNI-2' } })
+      fireEvent.click(sendButton())
+      expect(await screen.findByText('Confirm')).toBeInTheDocument()
+      expect(screen.getByRole('status')).toHaveTextContent('Session · OMNI-2 · read-only')
+
+      fireEvent.click(sendButton())
+      await waitFor(() =>
+        expect(onStart).toHaveBeenCalledWith(
+          'session',
+          '',
+          expect.objectContaining({ reference: 'OMNI-2', instruction: expect.stringContaining('the same bug') }),
+        ),
+      )
+      expect(onStart).not.toHaveBeenCalledWith('triage', expect.anything(), expect.anything())
     })
 
     it('starts a session about the first key when the setting is off', async () => {

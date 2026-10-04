@@ -437,11 +437,19 @@ export default function NewSession(props: {
   const foundBy = !confirmed && resolved?.key === key ? resolved.summary ?? '' : ''
   /** The Slack link to carry into the bundle: only when the key came from its thread. */
   const slackLink = !confirmed && resolved?.input === 'slack' && resolved.key === key ? intent.slack : ''
-  const instruction = (confirmed?.instruction ?? intent.instruction).trim()
-  // A reading confirms a ticket's mode when the line was ambiguous about
-  // one; absent that, `intentKind` is what tells a session from a bare
-  // triage, and a session is what is left once neither says anything.
-  const mode: SessionMode = pinnedMode ?? (confirmed?.mode || intentKind(intent) || 'session')
+  // A reading that kept nothing of the line as an instruction — it took a
+  // word for the mode, or the question for no question — leaves the line's
+  // own instruction, so a session it does not turn into a triage still has
+  // something to answer.
+  const instruction = (confirmed?.instruction || intent.instruction).trim()
+  // A reading settles the mode only when the operator's own line set one —
+  // a slash command or a bare mode word — and was ambiguous about something
+  // else. A reading of prose never picks the mode: the model's "triage"
+  // means "write a triage note", which is not what a question asked for.
+  // Otherwise `intentKind` tells a session from a bare triage, and a
+  // session is what is left once nothing says anything.
+  const mode: SessionMode =
+    pinnedMode ?? ((intent.mode && confirmed?.mode) || intentKind(intent) || 'session')
   const access = mode === 'session' ? (pinnedAccess ?? 'read-only') : accessOf(mode)
   const fixThen = prefs.fixThen
 
@@ -727,6 +735,12 @@ export default function NewSession(props: {
     disabled: needsNote && m.id !== 'triage' && m.id !== 'session' ? noteReason : undefined,
   }))
 
+  // The server refuses a worktree session until one can run in a worktree of
+  // its own, so the choice is shown and not offered: read-only is the one.
+  const accessItems: ChipMenuItem[] = ACCESS.map((a) =>
+    a.id === 'worktree' ? { ...a, disabled: 'Not available yet' } : a,
+  )
+
   const sendTitle = canStart
     ? wantsReading
       ? 'Read what this says (↵)'
@@ -786,7 +800,7 @@ export default function NewSession(props: {
                 <ChipMenu
                   label="Access"
                   value={access}
-                  items={ACCESS}
+                  items={accessItems}
                   disabled={busy}
                   onSelect={mode === 'session' ? (id) => setPinnedAccess(id as Access) : undefined}
                   readOnly={mode === 'session' ? undefined : 'Fixed by the mode'}
