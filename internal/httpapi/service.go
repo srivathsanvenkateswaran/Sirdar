@@ -17,6 +17,10 @@ type Service interface {
 	AddWorkspace(root string) (Workspace, error)
 	RemoveWorkspace(id string) error
 	Queue(ctx context.Context, wsID string, f QueueFilter) ([]Ticket, error)
+	// Resolve answers what pasted text points at — a key, a tracker or
+	// helpdesk link, a helpdesk number, a Slack link. ResolveHelpdesk and
+	// ComposeIntent are its two older, narrower routes, kept as aliases.
+	Resolve(ctx context.Context, wsID, text string) (Intake, error)
 	ResolveHelpdesk(ctx context.Context, wsID, number string) (HelpdeskLink, error)
 	ComposeIntent(ctx context.Context, wsID, text string) (ComposedIntent, error)
 	Runs(wsID, key string) ([]RunSummary, error)

@@ -28,6 +28,8 @@ type (
 	Event                = app.Event
 	QueueFilter          = app.QueueFilter
 	HelpdeskLink         = app.HelpdeskLink
+	Intake               = app.Intake
+	IntakeStep           = app.IntakeStep
 	ComposedIntent       = app.ComposedIntent
 	TriageOptions        = app.TriageOptions
 	RCAOptions           = app.RCAOptions

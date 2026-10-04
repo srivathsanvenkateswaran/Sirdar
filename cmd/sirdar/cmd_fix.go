@@ -13,7 +13,7 @@ func init() { commands["fix"] = cmdFix }
 
 func cmdFix(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("fix", stderr,
-		"usage: sirdar fix KEY [--dry-run] [--local] [--no-pr] [--base BRANCH] [--at COMMIT] [--accept-deviation] [--provider claude|codex|openai] [--model NAME]")
+		"usage: sirdar fix TICKET [--dry-run] [--local] [--no-pr] [--base BRANCH] [--at COMMIT] [--accept-deviation] [--provider claude|codex|openai] [--model NAME]")
 	dryRun := fs.Bool("dry-run", false, "create the branch and the prompt, start no agent and push nothing")
 	local := fs.Bool("local", false, "commit in the worktree and stop: push nothing, open no pull request, write the diff to fix.diff, keep the worktree")
 	noPR := fs.Bool("no-pr", false, "push the branch but do not open a pull request")
@@ -41,6 +41,14 @@ func cmdFix(args []string, stdout, stderr io.Writer) int {
 
 	ctx, stop := interruptible()
 	defer stop()
+
+	// A fix reads the triage note, not a bundle, so a Slack thread the
+	// ticket was named in is resolved for its key and not carried further.
+	resolved, ok := resolveArgs(ctx, cfg, deps, []string{key}, stderr)
+	if !ok {
+		return 1
+	}
+	key = resolved.keys[0]
 
 	res, err := fix.Run(ctx, deps, key, fix.Options{
 		Model:           *model,
