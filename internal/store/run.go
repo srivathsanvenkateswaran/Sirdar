@@ -163,6 +163,13 @@ type State struct {
 	// what `sirdar rca` or `sirdar fix` reads as "the newest triage note".
 	Eval bool `json:",omitempty"`
 
+	// HandleCostUSD is the cost the provider last reported for the
+	// conversation Handle names. Claude reports a resumed session's cost as
+	// a running total for the whole conversation rather than for the one
+	// invocation, so a session that resumes Handle adds to the run only
+	// what it reports beyond this.
+	HandleCostUSD float64 `json:",omitempty"`
+
 	// Steers lists every follow-up instruction the run has taken, oldest
 	// first. A run with none omits the field. The instruction and the
 	// continuation are also written to events.jsonl at the point the

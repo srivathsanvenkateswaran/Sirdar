@@ -55,8 +55,9 @@ func (r *Runner) UpdateNote(ctx context.Context, runID string, o UpdateNoteOptio
 	// under the note policy and can call nothing a follow-up could.
 	cont, _ := provider.PlanSteer(r.Provider)
 
-	p := &prepared{run: rn, state: state, kind: state.Kind, usageBase: state.Usage}
-	bundle, err := readBundleIfAny(rn.BundleDir())
+	p := &prepared{run: rn, state: state, kind: state.Kind, usageBase: state.Usage,
+		refiled: &filedNote{notes: state.Notes, warning: state.NoteWarning}}
+	bundle, err := readBundle(rn.BundleDir())
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -82,6 +83,7 @@ func (r *Runner) UpdateNote(ctx context.Context, runID string, o UpdateNoteOptio
 	handle := ""
 	if cont == provider.ContinueResume {
 		handle = state.Handle
+		p.resumeCost = state.HandleCostUSD
 	}
 	notePrompt := r.notePrompt(p)
 	if handle != "" {

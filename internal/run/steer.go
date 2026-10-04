@@ -79,9 +79,11 @@ func (r *Runner) Steer(ctx context.Context, runID, text string, o SteerOptions) 
 
 	// A run that answers in chat takes a follow-up as conversation: the
 	// operator gets an answer in answer.md, and the note, its filed copy
-	// and the register stay as the note turn left them.
-	talk := conversational(state, rn.Dir)
-	p := &prepared{run: rn, state: state, kind: state.Kind, root: o.Root, usageBase: state.Usage, reply: talk}
+	// and the register stay as the note turn left them. One that never
+	// replied still owes its note, and files it once the reply lands.
+	talk := conversational(state)
+	p := &prepared{run: rn, state: state, kind: state.Kind, root: o.Root, usageBase: state.Usage,
+		reply: talk, noteAfter: owesNote(state, rn.Dir)}
 	switch state.Kind {
 	case store.KindFix:
 		// No bundle: a fix session reads the note internal/fix put in its
@@ -90,8 +92,13 @@ func (r *Runner) Steer(ctx context.Context, runID, text string, o SteerOptions) 
 			p.state.Fix.Worktree = p.root
 		}
 	default:
-		// A session started from an instruction alone has no bundle.
-		bundle, err := readBundleIfAny(rn.BundleDir())
+		// A session started from an instruction alone has no bundle; every
+		// other kind has one, and a run whose bundle is gone is refused.
+		read := readBundle
+		if state.Kind == store.KindSession {
+			read = readBundleIfAny
+		}
+		bundle, err := read(rn.BundleDir())
 		if err != nil {
 			return Outcome{}, err
 		}
@@ -121,6 +128,7 @@ func (r *Runner) Steer(ctx context.Context, runID, text string, o SteerOptions) 
 	handle := ""
 	if cont == provider.ContinueResume {
 		handle = state.Handle
+		p.resumeCost = state.HandleCostUSD
 	}
 	switch {
 	case talk:
@@ -234,16 +242,20 @@ func conversationPrompt(text string) string {
 }
 
 // conversational reports whether a follow-up on this run is conversation: every session run,
-// and a reply-first triage or RCA run once it has a reply.
-func conversational(state store.State, dir string) bool {
-	if state.Kind == store.KindSession {
-		return true
-	}
-	if !state.ReplyFirst {
+// and every reply-first triage or RCA run.
+func conversational(state store.State) bool {
+	return state.Kind == store.KindSession || state.ReplyFirst
+}
+
+// owesNote reports whether a steered run files its note after its reply: a reply-first triage
+// or RCA that never replied, because it blocked or stopped in its reply turn, as Resume does.
+// One that has replied keeps the note it has, and Update note files it again.
+func owesNote(state store.State, dir string) bool {
+	if !state.ReplyFirst || state.Kind == store.KindSession {
 		return false
 	}
 	_, err := os.Stat(filepath.Join(dir, answerFile))
-	return err == nil
+	return err != nil
 }
 
 // primedReplyPrompt opens a fresh session standing in for the one that answered: the run's

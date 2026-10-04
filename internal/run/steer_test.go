@@ -112,7 +112,10 @@ func TestSteerResumesTheRunInPlace(t *testing.T) {
 		defer s.finish()
 		// The channel is unbuffered, so once the first event has been
 		// taken the runner is past writing the running state.
-		s.emit(provider.Event{Kind: provider.EvUsage, Turns: 2, InputTok: 50, OutputTok: 10, CostUSD: 0.10})
+		// The resumed session reports the conversation's running cost,
+		// $0.42 before it and $0.10 of its own, and its own turns and
+		// tokens.
+		s.emit(provider.Event{Kind: provider.EvUsage, Turns: 2, InputTok: 50, OutputTok: 10, CostUSD: 0.52})
 		st, _ := (store.Run{Dir: dir}).ReadState()
 		statusDuringSteer = st.Status
 		s.emit(finalEvent(steeredDoc))
@@ -664,5 +667,76 @@ func TestSteerQueuedDuringTheNoteTurnIsHeld(t *testing.T) {
 	}
 	if q := out.State.QueuedSteers; len(q) != 1 || q[0].Status != store.SteerHeld {
 		t.Fatalf("queued steers %+v, want one held", q)
+	}
+}
+
+// TestSteerOnATriageWithoutItsBundleIsRefused: only a session may have no
+// bundle. A triage whose ticket.json is gone is refused as it always was,
+// rather than steered with an empty ticket.
+func TestSteerOnATriageWithoutItsBundleIsRefused(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replyThenNote("The export job times out.", finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil || outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("triage: %v %+v", err, outs)
+	}
+	dir := runDir(t, cfg, outs[0])
+	if err := os.Remove(filepath.Join(dir, "bundle", "ticket.json")); err != nil {
+		t.Fatal(err)
+	}
+	starts := p.startCount()
+	if _, err := r.Steer(context.Background(), outs[0].State.RunID, "Did you test it?", SteerOptions{}); err == nil || !strings.Contains(err.Error(), "read bundle") {
+		t.Fatalf("Steer = %v, want the missing bundle", err)
+	}
+	if p.startCount() != starts {
+		t.Error("a refused steer started a session")
+	}
+}
+
+// TestSteerBeforeTheReplyRepliesThenFilesTheNote: a reply-first triage that
+// blocked in its reply turn has neither reply nor note. A steer carries on
+// the way the run began: the follow-up as conversation, the reply into
+// answer.md, then the note turn.
+func TestSteerBeforeTheReplyRepliesThenFilesTheNote(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(provider.Event{Kind: provider.EvQuestion, Text: "Which database?"})}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := outs[0]
+	if first.State.Status != store.StatusBlocked || !first.State.ReplyFirst {
+		t.Fatalf("status %q replyFirst %v", first.State.Status, first.State.ReplyFirst)
+	}
+	dir := runDir(t, cfg, first)
+
+	const reply = "The orders database drops rows past 500."
+	p.script = replyThenNote(reply, finalEvent(triageDoc))
+	out, err := r.Steer(context.Background(), first.State.RunID, "The orders database", SteerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" || out.State.Phase != "" {
+		t.Fatalf("status %q reason %q warning %q phase %q", out.State.Status, out.State.Reason, out.State.NoteWarning, out.State.Phase)
+	}
+	if n := p.startCount(); n != 3 {
+		t.Fatalf("started %d sessions, want the blocked one, the reply and the note", n)
+	}
+	if spec := p.spec(1); spec.OutputSchema != nil || spec.Prompt != conversationPrompt("The orders database") {
+		t.Errorf("reply turn: schema %v prompt %q", spec.OutputSchema != nil, spec.Prompt)
+	}
+	if !bytes.Equal(p.spec(2).OutputSchema, prompt.TriageSchema) {
+		t.Error("the note turn was not held to the triage schema")
+	}
+	if got := readFile(t, filepath.Join(dir, "answer.md")); got != reply+"\n" {
+		t.Errorf("answer.md = %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "note.md")); err != nil {
+		t.Error(err)
+	}
+	if rows, _ := store.ReadRegister(cfg.Root); len(rows) != 1 {
+		t.Errorf("register rows %d, want 1", len(rows))
 	}
 }

@@ -632,7 +632,7 @@ func (r *Runner) finish(ctx context.Context, p *prepared, status store.Status, r
 	// in finishNote.
 	if p.state.Phase == store.PhaseNote && status != store.StatusCompleted {
 		p.state.Phase = ""
-		p.state.NoteWarning = "note not filed: " + reason
+		noteNotFiled(p, reason)
 		status, reason = store.StatusCompleted, ""
 	}
 	p.state.Status = status

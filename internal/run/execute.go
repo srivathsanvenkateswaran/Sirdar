@@ -54,6 +54,16 @@ var noWireSchemaEnforcement = map[string]bool{
 	"qwen":   true,
 }
 
+// cumulativeResumeCost names the providers whose resumed session reports
+// its cost as a running total for the whole conversation, not for the one
+// invocation. A live probe of claude 2.1.283 showed total_cost_usd rising
+// $0.0340, $0.0405, $0.0438 across three `--resume` calls of one session,
+// while num_turns and the token counts restarted with each call. Every
+// other provider either reports no cost or counts it per process.
+var cumulativeResumeCost = map[string]bool{
+	"claude": true,
+}
+
 // maxEmptyTurns is how many turns may end with no answer before the run is
 // given up on. A turn that says nothing is not a wrong answer but a session
 // that stopped — an ACP agent ends its turn on the spot when a tool call is
@@ -116,6 +126,14 @@ type execution struct {
 	// zero, and taking the maximum alone would hand the run back the
 	// budget it spent the first time.
 	base, seen store.Usage
+
+	// costOffset is the part of what the sessions being read now report as
+	// cost that base already counts: the conversation they resume had
+	// reported that much before they began (see cumulativeResumeCost). It
+	// is zero for a fresh session. rawCost is the highest cost the
+	// conversation has reported, offset included, which becomes the run's
+	// HandleCostUSD and the next resume's offset.
+	costOffset, rawCost float64
 
 	question    string
 	rateLimited bool
@@ -411,6 +429,10 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	ex.live.set(sess)
 	ex.tried = map[string]bool{}
 	ex.markTried(p.state.RequestedModel())
+	if resume != "" && cumulativeResumeCost[r.providerName()] {
+		ex.costOffset = p.resumeCost
+	}
+	ex.rawCost = ex.costOffset
 	// An Update note opens in the note phase, so its first session is the
 	// note turn's and its events are the ones judged.
 	if p.state.Phase == store.PhaseNote {
@@ -503,11 +525,12 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 			ex.seen.InputTokens = got.Usage.InputTok
 			ex.seen.OutputTokens = got.Usage.OutputTok
 		}
-		if got.Usage.CostUSD > ex.seen.CostUSD {
-			ex.seen.CostUSD = got.Usage.CostUSD
+		if c := ex.costOf(got.Usage.CostUSD); c > ex.seen.CostUSD {
+			ex.seen.CostUSD = c
 		}
 	}
 	p.state.Usage = usagePlus(ex.base, ex.seen)
+	p.state.HandleCostUSD = ex.rawCost
 	// The wall clock this execute spent joins what the run had already
 	// spent, so a later steer's minute budget counts against the total.
 	p.state.Usage.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(started).Seconds()
@@ -651,8 +674,21 @@ func (r *Runner) finishNote(ctx context.Context, p *prepared, ex *execution, res
 	default:
 		reason = "the note turn ended without a JSON note"
 	}
-	p.state.NoteWarning = "note not filed: " + reason
+	noteNotFiled(p, reason)
 	return r.finish(ctx, p, store.StatusCompleted, "", note.DigestRow{})
+}
+
+// noteNotFiled records why the note turn filed nothing. An Update note that
+// files nothing leaves the note it was replacing in place, so the run goes
+// on naming that note and its old warning, and the failure is a warning of
+// its own. Anything else has no note, and says so in NoteWarning.
+func noteNotFiled(p *prepared, reason string) {
+	if old := p.refiled; old != nil && len(old.notes) > 0 && len(p.state.Notes) == 0 {
+		p.state.Notes, p.state.NoteWarning = old.notes, old.warning
+		p.state.Warnings = append(p.state.Warnings, "note not updated: "+reason)
+		return
+	}
+	p.state.NoteWarning = "note not filed: " + reason
 }
 
 // afterAnswerWarnings records, as warnings on a run that has already filed
@@ -1179,7 +1215,7 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		ex.seen.Turns = max(ex.seen.Turns, ev.Turns)
 		ex.seen.InputTokens = max(ex.seen.InputTokens, ev.InputTok)
 		ex.seen.OutputTokens = max(ex.seen.OutputTokens, ev.OutputTok)
-		ex.seen.CostUSD = max(ex.seen.CostUSD, ev.CostUSD)
+		ex.seen.CostUSD = max(ex.seen.CostUSD, ex.costOf(ev.CostUSD))
 		elapsed := p.state.Usage.ElapsedSeconds
 		p.state.Usage = usagePlus(ex.base, ex.seen)
 		p.state.Usage.ElapsedSeconds = elapsed
@@ -1653,6 +1689,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	}
 }
 
+// costOf is what a session's reported cost adds to this execute's own, and
+// records the report as the conversation's latest total.
+func (ex *execution) costOf(reported float64) float64 {
+	ex.rawCost = max(ex.rawCost, reported)
+	return max(0, reported-ex.costOffset)
+}
+
 // failTurn records why the turn could not produce its note: the run's
 // failure ordinarily, and only the note step's in a note turn, where the
 // reply already stands.
@@ -1796,9 +1839,17 @@ func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.S
 	cont, _ := provider.PlanSteer(r.Provider)
 	var spec provider.SessionSpec
 	if handle := sess.Handle(); cont == provider.ContinueResume && handle != "" {
+		// The note session resumes the reply's conversation, whose cost
+		// is in base now, so what it reports on top of that is all that
+		// is new.
+		if cumulativeResumeCost[r.providerName()] {
+			ex.costOffset = ex.rawCost
+		}
 		spec = r.sessionSpec(p, handle)
 		spec.Prompt = r.notePrompt(p)
 	} else {
+		// A fresh conversation: everything it reports is its own.
+		ex.costOffset, ex.rawCost = 0, 0
 		original, err := os.ReadFile(filepath.Join(p.run.Dir, "prompt.md"))
 		if err != nil {
 			ex.noteErr = "the note turn could not start: " + err.Error()

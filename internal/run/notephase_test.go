@@ -461,13 +461,15 @@ func TestBreachInTheNoteTurnFailsTheRunAndClearsThePhase(t *testing.T) {
 
 // TestBudgetCoversBothTurnsTogether: each turn alone is under the $5 cap,
 // the two together are over it. The run is held to the total, the note
-// session is told what is left, and the run's usage is the sum.
+// session is told what is left, and the run's usage is the sum. The note
+// session resumes the reply's, so its $6 is the conversation's running
+// total: $3 of its own.
 func TestBudgetCoversBothTurnsTogether(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
 		{Kind: provider.EvUsage, Turns: 2, CostUSD: 3},
 		{Kind: provider.EvFinal, Text: "The ledger skips zero rows."},
-	}, provider.Event{Kind: provider.EvUsage, Turns: 2, CostUSD: 3}, finalEvent(triageDoc))}
+	}, provider.Event{Kind: provider.EvUsage, Turns: 2, CostUSD: 6}, finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 	r.CloseGrace = 50 * time.Millisecond
 
@@ -496,12 +498,15 @@ func TestBudgetCoversBothTurnsTogether(t *testing.T) {
 	}
 }
 
+// TestRunUsageIsTheSumOfBothTurns: turns and tokens are counted per
+// invocation and add up; the resumed note session's cost is the
+// conversation's running total, $2.50 of which $1.50 is its own.
 func TestRunUsageIsTheSumOfBothTurns(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
 		{Kind: provider.EvUsage, Turns: 2, InputTok: 100, OutputTok: 10, CostUSD: 1},
 		{Kind: provider.EvFinal, Text: "The ledger skips zero rows."},
-	}, provider.Event{Kind: provider.EvUsage, Turns: 3, InputTok: 50, OutputTok: 20, CostUSD: 1.5}, finalEvent(triageDoc))}
+	}, provider.Event{Kind: provider.EvUsage, Turns: 3, InputTok: 50, OutputTok: 20, CostUSD: 2.5}, finalEvent(triageDoc))}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
@@ -518,6 +523,60 @@ func TestRunUsageIsTheSumOfBothTurns(t *testing.T) {
 	rows, err := store.ReadRegister(cfg.Root)
 	if err != nil || len(rows) != 1 || rows[0].CostUSD != 2.5 || rows[0].Turns != 5 {
 		t.Errorf("register %+v, %v", rows, err)
+	}
+}
+
+// noteTurnCost runs a reply-first triage whose reply reports $3.00 and whose
+// note turn reports noteCost, on provider prov, and returns the outcome.
+func noteTurnCost(t *testing.T, prov func(*stubProvider) provider.Provider, noteCost float64) (*stubProvider, Outcome) {
+	t.Helper()
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
+		{Kind: provider.EvUsage, Turns: 2, CostUSD: 3},
+		{Kind: provider.EvFinal, Text: "The ledger skips zero rows."},
+	}, provider.Event{Kind: provider.EvUsage, Turns: 1, CostUSD: noteCost}, finalEvent(triageDoc))}
+	r := newRunner(cfg, prov(p), stubTracker{}, stubHelpdesk{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p, outs[0]
+}
+
+// TestResumedNoteTurnCostIsTheConversationsTotal is the claude CLI's own
+// accounting: a `--resume` call reports total_cost_usd for the whole
+// conversation. The note turn's $3.40 is the run's cost, not $6.40, and
+// the $5 cap is judged on $3.40, so the note is filed.
+func TestResumedNoteTurnCostIsTheConversationsTotal(t *testing.T) {
+	p, out := noteTurnCost(t, func(p *stubProvider) provider.Provider { return p }, 3.4)
+	if p.spec(1).Resume == "" {
+		t.Fatal("the note turn did not resume the reply's session")
+	}
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q note warning %q", out.State.Status, out.State.NoteWarning)
+	}
+	if u := out.State.Usage; u.CostUSD < 3.399 || u.CostUSD > 3.401 || u.Turns != 3 {
+		t.Errorf("usage %+v, want $3.40 over 3 turns", u)
+	}
+	if c := out.State.HandleCostUSD; c < 3.399 || c > 3.401 {
+		t.Errorf("handle cost %v, want the conversation's $3.40", c)
+	}
+}
+
+// TestPrimedNoteTurnCostAddsToTheReply: a primed note turn is a new
+// conversation, so all of its $0.40 is new.
+func TestPrimedNoteTurnCostAddsToTheReply(t *testing.T) {
+	p, out := noteTurnCost(t, func(p *stubProvider) provider.Provider {
+		return steerable{stubProvider: p, c: provider.ContinuePrimed}
+	}, 0.4)
+	if p.spec(1).Resume != "" {
+		t.Fatal("the note turn resumed")
+	}
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q note warning %q", out.State.Status, out.State.NoteWarning)
+	}
+	if u := out.State.Usage; u.CostUSD < 3.399 || u.CostUSD > 3.401 {
+		t.Errorf("usage %+v, want $3.40", u)
 	}
 }
 

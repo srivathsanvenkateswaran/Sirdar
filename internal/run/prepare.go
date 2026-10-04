@@ -76,6 +76,17 @@ type prepared struct {
 	// whose session adds to it rather than replacing it.
 	usageBase store.Usage
 
+	// resumeCost is the cost the conversation this execute resumes had
+	// already reported, which usageBase counts: the run's HandleCostUSD, for
+	// a steer or an Update note that continues the run's own handle. A
+	// resume of a blocked run leaves it zero, because its earlier usage is
+	// not in usageBase but merged with what the resumed session reports.
+	resumeCost float64
+
+	// refiled is the note an Update note is replacing, kept so that a note
+	// turn that files nothing leaves the run naming the note still on disk.
+	refiled *filedNote
+
 	// steer is the follow-up instruction this execute carries, when it is
 	// one; execute writes it into the transcript ahead of the session.
 	// previousFinal is the answer the run had already filed, so a steer
@@ -100,6 +111,12 @@ type prepared struct {
 	// reply-first triage or rca still files its note. A session run has
 	// no note to file.
 	noteAfter bool
+}
+
+// filedNote is what a run said about its note before an Update note began.
+type filedNote struct {
+	notes   []string
+	warning string
 }
 
 // replyTurn reports whether the turn being run now is a reply: the run

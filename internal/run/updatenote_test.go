@@ -137,6 +137,16 @@ func TestUpdateNoteReplacesTheNote(t *testing.T) {
 			t.Errorf("%s does not hold the new note", path)
 		}
 	}
+	// The register is a log: the note filed again is a second row for the
+	// same run, beside the first, as a steer that changes the note adds one.
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].RunID != first.State.RunID || rows[1].RunID != first.State.RunID ||
+		rows[0].Title != "Export fails for large orders" || rows[1].Title != "Export drops the last page" {
+		t.Errorf("register rows %+v, want the first note's and the new one's", rows)
+	}
 }
 
 // refusedNote checks that UpdateNote refused with ErrNoNote and left the
@@ -188,12 +198,13 @@ func TestUpdateNoteRefusesALiveRun(t *testing.T) {
 
 // TestUpdateNoteThatCannotStartLeavesTheRunCompleted: a note turn whose
 // session never starts is a warning on a run that already answered, not a
-// failed run.
+// failed run. With no note filed before, the warning is the run's
+// NoteWarning.
 func TestUpdateNoteThatCannotStartLeavesTheRunCompleted(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
-	first := replyFirstTriage(t, cfg, r, p, replyThenNote("The export job times out.", finalEvent(triageDoc)))
+	first := replyFirstTriage(t, cfg, r, p, failingNote)
 
 	r.Provider = failingStart{p}
 	out, err := r.UpdateNote(context.Background(), first.State.RunID, UpdateNoteOptions{})
@@ -205,6 +216,52 @@ func TestUpdateNoteThatCannotStartLeavesTheRunCompleted(t *testing.T) {
 	}
 	if !strings.HasPrefix(out.State.NoteWarning, "note not filed: ") || !strings.Contains(out.State.NoteWarning, "no session today") {
 		t.Errorf("note warning %q", out.State.NoteWarning)
+	}
+}
+
+// TestFailedUpdateNoteKeepsTheNoteItWasReplacing: an Update note that files
+// nothing, because its note fails validation twice or its session never
+// starts, leaves the run naming the note still on disk, with the warning it
+// had, and says the update failed among the run's warnings.
+func TestFailedUpdateNoteKeepsTheNoteItWasReplacing(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail func(r *Runner, p *stubProvider)
+		want string
+	}{
+		{"validation", func(_ *Runner, p *stubProvider) { p.script = failingNote }, "schema validation failed twice"},
+		{"start", func(r *Runner, p *stubProvider) { r.Provider = failingStart{p} }, "no session today"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := newWorkspace(t)
+			p := &stubProvider{}
+			r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+			first := replyFirstTriage(t, cfg, r, p, replyThenNote("The export job times out.", finalEvent(triageDoc)))
+			dir := runDir(t, cfg, first)
+			noteBefore := readFile(t, filepath.Join(dir, "note.md"))
+
+			tc.fail(r, p)
+			out, err := r.UpdateNote(context.Background(), first.State.RunID, UpdateNoteOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+				t.Fatalf("status %q warning %q", out.State.Status, out.State.NoteWarning)
+			}
+			if strings.Join(out.State.Notes, ",") != strings.Join(first.State.Notes, ",") || len(out.State.Notes) != 2 {
+				t.Errorf("notes %v, want the note still on disk %v", out.State.Notes, first.State.Notes)
+			}
+			var warned bool
+			for _, w := range out.State.Warnings {
+				warned = warned || (strings.HasPrefix(w, "note not updated: ") && strings.Contains(w, tc.want))
+			}
+			if !warned {
+				t.Errorf("warnings %q, want the failed update named", out.State.Warnings)
+			}
+			if readFile(t, filepath.Join(dir, "note.md")) != noteBefore {
+				t.Error("a failed Update note changed note.md")
+			}
+		})
 	}
 }
 
