@@ -625,6 +625,16 @@ func (r *Runner) prepareFailed(ctx context.Context, p *prepared, key string, kin
 // post can honour whatever deadline the caller set — but decoupled from the
 // run's own cancellation: see notifyFinished.
 func (r *Runner) finish(ctx context.Context, p *prepared, status store.Status, reason string, row note.DigestRow) Outcome {
+	// Still in the note phase here means an Update note's note turn never
+	// got going: no provider, an interrupt while a rate limit held it, a
+	// session that would not start. The run had already answered, so what
+	// stopped the note is a warning on it rather than its verdict, as it is
+	// in finishNote.
+	if p.state.Phase == store.PhaseNote && status != store.StatusCompleted {
+		p.state.Phase = ""
+		p.state.NoteWarning = "note not filed: " + reason
+		status, reason = store.StatusCompleted, ""
+	}
 	p.state.Status = status
 	p.state.Reason = reason
 	p.state.UpdatedAt = r.now()

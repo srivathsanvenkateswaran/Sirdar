@@ -411,6 +411,11 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	ex.live.set(sess)
 	ex.tried = map[string]bool{}
 	ex.markTried(p.state.RequestedModel())
+	// An Update note opens in the note phase, so its first session is the
+	// note turn's and its events are the ones judged.
+	if p.state.Phase == store.PhaseNote {
+		ex.noteSess = sess
+	}
 
 	// A steer's instruction goes into the transcript ahead of the session
 	// it started, with who is answering it: the session that wrote the

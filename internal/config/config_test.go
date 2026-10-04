@@ -51,6 +51,23 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestNotesFilenamesSessionDefault(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Notes.Filenames.Session != "Sessions/{key} {slug}.md" {
+		t.Fatalf("session filename default %q", c.Notes.Filenames.Session)
+	}
+	c, err = Load(writeCfg(t, minimal+"notes:\n  filenames:\n    session: \"Asks/{key}.md\"\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Notes.Filenames.Session != "Asks/{key}.md" {
+		t.Fatalf("a configured session filename became %q", c.Notes.Filenames.Session)
+	}
+}
+
 func TestLoadRejectsUnknownKey(t *testing.T) {
 	_, err := Load(writeCfg(t, minimal+"\nbogus: 1\n"))
 	if err == nil || !strings.Contains(err.Error(), "bogus") {

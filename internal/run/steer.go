@@ -39,7 +39,9 @@ var ErrSteerLive = errors.New("the run is still going")
 // Steer continues a finished run with a follow-up instruction. The same
 // run goes back to running, its transcript grows in place, its usage and
 // wall-clock time keep counting against the same caps, and its note is
-// rendered again when the answer changes.
+// rendered again when the answer changes. A run that answers in chat (see
+// conversational) takes the follow-up as conversation instead: no schema,
+// the answer replaces answer.md, and the note is left alone.
 //
 // Every refusal happens before the run's state is touched: a live run, an
 // eval, a run over any budget, a provider that cannot continue (see
@@ -75,7 +77,11 @@ func (r *Runner) Steer(ctx context.Context, runID, text string, o SteerOptions) 
 		cont = provider.ContinuePrimed
 	}
 
-	p := &prepared{run: rn, state: state, kind: state.Kind, root: o.Root, usageBase: state.Usage}
+	// A run that answers in chat takes a follow-up as conversation: the
+	// operator gets an answer in answer.md, and the note, its filed copy
+	// and the register stay as the note turn left them.
+	talk := conversational(state, rn.Dir)
+	p := &prepared{run: rn, state: state, kind: state.Kind, root: o.Root, usageBase: state.Usage, reply: talk}
 	switch state.Kind {
 	case store.KindFix:
 		// No bundle: a fix session reads the note internal/fix put in its
@@ -84,7 +90,8 @@ func (r *Runner) Steer(ctx context.Context, runID, text string, o SteerOptions) 
 			p.state.Fix.Worktree = p.root
 		}
 	default:
-		bundle, err := readBundle(rn.BundleDir())
+		// A session started from an instruction alone has no bundle.
+		bundle, err := readBundleIfAny(rn.BundleDir())
 		if err != nil {
 			return Outcome{}, err
 		}
@@ -111,15 +118,30 @@ func (r *Runner) Steer(ctx context.Context, runID, text string, o SteerOptions) 
 		}
 	}
 
-	previous, _ := os.ReadFile(filepath.Join(rn.Dir, "result.json"))
-	p.previousFinal = previous
-
 	handle := ""
-	switch cont {
-	case provider.ContinueResume:
+	if cont == provider.ContinueResume {
 		handle = state.Handle
+	}
+	switch {
+	case talk:
+		if handle != "" {
+			p.promptText = conversationPrompt(text)
+			break
+		}
+		original, err := os.ReadFile(filepath.Join(rn.Dir, "prompt.md"))
+		if err != nil {
+			return Outcome{}, fmt.Errorf("run: read the run's prompt: %w", err)
+		}
+		// A session that failed before it answered has no reply to hand on.
+		earlier, _ := os.ReadFile(filepath.Join(rn.Dir, answerFile))
+		p.promptText = primedReplyPrompt(string(original), string(earlier), text)
+	case cont == provider.ContinueResume:
+		previous, _ := os.ReadFile(filepath.Join(rn.Dir, "result.json"))
+		p.previousFinal = previous
 		p.promptText = steerPrompt(text, state.Kind)
 	default:
+		previous, _ := os.ReadFile(filepath.Join(rn.Dir, "result.json"))
+		p.previousFinal = previous
 		original, err := os.ReadFile(filepath.Join(rn.Dir, "prompt.md"))
 		if err != nil {
 			return Outcome{}, fmt.Errorf("run: read the run's prompt: %w", err)
@@ -209,6 +231,36 @@ func conversationPrompt(text string) string {
 	return "Follow-up from the operator:\n\n" + text + "\n\n" +
 		"Answer the operator. Reply in markdown, verdict first, and say how each claim was " +
 		"established. Do not repeat your earlier reply or the note unless they ask for it."
+}
+
+// conversational reports whether a follow-up on this run is conversation: every session run,
+// and a reply-first triage or RCA run once it has a reply.
+func conversational(state store.State, dir string) bool {
+	if state.Kind == store.KindSession {
+		return true
+	}
+	if !state.ReplyFirst {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(dir, answerFile))
+	return err == nil
+}
+
+// primedReplyPrompt opens a fresh session standing in for the one that answered: the run's
+// original prompt, its latest reply, and the follow-up.
+func primedReplyPrompt(original, earlierReply, text string) string {
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(original))
+	b.WriteString("\n\n---\n\n## Your earlier reply\n\n")
+	if strings.TrimSpace(earlierReply) == "" {
+		b.WriteString("A previous session worked on the task above but gave the operator no reply. You are continuing its work in a new session.\n\n")
+	} else {
+		b.WriteString("A previous session answered the operator with this reply. You are continuing its work in a new session, so read it as your own:\n\n")
+		b.WriteString(strings.TrimRight(earlierReply, "\n"))
+		b.WriteString("\n\n")
+	}
+	b.WriteString(conversationPrompt(text))
+	return b.String()
 }
 
 // primedPrompt is the opening message of a fresh session standing in for

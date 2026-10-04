@@ -525,6 +525,8 @@ type Config struct {
 			Triage     string `yaml:"triage"`
 			RCA        string `yaml:"rca"`
 			Resolution string `yaml:"resolution"`
+			// Session is where Save as note writes a session run's reply.
+			Session string `yaml:"session"`
 		} `yaml:"filenames"`
 	} `yaml:"notes"`
 	Budget struct {
@@ -798,6 +800,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Notes.Filenames.Resolution == "" {
 		c.Notes.Filenames.Resolution = "{key} RES {slug}.md"
+	}
+	if c.Notes.Filenames.Session == "" {
+		c.Notes.Filenames.Session = "Sessions/{key} {slug}.md"
 	}
 	if c.Playbooks == "" {
 		c.Playbooks = ".sirdar/playbooks"

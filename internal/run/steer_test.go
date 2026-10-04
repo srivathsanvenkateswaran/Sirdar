@@ -2,6 +2,7 @@ package run
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 )
@@ -436,5 +438,231 @@ func TestSteerBlockedRunTakesTheInstructionAsTheAnswer(t *testing.T) {
 	}
 	if len(out.State.Notes) != 2 {
 		t.Fatalf("notes: %v", out.State.Notes)
+	}
+}
+
+// followUpAnswer is what a session says when asked whether it tested its claim.
+const followUpAnswer = "No — read from code only. Unverified."
+
+// finalCount is how many final lines a run's events.jsonl holds.
+func finalCount(t *testing.T, dir string) int {
+	t.Helper()
+	n := 0
+	for _, k := range eventKinds(t, dir) {
+		if k == "final" {
+			n++
+		}
+	}
+	return n
+}
+
+// TestSteerOnASessionIsConversation is a follow-up on a settled session
+// started from an instruction alone. It has no bundle, which a steer used to
+// read and refuse on, and its answer is a reply, not a document.
+func TestSteerOnASessionIsConversation(t *testing.T) {
+	cfg, p, first := runSessionWithoutAReference(t)
+	r := newRunner(cfg, p, nil, nil)
+	p.script = replay(provider.Event{Kind: provider.EvFinal, Text: followUpAnswer})
+
+	out, err := r.Steer(context.Background(), first.State.RunID, "Did you test it?", SteerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted || out.State.RunID != first.State.RunID {
+		t.Fatalf("status %q reason %q run %s", out.State.Status, out.State.Reason, out.State.RunID)
+	}
+	spec := p.spec(1)
+	if spec.OutputSchema != nil {
+		t.Errorf("the follow-up was held to a schema: %s", spec.OutputSchema)
+	}
+	if spec.Prompt != conversationPrompt("Did you test it?") {
+		t.Errorf("prompt %q", spec.Prompt)
+	}
+	if spec.Resume != "handle-abc" {
+		t.Errorf("resume %q", spec.Resume)
+	}
+	dir := runDir(t, cfg, out)
+	if got := readFile(t, filepath.Join(dir, "answer.md")); got != followUpAnswer+"\n" {
+		t.Errorf("answer.md = %q", got)
+	}
+	if s := out.State.Steers; len(s) != 1 || s[0].Continuation != "resume" {
+		t.Errorf("steers %+v", s)
+	}
+	if n := finalCount(t, dir); n != 2 {
+		t.Errorf("events.jsonl holds %d final lines, want both replies", n)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "note.md")); !os.IsNotExist(err) {
+		t.Errorf("a session follow-up filed a note: %v", err)
+	}
+}
+
+// TestSteerOnASessionWithAReferenceIsConversation: a session that has a
+// bundle is still a session. Its follow-up is not sent the triage steer and
+// schema, and files no triage note.
+func TestSteerOnASessionWithAReferenceIsConversation(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(provider.Event{Kind: provider.EvFinal, Text: "Yes: the PR dropped the guard."})}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	first, err := r.Session(context.Background(), "OMNI-1", Options{Instruction: "Was it the PR?"})
+	if err != nil || first.State.Status != store.StatusCompleted {
+		t.Fatalf("session: %v %q %q", err, first.State.Status, first.State.Reason)
+	}
+
+	p.script = replay(provider.Event{Kind: provider.EvFinal, Text: followUpAnswer})
+	out, err := r.Steer(context.Background(), first.State.RunID, "Did you test it?", SteerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	spec := p.spec(1)
+	if spec.OutputSchema != nil || spec.Prompt != conversationPrompt("Did you test it?") {
+		t.Errorf("schema %v prompt %q", spec.OutputSchema != nil, spec.Prompt)
+	}
+	dir := runDir(t, cfg, out)
+	if got := readFile(t, filepath.Join(dir, "answer.md")); got != followUpAnswer+"\n" {
+		t.Errorf("answer.md = %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "note.md")); !os.IsNotExist(err) {
+		t.Errorf("a session follow-up filed a note: %v", err)
+	}
+	if rows, _ := store.ReadRegister(cfg.Root); len(rows) != 0 {
+		t.Errorf("register rows %+v", rows)
+	}
+	if len(out.State.Notes) != 0 {
+		t.Errorf("notes %v", out.State.Notes)
+	}
+}
+
+// TestSteerAfterTheTriageNoteIsConversation: once a reply-first triage has
+// replied and filed its note, a follow-up is answered in chat and the note,
+// its filed copy and the register are left exactly as they were.
+func TestSteerAfterTheTriageNoteIsConversation(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replyThenNote("The export job times out.", finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil || outs[0].State.Status != store.StatusCompleted || outs[0].State.NoteWarning != "" {
+		t.Fatalf("triage: %v %+v", err, outs)
+	}
+	first := outs[0]
+	dir := runDir(t, cfg, first)
+	notePath := filepath.Join(dir, "note.md")
+	filedPath := filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md")
+	registerPath := filepath.Join(cfg.Root, ".sirdar", "register.jsonl")
+	noteBefore, filedBefore, registerBefore := readFile(t, notePath), readFile(t, filedPath), readFile(t, registerPath)
+
+	// Answers in prose whatever it is asked; a schema'd session would
+	// file nothing from this, and a note turn would show as a third start.
+	p.script = replay(provider.Event{Kind: provider.EvFinal, Text: followUpAnswer})
+	out, err := r.Steer(context.Background(), first.State.RunID, "Did you test it?", SteerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted || out.State.Phase != "" || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q phase %q warning %q", out.State.Status, out.State.Reason, out.State.Phase, out.State.NoteWarning)
+	}
+	if n := p.startCount(); n != 3 {
+		t.Fatalf("started %d sessions, want the reply, the note and one follow-up", n)
+	}
+	spec := p.spec(2)
+	if spec.OutputSchema != nil || spec.Prompt != conversationPrompt("Did you test it?") {
+		t.Errorf("schema %v prompt %q", spec.OutputSchema != nil, spec.Prompt)
+	}
+	if got := readFile(t, filepath.Join(dir, "answer.md")); got != followUpAnswer+"\n" {
+		t.Errorf("answer.md = %q", got)
+	}
+	if readFile(t, notePath) != noteBefore || readFile(t, filedPath) != filedBefore || readFile(t, registerPath) != registerBefore {
+		t.Error("a follow-up rewrote the note, its filed copy or the register")
+	}
+	if strings.Join(out.State.Notes, ",") != strings.Join(first.State.Notes, ",") {
+		t.Errorf("notes %v, were %v", out.State.Notes, first.State.Notes)
+	}
+}
+
+// TestSteerOnANoteOnlyTriageKeepsTheSchema: a run whose answer is its note
+// is steered as it always was, for the document again.
+func TestSteerOnANoteOnlyTriageKeepsTheSchema(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	first := triageThen(t, cfg, r, p)
+
+	p.script = replay(finalEvent(steeredDoc))
+	if _, err := r.Steer(context.Background(), first.State.RunID, "Re-check it", SteerOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	spec := p.spec(1)
+	if !bytes.Equal(spec.OutputSchema, prompt.TriageSchema) {
+		t.Error("a note-only steer lost the triage schema")
+	}
+	if spec.Prompt != steerPrompt("Re-check it", store.KindTriage) {
+		t.Errorf("prompt %q", spec.Prompt)
+	}
+}
+
+// TestPrimedSteerOnASessionCarriesTheEarlierReply: a provider that cannot
+// resume opens a fresh session with the original prompt, the reply it is
+// standing in for, and the follow-up.
+func TestPrimedSteerOnASessionCarriesTheEarlierReply(t *testing.T) {
+	cfg, stub, first := runSessionWithoutAReference(t)
+	r := newRunner(cfg, steerable{stubProvider: stub, c: provider.ContinuePrimed}, nil, nil)
+	stub.script = replay(provider.Event{Kind: provider.EvFinal, Text: followUpAnswer})
+
+	out, err := r.Steer(context.Background(), first.State.RunID, "Did you test it?", SteerOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	spec := stub.spec(1)
+	if spec.Resume != "" || spec.OutputSchema != nil {
+		t.Errorf("resume %q schema %v", spec.Resume, spec.OutputSchema != nil)
+	}
+	for _, want := range []string{strings.TrimSpace(stub.spec(0).Prompt), "## Your earlier reply", sessionReply, conversationPrompt("Did you test it?")} {
+		if !strings.Contains(spec.Prompt, want) {
+			t.Errorf("primed prompt lacks %q", firstLine(want))
+		}
+	}
+	if out.State.Steers[0].Continuation != "primed" {
+		t.Errorf("steers %+v", out.State.Steers)
+	}
+}
+
+// TestSteerQueuedDuringTheNoteTurnIsHeld: a follow-up typed while Update note
+// files the note is not sent into that turn; it waits for the run to settle.
+func TestSteerQueuedDuringTheNoteTurnIsHeld(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replyThenNote("The export job times out.", finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.SteerPoll = 5 * time.Millisecond
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil || outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("triage: %v %+v", err, outs)
+	}
+
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if _, err := (store.Run{Dir: spec.RunDir}).QueueSteer("Also check the refunds table", "", time.Now()); err != nil {
+			t.Error(err)
+		}
+		// Long enough for the inbox poll to take it while the turn is open.
+		time.Sleep(30 * time.Millisecond)
+		s.emit(finalEvent(triageDoc))
+	}
+	out, err := r.UpdateNote(context.Background(), outs[0].State.RunID, UpdateNoteOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	if sent := p.session(2).sentTexts(); len(sent) != 0 {
+		t.Fatalf("the note turn was sent %q", sent)
+	}
+	if q := out.State.QueuedSteers; len(q) != 1 || q[0].Status != store.SteerHeld {
+		t.Fatalf("queued steers %+v, want one held", q)
 	}
 }

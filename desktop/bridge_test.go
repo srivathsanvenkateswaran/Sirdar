@@ -90,6 +90,10 @@ var notBridged = map[string]string{
 	// in the frontend calls them. See internal/app/live.go.
 	"Append": "the run executor publishes its own event lines through this",
 	"Done":   "the run executor closes its event log through this",
+	// Temporary: the bridge methods arrive with the session routes, and
+	// these two entries go with them.
+	"UpdateNote": "bridged with the session routes in task B5",
+	"SaveNote":   "bridged with the session routes in task B5",
 }
 
 // bridgeOnlyMethods are the desktop's own bindings: methods on *Bridge with
