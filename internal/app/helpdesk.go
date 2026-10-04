@@ -71,6 +71,7 @@ func newResolver(cfg *config.Config, tracker source.Tracker, helpdesk source.Hel
 		slack:        sr,
 		slackErr:     serr,
 		cache:        newIntakeCache(cfg.Root, nil),
+		repos:        cfg.Repositories(),
 		fallback:     fallback,
 	}
 	if cfg.Sources.Helpdesk != nil {

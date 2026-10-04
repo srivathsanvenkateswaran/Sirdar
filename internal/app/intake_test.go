@@ -43,6 +43,7 @@ func TestRecognise(t *testing.T) {
 		{"a look-alike Zoho host is a URL and nothing more", "https://desk.zoho.com.evil.example/agent/x/tickets/details/123400000456789", "", ""},
 		{"a UUID is not a key", "ABCDEF12-3456-7890-ABCD-EF1234567890", "", ""},
 		{"a short number is not a helpdesk number", "#12 is the room", "", ""},
+		{"a GitHub reference is not a helpdesk number", "broke after acme/Acme.Web#12345", "", ""},
 		{"prose", "the customer says the export is empty", "", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
