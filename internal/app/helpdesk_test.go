@@ -34,8 +34,17 @@ func TestTrackerKeyOfReadsTheFieldsThenTheSubject(t *testing.T) {
 			Fields:  map[string]string{"ticketIds": "OMNI-3233"},
 		}, "OMNI-3233"},
 		{"the first field by name, so the answer does not move", ticket.HelpdeskTicket{
-			Fields: map[string]string{"zzz": "OMNI-9", "aaa": "OMNI-1"},
-		}, "OMNI-1"},
+			Fields: map[string]string{"zzz": "SBX-9", "aaa": "SBX-1"},
+		}, "SBX-1"},
+		{"a field named for the link before any other", ticket.HelpdeskTicket{
+			Fields: map[string]string{"aaa": "SBX-1", "cf.cf_jira_ticket_id": "SBX-7"},
+		}, "SBX-7"},
+		{"several keys in one field: the newest-numbered wins", ticket.HelpdeskTicket{
+			Fields: map[string]string{"cf.cf_jira_ticket_id": "SBX-12, SBX-140, SBX-9"},
+		}, "SBX-140"},
+		{"an upper-case UUID is not read as a key", ticket.HelpdeskTicket{
+			Fields: map[string]string{"cf.cf_jira_ticket_id": "ABCDEF12-3456-7890-ABCD-EF1234567890"},
+		}, ""},
 		{"nothing that is a key", ticket.HelpdeskTicket{
 			Subject: "refund is late",
 			Fields:  map[string]string{"tags": "billing, urgent", "via": "email"},
@@ -68,7 +77,10 @@ func TestResolveHelpdeskAnswersTheKeyOrTheReason(t *testing.T) {
 	}
 
 	// A record that names no tracker issue is an answer with a reason on
-	// it, not an error: the composer prints the reason under the box.
+	// it, not an error: the composer prints the reason under the box. A
+	// fresh workspace, because the first one now remembers 25312.
+	root = newWorkspace(t)
+	wsID = WorkspaceID(root)
 	bare := linkedHelpdesk{hd: ticket.HelpdeskTicket{ID: "25312", Subject: "refund is late"}}
 	svc = newService(t, root, stubBuilder(&stubProvider{}, stubTracker{}, bare))
 	got, err = svc.ResolveHelpdesk(context.Background(), wsID, "25312")

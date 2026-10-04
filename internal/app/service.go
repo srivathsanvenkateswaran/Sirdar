@@ -67,6 +67,10 @@ type Options struct {
 	// ProbeModel resolves one model alias with the provider's CLI; nil
 	// means claude.ProbeModel. Tests set it so no CLI is started.
 	ProbeModel ProbeFunc
+	// Slack builds the Slack reader for a workspace; nil means SlackFor,
+	// which reads sources.slack.token. Tests set it so no request leaves
+	// the process.
+	Slack func(cfg *config.Config) (SlackReader, error)
 }
 
 // DefaultBuffer is how many events a subscriber may fall behind by before
