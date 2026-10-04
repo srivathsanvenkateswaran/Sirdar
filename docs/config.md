@@ -81,6 +81,7 @@ rather than being silently ignored.
 | `permissions.readAlso` | list of string | `[]` | Paths outside the workspace a read-class tool may still open: an absolute path or one starting with `~`, with `*` spanning `/`. Empty — the default — confines every read to the workspace, the run directory and its bundle; see Read scope below |
 | `permissions.ask` | bool | `true` | A call the policy refuses but the operator could allow — a command off `permissions.bash`, an MCP tool `permissions.mcp` does not cover, a fetch to an unlisted host, a read outside the scope — blocks the run on a question instead of being refused. It is answered with Allow once, Allow for this run or Deny (`sirdar resume RUN --allow \| --allow-run \| --deny`). The answers are **per run**: they are kept on the run's `state.json`, never written here. `false` refuses the call and lets the agent carry on, as before. An eval never asks. See [Blocked runs](blocked.md) |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
+| `mcp.userServers` | list of string | `[]` | Names of servers from the Claude CLI's own user scope (`~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json`) that a run sees beside the workspace's — the Slack, helpdesk or tracker connectors the operator already uses in Claude Code. A name the CLI does not have fails the load and lists the ones it has. See [Your own MCP servers](#your-own-mcp-servers-mcpuserservers) |
 | `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
 | `notify.on` | list of string | all four terminal states | Which of `completed`, `failed`, `over_budget`, `blocked` are worth a message |
 | `notify.includeTitle` | bool | `false` | Send the ticket title; off because a support subject line routinely names the customer |
@@ -278,7 +279,8 @@ Every row of the report carries one of three levels, and the mark says which:
 `sirdar doctor` exits non-zero only on a failure, so a warning does not trip a CI gate. What
 warns today: the `mcp` row when `mcp.workspaceOnly` is off (the agent sees every user-level
 server the operator has) and when it is on with no workspace `.mcp.json` (the agent gets no MCP
-tools at all); the Codex `mcp servers` row when the session would see none; the
+tools at all); the `mcp user servers` row when the provider runs without some of them or
+`mcp.workspaceOnly` is off; the Codex `mcp servers` row when the session would see none; the
 `claude environment` row under `billing: api` with a custom `ANTHROPIC_BASE_URL`, where
 `budget.maxUsd` cannot be trusted; and the qwen `workspace settings` row when a session that
 keeps folder trust for MCP would load the repository's own `.qwen/settings.json` or
@@ -465,10 +467,27 @@ sources:
     token: keychain:sirdar-slack      # a user (xoxp-) or bot (xoxb-) token
 ```
 
-Without `sources.slack`, a Slack link is answered with "Slack is not configured: set
-sources.slack.token (a Slack user token with channels:history, groups:history) in
-config.yaml". `sirdar doctor` has a `sources.slack` row that checks the token with
-`auth.test`.
+### Slack through your own MCP server
+
+With no `sources.slack` but `slack` in `mcp.userServers` and `provider: claude`, a Slack
+link is read through the Slack MCP server the operator already has in Claude Code, and no
+token is needed. One short session does it: it sees that server and nothing else, may call
+only `mcp__slack__slack_read_*`, has four turns, and answers with the messages exactly as
+written and the ticket references in them. Those go the same way as the Web API path's:
+the references are resolved onward, the messages become `slack.md`, and the chip says
+`Slack (via MCP) → #28310 → SBX-1 · matched by title`. The thread is kept in memory for
+half an hour, so resolving a link and then starting the run on it is one reading, not two.
+
+```yaml
+mcp:
+  userServers: [slack]
+```
+
+A token wins when both are set. Without either, a Slack link is answered with "Slack is not
+configured: set sources.slack.token (a Slack user token with channels:history,
+groups:history) in config.yaml, or add `slack` to mcp.userServers". `sirdar doctor` has a
+`sources.slack` row that checks the token with `auth.test`, or says the MCP server reads
+Slack links.
 
 ## Built-in helpdesks
 
@@ -1255,6 +1274,69 @@ as the case may be. `permissions.mcp` still decides which of their tools it may 
 `provider: openai` is not affected by the setting, because it never had the wider reach to
 give up: the loop starts MCP servers itself, and the workspace's `.mcp.json` is the only file
 it reads.
+
+### Your own MCP servers (`mcp.userServers`)
+
+`mcp.workspaceOnly` keeps the operator's own servers out of a run, and that includes the ones
+a support engineer actually wants there: Slack, the helpdesk, the tracker. `mcp.userServers`
+names the ones to let back in:
+
+```yaml
+mcp:
+  userServers: [slack, zoho-desk, janus]
+```
+
+Each name is a server in the Claude CLI's **user scope** — the top-level `mcpServers` of
+`~/.claude.json`, or of `$CLAUDE_CONFIG_DIR/.claude.json` when that variable is set, which is
+what `claude mcp add --scope user` writes. At the start of every run Sirdar reads that file
+and copies the named entries **verbatim** — `type`, `url`, `headers`, the `oauth` block,
+`command`, `args`, `env` — into the session's MCP config, beside the workspace's `.mcp.json`
+servers. `--strict-mcp-config` stays, so every other user server is still kept out. The
+entries can carry credentials, so they are never logged and never written anywhere but that
+generated config: a 0600 file in a 0700 temporary directory, removed when the session's
+process has been reaped. A name the CLI does not have fails the config load with the names it
+does have; a name that disappears between load and run fails the run. A user server with the
+same name as a workspace server is refused rather than letting either win.
+
+**OAuth servers.** Slack's official server (`https://mcp.slack.com/mcp`) authenticates with an
+OAuth grant the Claude CLI holds. Supplied through `--mcp-config` under the **same name** and
+the same URL, the CLI reuses that grant: a session started with only the `slack` entry and
+`--strict-mcp-config` reported the server `connected` and ran `slack_search_channels` without
+asking to sign in again. Keep the name as it is in `~/.claude.json`; the grant is not found
+under another.
+
+**Which providers.** `provider: claude` carries every entry. `provider: codex` writes the
+stdio entries (`command`, `args`, `env`) and the http entries that carry their own `headers`
+(`url`, `http_headers`) into its generated `config.toml`, and runs without the rest — an http
+entry with an `oauth` block, or with no headers at all, authenticates with a grant only the
+Claude CLI holds — saying so once in the run's transcript. `acp`, `qwen`, `cursor`, `agy` and
+`openai` ignore `mcp.userServers` and say so the same way. With `mcp.workspaceOnly: false` the
+setting does nothing: the session loads every user server itself.
+
+**Permissions.** Their tools are judged exactly like a workspace server's: `permissions.mcp`
+when it is non-empty, the write-word heuristic otherwise, which refuses `slack_send_*`,
+`slack_add_*`, `slack_create_*`, `slack_update_*`, `slack_schedule_*` and
+`janus_create_*`, `update_*`, `transition_*`, `log_*`, `add_*`, `delete_*`. With
+`permissions.ask` on, a read the list does not cover becomes a question. The heuristic also
+refuses `resolveTicketNumber` (`resolve` is a write word), so a workspace that uses these
+three servers is better off naming their reads outright:
+
+```yaml
+permissions:
+  mcp:
+    - "mcp__slack__slack_read_*"
+    - "mcp__slack__slack_search_*"
+    - "mcp__zoho-desk__get*"
+    - "mcp__zoho-desk__search*"
+    - "mcp__zoho-desk__resolveTicketNumber"
+    - "mcp__janus__janus_get_*"
+    - "mcp__janus__janus_search_*"
+    - "mcp__janus__janus_list_*"
+```
+
+`sirdar doctor` has an `mcp user servers` row naming each opted server, its transport and
+whether the CLI has it — `slack (http, oauth) · zoho-desk (stdio) · janus (http)` — and fails
+when a name is missing.
 
 `permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
 `mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is judged by its name alone,

@@ -23,6 +23,15 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
   shown in the Bundle pane as "From Slack". `sirdar doctor` checks the token.
 - The exec adapter protocol's `tracker.list` takes two optional hints, `query` and
   `order`, and `tracker.get` optionally takes `{"id"}`.
+- `mcp.userServers` opts servers from the Claude CLI's own user scope (`~/.claude.json`)
+  into runs — Slack, a helpdesk, a tracker — copied verbatim into the session's generated
+  MCP config, with `--strict-mcp-config` kept. An OAuth server such as Slack's reuses the
+  grant the CLI holds under the same name. Codex carries the stdio and header-auth entries;
+  other providers ignore the setting and say so. `sirdar doctor` has an `mcp user servers`
+  row, and docs/config.md a block of read-only globs for Slack, Zoho Desk and Janus.
+- A Slack link is read through the operator's Slack MCP server when there is no
+  `sources.slack.token` and `slack` is in `mcp.userServers`: one short read-only session,
+  the chip says `Slack (via MCP)`, and the thread is kept for half an hour.
 
 Sirdar as it stands today, before the first tagged release:
 
