@@ -313,6 +313,15 @@ permissions:
   readAlso: []
     # - "~/notes/support/*"
     # - "/opt/runbooks"
+# Other repositories a triage may read: a frontend, a mobile app, another
+# service. Each path joins the read scope like a readAlso entry, the prompt
+# lists them, and a ticket naming owner/name#123 is matched to one by its
+# origin (read from the clone when not given). A fix still happens only in
+# this workspace. Keep readAlso for directories that are not repositories.
+# repos:
+#   - name: Acme.Web
+#     path: ~/code/Acme.Web
+#     about: Angular frontend
 mcp:
   # Start the session against <workspace>/.mcp.json and nothing else, so the
   # operator's own global connectors are not loaded into a triage run. With
