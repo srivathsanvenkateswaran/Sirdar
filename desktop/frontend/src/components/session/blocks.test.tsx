@@ -454,7 +454,11 @@ describe('ComposerStrip', () => {
     expect(within(bar).getByRole('button', { name: /Allow once/ })).toHaveAttribute('data-variant', 'primary')
     expect(within(strip).getByRole('button', { name: /^Answer/ })).toHaveAttribute('data-variant', 'secondary')
     fireEvent.click(within(bar).getByRole('button', { name: 'Allow for this run' }))
-    expect(onDecide).toHaveBeenCalledWith({ verdict: 'allow_run' })
+    expect(onDecide).toHaveBeenLastCalledWith({ verdict: 'allow_run' }, '')
+    // Words in the box go with the verdict rather than instead of it.
+    fireEvent.change(within(strip).getByRole('textbox'), { target: { value: 'only the ledger package' } })
+    fireEvent.click(within(bar).getByRole('button', { name: /Allow once/ }))
+    expect(onDecide).toHaveBeenLastCalledWith({ verdict: 'allow' }, 'only the ledger package')
     expect(onSend).not.toHaveBeenCalled()
   })
 

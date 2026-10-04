@@ -53,6 +53,8 @@ export interface ComposerStripProps {
   stopBusy?: boolean
   /** Draw the send bordered: the decision bar above holds the screen's filled button. */
   quiet?: boolean
+  /** Told the text as it changes, so a decision bar above can send it with its verdict. */
+  onTextChange?: (text: string) => void
 }
 
 export default function ComposerCard({
@@ -71,10 +73,15 @@ export default function ComposerCard({
   canStop = false,
   stopBusy = false,
   quiet = false,
+  onTextChange,
 }: ComposerStripProps): JSX.Element {
   const [text, setText] = useState('')
   const field = useRef<HTMLTextAreaElement | null>(null)
   const id = useId()
+
+  useEffect(() => {
+    onTextChange?.(text)
+  }, [text, onTextChange])
 
   useEffect(() => {
     setText('')

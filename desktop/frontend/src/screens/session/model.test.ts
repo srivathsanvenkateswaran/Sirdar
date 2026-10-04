@@ -94,6 +94,26 @@ describe('the session model', () => {
     expect(triage.items[you]).toMatchObject({ kind: 'you', at: '02:02', continuation: 'resume' })
   })
 
+  // The 2026-10-04 dogfood run: after a steer, each resumed session stopped
+  // on a permission question and ended with an empty result, and each one
+  // was drawn as "Answer · revised after your steer · The run finished
+  // without a structured answer" over the note the run had written.
+  it('lets a session that stopped without answering leave the last answer standing', () => {
+    const t = '2026-09-15T12:15:00Z'
+    const events = [
+      ...triageEvents(),
+      { t, kind: 'system', payload: { text: 'control_cancel_request', raw: { type: 'control_cancel_request', request_id: 'r1' } } },
+      { t, kind: 'final', payload: { text: '', raw: { type: 'result', subtype: 'error_during_execution' } } },
+    ] as ReturnType<typeof triageEvents>
+    const m = buildSessionModel(indexed(events), TRIAGE_DETAIL)
+    const answers = m.items.filter((i) => i.kind === 'answer')
+    expect(answers).toHaveLength(2)
+    expect(answers[1]).toMatchObject({ superseded: false, revised: true, at: '03:13' })
+    expect(m.answerIndex).toBe(answers[1].index)
+    expect(m.answer?.title).toMatch(/^Recording a customer return/)
+    expect(m.items.some((i) => i.kind === 'sys' && JSON.stringify(i.parts).includes('control_cancel_request'))).toBe(false)
+  })
+
   it('keeps the provider’s bookkeeping out of the flow', () => {
     expect(triage.items.some((i) => i.kind === 'sys' && i.parts.join('').includes('stream_event'))).toBe(false)
     expect(triage.items.filter((i) => i.kind === 'sys')).toHaveLength(1)

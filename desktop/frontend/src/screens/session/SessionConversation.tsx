@@ -426,11 +426,11 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const ask = blocked ? detail?.question?.decision : undefined
 
   const decide = useCallback(
-    async (verdict: Verdict, reason?: string) => {
+    async (verdict: Verdict, reason?: string, text = '') => {
       setPending('answer')
       setActionError('')
       try {
-        const started = await transport.resume(workspaceId, runId, '', pickedModel, {
+        const started = await transport.resume(workspaceId, runId, text, pickedModel, {
           verdict,
           ...(reason ? { reason } : {}),
         })
@@ -809,7 +809,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               onPickModel={terminal || blocked ? setPickedModel : undefined}
               catalog={catalog}
               queued={withLocalQueued(detail.queuedSteers, localQueued)}
-              decision={ask ? { ask, onDecide: (verdict, reason) => void decide(verdict, reason) } : undefined}
+              decision={ask ? { ask, onDecide: (verdict, reason, text) => void decide(verdict, reason, text) } : undefined}
             />
           </div>
         </div>

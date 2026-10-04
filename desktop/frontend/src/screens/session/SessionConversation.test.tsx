@@ -370,11 +370,28 @@ describe('SessionConversation', () => {
       await waitFor(() => expect(f.transport.resume).toHaveBeenLastCalledWith('ws1', FIX_DETAIL.runId, '', '', { verdict: 'allow' }))
     })
 
+    // The 2026-10-04 dogfood run: the operator typed "You can view" into
+    // the box and pressed Answer three times, meaning yes, and nothing was
+    // ever allowed. What is typed now rides along with a decision button.
+    it('sends what is typed in the box with the decision clicked', async () => {
+      const f = fake({ detail: ASKING, events: fixEvents('blocked'), diff: FIX_DIFF })
+      renderScene(f, { runId: FIX_DETAIL.runId })
+      const box = await screen.findByRole('textbox', { name: 'Answer' })
+      fireEvent.change(box, { target: { value: 'Then read the ledger tests.' } })
+      const bar = screen.getByTestId('decision-bar')
+      fireEvent.click(within(bar).getByRole('button', { name: /Allow once/ }))
+      await waitFor(() =>
+        expect(f.transport.resume).toHaveBeenLastCalledWith('ws1', FIX_DETAIL.runId, 'Then read the ledger tests.', '', {
+          verdict: 'allow',
+        }),
+      )
+    })
+
     it('keeps the box for an answer in words, which goes without a decision', async () => {
       const f = fake({ detail: ASKING, events: fixEvents('blocked'), diff: FIX_DIFF })
       renderScene(f, { runId: FIX_DETAIL.runId })
       const box = await screen.findByRole('textbox', { name: 'Answer' })
-      expect(box).toHaveAttribute('placeholder', 'Or answer in words — the call is not run')
+      expect(box).toHaveAttribute('placeholder', 'A note for the agent goes with Allow or Deny. Sent alone, it allows nothing')
       fireEvent.change(box, { target: { value: 'Run only the ledger package.' } })
       fireEvent.click(send(/^Answer/))
       await waitFor(() => expect(f.transport.resume).toHaveBeenCalledWith('ws1', FIX_DETAIL.runId, 'Run only the ledger package.', ''))

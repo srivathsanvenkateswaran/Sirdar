@@ -314,6 +314,14 @@ describe('SessionWorkbench', () => {
       await waitFor(() =>
         expect(f.transport.resume).toHaveBeenCalledWith('ws1', BLOCKED_FIX_RUN.runId, '', undefined, { verdict: 'allow' }),
       )
+      // Words typed in the box ride along with the next decision.
+      fireEvent.change(within(commandBar()).getByRole('textbox'), { target: { value: 'then the ledger tests' } })
+      fireEvent.click(within(bar).getByRole('button', { name: 'Allow for this run' }))
+      await waitFor(() =>
+        expect(f.transport.resume).toHaveBeenLastCalledWith('ws1', BLOCKED_FIX_RUN.runId, 'then the ledger tests', undefined, {
+          verdict: 'allow_run',
+        }),
+      )
     })
 
     it('grows as the run goes on, and the header follows the run.updated', async () => {

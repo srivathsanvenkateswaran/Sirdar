@@ -16,8 +16,8 @@ export interface ComposerStripProps {
   error: string
   /** Sends the text: the answer while blocked, the instruction once finished. */
   onSend: (text: string) => void
-  /** Answers a permission question from the decision bar. */
-  onDecide?: (decision: PermissionDecision) => void
+  /** Answers a permission question from the decision bar, with what the box holds. */
+  onDecide?: (decision: PermissionDecision, text: string) => void
   /** Clears the text once a send succeeded. Bump it. */
   sentCount: number
   /** How many playbooks the prompt carried. */
@@ -87,7 +87,7 @@ export default function ComposerStrip({
       ? state.reason
       : reply
         ? ask
-          ? 'Or answer in words — the call is not run'
+          ? 'A note for the agent goes with Allow or Deny. Sent alone, it allows nothing'
           : 'Answer the question'
         : `Steer the agent — it resumes ${detail.kind === 'fix' ? 'in the worktree with the diff and the checks in context' : 'from where it stopped'}.${
             lastSteer ? ` Your last steer at ${lastSteer.at}.` : ''
@@ -113,7 +113,7 @@ export default function ComposerStrip({
         <DecisionBar
           ask={ask}
           busy={busy}
-          onDecide={(verdict, reason) => onDecide({ verdict, ...(reason ? { reason } : {}) })}
+          onDecide={(verdict, reason) => onDecide({ verdict, ...(reason ? { reason } : {}) }, trimmed)}
         />
       ) : reply ? (
         <div className="sn-q" role="group" aria-label="The agent's question">

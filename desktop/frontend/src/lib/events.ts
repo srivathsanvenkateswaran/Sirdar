@@ -109,7 +109,8 @@ export function classify(event: RunEvent): EventClass {
 
 /**
  * True when every layout throws this line away: the provider's stream
- * deltas, and the hook chatter it writes around a tool call. `system/init`
+ * deltas, its control-protocol bookkeeping, and the hook chatter it writes
+ * around a tool call. `system/init`
  * and `system/thinking_tokens` are not this — one is the run's opening line
  * and the other its thinking stamp — and neither is a line the provider
  * wrote in its own words, which is drawn small and grey.
@@ -123,6 +124,9 @@ export function drawsNothing(event: RunEvent): boolean {
   const raw = asRecord(event.payload?.raw)
   const type = str(raw?.type)
   if (type === 'stream_event') return true
+  // Claude Code withdrawing a permission prompt it no longer needs answered:
+  // wire protocol between it and Sirdar, never something the agent did.
+  if (type === 'control_cancel_request') return true
   if (type !== 'system') return false
   const subtype = str(raw?.subtype)
   return subtype !== 'init' && subtype !== 'thinking_tokens'

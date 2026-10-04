@@ -312,7 +312,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
             busy={sendBusy}
             error={composerError}
             onSend={(text) => (model.composer.kind === 'reply' ? actions.answer(text) : actions.steer(text))}
-            onDecide={(decision) => actions.answer('', decision)}
+            onDecide={(decision, text) => actions.answer(text, decision)}
             sentCount={sent}
             playbooks={playbooks}
             lastSteer={model.lastSteer}

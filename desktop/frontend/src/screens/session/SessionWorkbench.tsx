@@ -305,13 +305,22 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     [transport, workspaceId, runId, noteOwnLine],
   )
 
+  /** What the composer holds, which a decision carries to the agent with its verdict. */
+  const draft = useRef('')
+  const onDraft = useCallback((text: string) => {
+    draft.current = text
+  }, [])
+
   /** Answers a permission question from the decision bar. */
   const decide = useCallback(
     async (verdict: Verdict, reason?: string) => {
       setPending('answer')
       setActionError('')
       try {
-        const started = await transport.resume(workspaceId, runId, '', undefined, { verdict, ...(reason ? { reason } : {}) })
+        const started = await transport.resume(workspaceId, runId, draft.current.trim(), undefined, {
+          verdict,
+          ...(reason ? { reason } : {}),
+        })
         if (started?.jobId) setRunJob(runId, started.jobId)
         setSent((n) => n + 1)
       } catch (err: unknown) {
@@ -445,8 +454,9 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   }
 
   const turns = detail.usage?.turns ?? 0
-  const placeholder =
-    mode.kind === 'answer'
+  const placeholder = ask
+    ? 'A note for the agent goes with Allow or Deny. Sent alone, it allows nothing'
+    : mode.kind === 'answer'
       ? `Type an answer${question && question.options.length > 0 ? ', or pick an option above' : ''} — the run resumes from turn ${turns}`
       : `Follow up — the run resumes from turn ${turns}${isFix ? ' in the same worktree' : ' with the note in context'}`
 
@@ -626,6 +636,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
           <ComposerCard
             variant="strip"
             quiet={Boolean(ask)}
+            onTextChange={onDraft}
             mode={mode}
             busy={sendBusy}
             error={mode.kind === 'disabled' ? '' : actionError}

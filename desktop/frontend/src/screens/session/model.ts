@@ -513,6 +513,13 @@ class SessionBuilder {
         return
       case 'final': {
         this.flush(event.t)
+        // A session that stopped without answering — a resume that blocked
+        // on a permission question, an interrupt — ends with an empty
+        // result. Once the run has an answer, that is not a revision of it.
+        if (this.answers.length > 0 && !str(event.payload?.text).trim()) {
+          this.mark(event.t, null)
+          return
+        }
         this.finals += 1
         const wrote = this.items[this.items.length - 1]
         // Every answer but the last is one a steer superseded.
@@ -720,7 +727,8 @@ class SessionBuilder {
     const calls = this.callsOut
 
     if (!this.derived) {
-      const lastFinal = [...this.runEvents].reverse().find((e) => e.kind === 'final')
+      const finals = this.runEvents.filter((e) => e.kind === 'final')
+      const lastFinal = [...finals].reverse().find((e) => str(e.payload?.text).trim() !== '') ?? finals[finals.length - 1]
       this.derived = {
         answer: parseAnswer(lastFinal?.payload?.text),
         report: fixReport(this.runEvents),

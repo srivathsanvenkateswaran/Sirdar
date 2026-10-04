@@ -77,9 +77,9 @@ export interface ComposerProps {
    * The permission question a blocked run is waiting on. Given, the
    * decision bar sits above the box and its Allow once is the screen's
    * filled control; the box stays for an answer in words, with a bordered
-   * send.
+   * send, and whatever is in it goes along with the decision clicked.
    */
-  decision?: { ask: DecisionAsk; onDecide: (verdict: Verdict, reason?: string) => void }
+  decision?: { ask: DecisionAsk; onDecide: (verdict: Verdict, reason?: string, text?: string) => void }
 }
 
 /**
@@ -156,7 +156,7 @@ export default function Composer({
     : mode.kind === 'disabled'
       ? mode.reason
       : deciding
-        ? 'Or answer in words — the call is not run'
+        ? 'A note for the agent goes with Allow or Deny. Sent alone, it allows nothing'
         : ownPlaceholder ??
           (mode.kind === 'answer'
             ? mode.question
@@ -169,7 +169,7 @@ export default function Composer({
   return (
     <div className="session-composer" data-mode={mode.kind}>
       <QueuedSteers items={chips} />
-      {deciding && decision ? <DecisionBar ask={decision.ask} busy={busy} onDecide={decision.onDecide} /> : null}
+      {deciding && decision ? <DecisionBar ask={decision.ask} busy={busy} onDecide={(verdict, reason) => decision.onDecide(verdict, reason, trimmed)} /> : null}
       <ComposerCard
         name={label}
         label={label}
