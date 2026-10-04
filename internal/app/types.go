@@ -99,6 +99,14 @@ type RunSummary struct {
 	// have to move as the executor resolves them. Omitted on a run nobody
 	// steered while it worked.
 	QueuedSteers []QueuedSteerInfo `json:"queuedSteers,omitempty"`
+	// Question is what a blocked run is waiting on the operator for, when
+	// it is a question: Text in the agent's words, and Decision when the
+	// question is a permission one — a call the policy refused that the
+	// operator can allow once, allow for the run, or deny. Absent on every
+	// run that is not blocked on one. It is on the summary rather than only
+	// the detail because a run that blocks while its page is open reaches
+	// that page as a run.updated, which carries the summary.
+	Question *QuestionInfo `json:"question,omitempty"`
 }
 
 // QueuedSteerInfo is one steer typed on a working run. Status is queued
@@ -144,13 +152,6 @@ type RunDetail struct {
 	// steer. `model` above is the one it is on now. A run that never
 	// changed omits this.
 	ModelSegments []ModelSegmentInfo `json:"modelSegments,omitempty"`
-
-	// Question is what a blocked run is waiting on the operator for, when
-	// it is a question: Text in the agent's words, and Decision when the
-	// question is a permission one — a call the policy refused that the
-	// operator can allow once, allow for the run, or deny. Absent on every
-	// run that is not blocked on one.
-	Question *QuestionInfo `json:"question,omitempty"`
 }
 
 // QuestionInfo is a blocked run's question. Text is always set; Decision is
@@ -555,6 +556,7 @@ func SummaryOf(s store.State) RunSummary {
 		},
 		Notes:        notes,
 		QueuedSteers: queuedSteersOf(s.QueuedSteers),
+		Question:     questionOf(s),
 	}
 }
 
@@ -739,7 +741,6 @@ func DetailFor(root string, s store.State, self config.Identity) RunDetail {
 		d.Fix = &f
 	}
 	d.Instruction = s.Instruction
-	d.Question = questionOf(s)
 	for _, st := range s.Steers {
 		d.Steers = append(d.Steers, SteerInfo{At: wireTime(st.At), Text: st.Text, Continuation: st.Continuation})
 	}

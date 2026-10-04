@@ -36,7 +36,9 @@ export interface RunSummary { runId: string; key: string; helpdeskKey?: string; 
   /** Where the ticket came from when it was not a tracker or helpdesk: `slack` for a thread triaged with no ticket (key `SLACK-<channel>-<ts>`). */
   source?: 'slack'
   /** Every instruction typed while the run worked, and what became of each; absent when there were none. */
-  queuedSteers?: QueuedSteer[] }
+  queuedSteers?: QueuedSteer[]
+  /** What a blocked run is waiting on, when it is a question; absent on every other run. A run.updated carries it, so a run that blocks while its page is open shows its decision bar at once. */
+  question?: QuestionInfo }
 /**
  * One steer typed on a working run. `queued` waits for the run's next turn
  * boundary; `delivered` reached the live session after turn `turn`; `held`
@@ -54,9 +56,7 @@ export interface QueuedSteer {
 }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo;
   /** What the operator asked for when they started the run, in their own words; absent when they asked for nothing in particular. */
-  instruction?: string; modelSegments?: ModelSegmentInfo[];
-  /** What a blocked run is waiting on, when it is a question; absent on every other run. */
-  question?: QuestionInfo }
+  instruction?: string; modelSegments?: ModelSegmentInfo[] }
 /**
  * A blocked run's question. `text` is always there; `decision` is there only
  * when the question is a permission one — a call the policy refused that the

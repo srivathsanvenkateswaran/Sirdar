@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { RunDetail, RunEvent } from '../../api/types'
+import type { QuestionInfo, RunDetail, RunEvent } from '../../api/types'
 import { createFakeTransport } from '../../store/fakeTransport'
 import { insertByIndex, useRunFeed } from './useRunFeed'
 
@@ -145,6 +145,31 @@ describe('useRunFeed', () => {
       transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...RUN, status: 'blocked' } })
     })
     expect(result.current.finished).toBe(1)
+  })
+
+  // The 2026-10-04 OMNI-3413 rerun blocked on a permission question while
+  // its page was open, and the page showed no Allow buttons until reloaded.
+  it('takes a blocked run’s question from the run.updated, and drops it once the run moves on', async () => {
+    const transport = createFakeTransport({})
+    transport.run = vi.fn(async () => RUN)
+    transport.events = vi.fn(async () => ({ events: [], next: 0 }))
+    const { result } = renderHook(() => useRunFeed(transport, 'ws1', 'r1'))
+    await waitFor(() => expect(result.current.detail?.status).toBe('running'))
+
+    const question: QuestionInfo = {
+      text: 'gh search code x',
+      decision: { kind: 'bash', tool: 'Bash', summary: 'gh search code x', patterns: ['gh search *'], verdict: 'deny', reason: 'not on permissions.bash' },
+    }
+    act(() => {
+      transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...RUN, status: 'blocked', updatedAt: '2026-09-10T10:01:00Z', question } })
+    })
+    await waitFor(() => expect(result.current.detail?.question?.decision?.summary).toBe('gh search code x'))
+
+    act(() => {
+      transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...RUN, status: 'running', updatedAt: '2026-09-10T10:02:00Z' } })
+    })
+    await waitFor(() => expect(result.current.detail?.status).toBe('running'))
+    expect(result.current.detail?.question).toBeUndefined()
   })
 
   it('re-reads the log from where a run.resync says the transcript can be trusted', async () => {

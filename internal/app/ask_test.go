@@ -51,3 +51,18 @@ func TestResumeRefusesADecisionNobodyAskedFor(t *testing.T) {
 		t.Errorf("bad verdict: %v", err)
 	}
 }
+
+// A run that blocks while its page is open reaches that page only as a
+// run.updated carrying the summary. Without the question on it, the 2026-10-04
+// OMNI-3413 rerun showed a plain "Waiting on you" card with no Allow buttons
+// until the page was reloaded.
+func TestQuestionOnTheSummary(t *testing.T) {
+	ask := &store.PermissionAsk{Kind: "bash", Tool: "Bash", Summary: "gh search code x", Patterns: []string{"gh search *"}, Verdict: "deny"}
+	s := SummaryOf(store.State{Status: store.StatusBlocked, Reason: "asking: gh search code x", Ask: ask})
+	if s.Question == nil || s.Question.Decision == nil || s.Question.Decision.Summary != "gh search code x" {
+		t.Fatalf("question %+v", s.Question)
+	}
+	if q := SummaryOf(store.State{Status: store.StatusRunning}).Question; q != nil {
+		t.Errorf("running: question %+v", q)
+	}
+}

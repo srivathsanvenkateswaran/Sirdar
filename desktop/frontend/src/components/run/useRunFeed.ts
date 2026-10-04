@@ -208,7 +208,9 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
       if (e.kind === 'run.updated' && e.run?.runId === runId) {
         const update = e.run
         setDetail((prev) => {
-          if (prev) return { ...prev, ...update }
+          // A summary without a question means the run is no longer waiting
+          // on one, so the old question goes rather than surviving the spread.
+          if (prev) return { ...prev, ...update, question: update.question }
           pendingUpdate.current = update
           return prev
         })
@@ -221,7 +223,7 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
         if (cancelled) return
         const update = pendingUpdate.current
         pendingUpdate.current = null
-        setDetail(update && newer(update, d) ? { ...d, ...update } : d)
+        setDetail(update && newer(update, d) ? { ...d, ...update, question: update.question } : d)
       })
       .catch((err: unknown) => {
         if (!cancelled) setLoadError(reasonOf(err))
