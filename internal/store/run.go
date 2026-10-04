@@ -18,9 +18,20 @@ import (
 type Kind string
 
 const (
-	KindTriage Kind = "triage"
-	KindRCA    Kind = "rca"
-	KindFix    Kind = "fix"
+	KindTriage  Kind = "triage"
+	KindRCA     Kind = "rca"
+	KindFix     Kind = "fix"
+	KindSession Kind = "session"
+)
+
+// PhaseNote names the second turn of a reply-first run: the one that files
+// the note after the run has already answered the operator. AccessReadOnly
+// and AccessWorktree name the two things a session run may do to the
+// workspace's files — read them, or edit them inside its own worktree.
+const (
+	PhaseNote      = "note"
+	AccessReadOnly = "read-only"
+	AccessWorktree = "worktree"
 )
 
 // Status identifies where a run is in its lifecycle.
@@ -236,6 +247,27 @@ type State struct {
 	// config.yaml; an allow-once answer is spent by the resumed session and
 	// is not kept here.
 	Grants []Grant `json:",omitempty"`
+
+	// ReplyFirst marks a run that answers the operator in chat rather than
+	// filing a note as its only output: every session run, and a triage or
+	// RCA run started by anything but eval. A triage or RCA run that is
+	// reply-first still files its note, in the second turn Phase names.
+	ReplyFirst bool `json:",omitempty"`
+
+	// Phase is "" for the ordinary course of a run, or PhaseNote while a
+	// reply-first triage or RCA run that has already answered is filing
+	// its note. Status stays "running" through that turn.
+	Phase string `json:",omitempty"`
+
+	// Access is AccessReadOnly or AccessWorktree, and applies to session
+	// runs only: what the run may do to the workspace's files.
+	Access string `json:",omitempty"`
+
+	// NoteWarning is set when a reply-first run's note turn failed to file
+	// a note: "note not filed: <reason>". The run itself is not failed by
+	// it — the operator already has their answer — so this is the only
+	// record that the note attempt did not succeed.
+	NoteWarning string `json:",omitempty"`
 }
 
 // PermissionAsk is a refused tool call the operator can answer. It mirrors
@@ -330,6 +362,24 @@ func CreateID(root, key, runID string) (Run, error) {
 	dir := filepath.Join(runsDir(root), key, runID)
 	if err := os.MkdirAll(filepath.Join(dir, "bundle", "attachments"), 0o755); err != nil {
 		return Run{}, fmt.Errorf("store: create run dir: %w", err)
+	}
+	return Run{Dir: dir}, nil
+}
+
+// CreateSessionDir makes a new run directory for a session run and returns
+// the Run. Unlike CreateID it makes the run directory alone, with no
+// bundle/ subdirectory: a session started from an instruction with no
+// ticket reference has no bundle to hold.
+func CreateSessionDir(root, key, runID string) (Run, error) {
+	if !ValidKey(key) {
+		return Run{}, fmt.Errorf("store: invalid run key %q", key)
+	}
+	if !ValidKey(runID) {
+		return Run{}, fmt.Errorf("store: invalid run id %q", runID)
+	}
+	dir := filepath.Join(runsDir(root), key, runID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return Run{}, fmt.Errorf("store: create session run dir: %w", err)
 	}
 	return Run{Dir: dir}, nil
 }
