@@ -104,6 +104,26 @@ type SourceConfig struct {
 	// reference out of the ticket description when the tracker's own data
 	// model carries none.
 	HelpdeskRef *HelpdeskRefConfig `yaml:"helpdeskRef,omitempty"`
+
+	// TrackerField is the helpdesk-only pin for the record field that
+	// holds the tracker issue's key (or the tracker's own id): the API name
+	// of a custom field, "cf_jira_ticket_id", with or without a "cf."
+	// prefix. The intake resolver reads it first and names it in the
+	// status line. Unset, every field is scanned; the zohodesk adapter
+	// defaults it to cf_jira_ticket_id.
+	TrackerField string `yaml:"trackerField,omitempty"`
+}
+
+// DefaultZohoTrackerField is the custom field a Zoho Desk layout that is
+// synced with a tracker keeps the tracker issue in, and what
+// sources.helpdesk.trackerField defaults to for the zohodesk adapter.
+const DefaultZohoTrackerField = "cf_jira_ticket_id"
+
+// SlackConfig configures the read-only Slack reader the intake resolver
+// uses for a pasted Slack link. Token is a credential reference to a user
+// (xoxp-) or bot (xoxb-) token with channels:history and groups:history.
+type SlackConfig struct {
+	Token string `yaml:"token"`
 }
 
 // QueueConfig narrows the tracker's answer to "what is assigned to me"
@@ -494,6 +514,9 @@ type Config struct {
 	Sources   struct {
 		Tracker  *SourceConfig `yaml:"tracker"`
 		Helpdesk *SourceConfig `yaml:"helpdesk"`
+		// Slack is optional: without it a pasted Slack link is answered
+		// with the setting to add rather than read.
+		Slack *SlackConfig `yaml:"slack,omitempty"`
 	} `yaml:"sources"`
 	Notes struct {
 		Dir       string `yaml:"dir"`
@@ -809,6 +832,9 @@ func applyDefaults(c *Config) {
 			s.BaseURL = RallyDefaultBaseURL
 		}
 	}
+	if h := c.Sources.Helpdesk; h != nil && h.Adapter == "zohodesk" && h.TrackerField == "" {
+		h.TrackerField = DefaultZohoTrackerField
+	}
 }
 
 // FindRoot walks up from dir to the first directory containing .sirdar/config.yaml.
@@ -893,6 +919,17 @@ func (c *Config) Validate() error {
 	}
 	if err := validateSource("sources.helpdesk", c.Sources.Helpdesk, false); err != nil {
 		return err
+	}
+	if t := c.Sources.Tracker; t != nil && t.TrackerField != "" {
+		return fmt.Errorf("config: sources.tracker.trackerField: is a helpdesk setting; move it under sources.helpdesk")
+	}
+	if s := c.Sources.Slack; s != nil {
+		if s.Token == "" {
+			return fmt.Errorf("config: sources.slack.token: is required (a credential ref to a Slack user or bot token)")
+		}
+		if err := credentialRef("sources.slack.token", s.Token); err != nil {
+			return err
+		}
 	}
 	if err := validateWebhooks(&c.Webhooks); err != nil {
 		return err
