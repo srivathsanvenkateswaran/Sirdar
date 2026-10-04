@@ -47,6 +47,7 @@ func cmdTriage(args []string, stdout, stderr io.Writer) int {
 	r := &runner.Runner{Deps: deps}
 	outs, err := r.Triage(ctx, resolved.keys, runner.Options{
 		Slack:        resolved.slack,
+		Reported:     resolved.reported,
 		Model:        *model,
 		Concurrency:  *concurrency,
 		DryRun:       *dryRun,

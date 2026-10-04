@@ -9,6 +9,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/slack"
 )
 
 // plainKey is an argument that is a tracker key and nothing else. It is
@@ -21,6 +22,9 @@ var plainKey = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]+-[0-9]+$`)
 type resolvedArgs struct {
 	keys  []string
 	slack string
+	// reported is the bundle a Slack thread with no ticket in it is
+	// triaged from; its key is the one key.
+	reported *runner.ReportedBundle
 }
 
 // resolveArgs turns each ticket argument — a key, a tracker URL, a helpdesk
@@ -32,7 +36,7 @@ func resolveArgs(ctx context.Context, cfg *config.Config, deps runner.Deps, args
 	var out resolvedArgs
 	slackThreads := 0 // how many arguments carried a Slack thread
 	for _, arg := range args {
-		if plainKey.MatchString(arg) {
+		if plainKey.MatchString(arg) || slack.IsKey(arg) {
 			out.keys = append(out.keys, arg)
 			continue
 		}
@@ -50,6 +54,13 @@ func resolveArgs(ctx context.Context, cfg *config.Config, deps runner.Deps, args
 		if md := in.SlackMarkdown(); md != "" {
 			slackThreads++
 			out.slack = md
+		}
+		if rb := in.Reported(); rb != nil {
+			if len(args) > 1 {
+				fmt.Fprintf(stderr, "sirdar: %s: a Slack thread with no ticket is triaged on its own; give it as the one ticket\n", arg)
+				return out, false
+			}
+			out.reported = rb
 		}
 	}
 	if slackThreads > 0 && len(args) > 1 {
