@@ -2,6 +2,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -286,5 +287,34 @@ func TestLiveSteerOnASessionIsConversation(t *testing.T) {
 	got := readFile(t, filepath.Join(runDir(t, cfg, out), "answer.md"))
 	if !strings.HasPrefix(got, "No: read from code only.") {
 		t.Errorf("answer.md = %q, want the follow-up's answer", got)
+	}
+}
+
+// TestReplyKeptWhenTheProviderExitsBadly is a reply that landed and a
+// provider that then exited with an error: the run completes with the reply
+// in answer.md, and the exit is a warning naming the reply, not a failure.
+func TestReplyKeptWhenTheProviderExitsBadly(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		// Set before the stream closes, so Wait, which the runner calls
+		// only after draining it, reads it.
+		s.result.ExitErr = errors.New("exit status 1")
+		s.emit(provider.Event{Kind: provider.EvFinal, Text: sessionReply})
+	}}
+	r := newRunner(cfg, p, nil, nil)
+
+	out, err := r.Session(context.Background(), "", Options{Instruction: sessionInstruction, NoBundle: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted || out.State.Reason != "" {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if got := readFile(t, filepath.Join(runDir(t, cfg, out), "answer.md")); got != sessionReply+"\n" {
+		t.Errorf("answer.md = %q", got)
+	}
+	if !contains(out.State.Warnings, "provider exited: exit status 1") {
+		t.Errorf("warnings %v", out.State.Warnings)
 	}
 }

@@ -504,28 +504,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		if ex.completeErr != nil {
 			return r.finish(ctx, p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
 		}
-		if res.ExitErr != nil {
-			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
-		}
-		if ex.interrupted {
-			p.state.Warnings = append(p.state.Warnings, "interrupted after the note was produced")
-		}
-		if ex.failure != "" {
-			// Whatever went wrong after the note landed is still worth
-			// reading — it is the only account of a provider that died
-			// mid-sentence — but it does not make the run a failure.
-			p.state.Warnings = append(p.state.Warnings, ex.failure+", after the note was written")
-		}
-		if timedOut.Load() {
-			p.state.Warnings = append(p.state.Warnings,
-				fmt.Sprintf("the session was still running when the %d minute budget expired, after the note was written", r.Config.Budget.MaxMinutes))
-		}
-		if ex.overBudget != "" {
-			p.state.Warnings = append(p.state.Warnings, ex.overBudget+", after the note was written")
-		}
-		if ex.stall.fired() {
-			p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+", after the note was written")
-		}
+		r.afterAnswerWarnings(p, ex, res, timedOut.Load(), stallFor, "note")
 		return r.finish(ctx, p, store.StatusCompleted, "", ex.row)
 	case ex.reply != "" && len(ex.final) == 0:
 		// A reply that landed is the run's answer, written the moment it
@@ -535,25 +514,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		if ex.completeErr != nil {
 			return r.finish(ctx, p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
 		}
-		if res.ExitErr != nil {
-			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
-		}
-		if ex.interrupted {
-			p.state.Warnings = append(p.state.Warnings, "interrupted after the reply was produced")
-		}
-		if ex.failure != "" {
-			p.state.Warnings = append(p.state.Warnings, ex.failure+", after the reply was written")
-		}
-		if timedOut.Load() {
-			p.state.Warnings = append(p.state.Warnings,
-				fmt.Sprintf("the session was still running when the %d minute budget expired, after the reply was written", r.Config.Budget.MaxMinutes))
-		}
-		if ex.overBudget != "" {
-			p.state.Warnings = append(p.state.Warnings, ex.overBudget+", after the reply was written")
-		}
-		if ex.stall.fired() {
-			p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+", after the reply was written")
-		}
+		r.afterAnswerWarnings(p, ex, res, timedOut.Load(), stallFor, "reply")
 		return r.finish(ctx, p, store.StatusCompleted, "", note.DigestRow{Issue: firstLine(p.state.Instruction)})
 	case timedOut.Load():
 		return r.finish(ctx, p, store.StatusOverBudget,
@@ -602,6 +563,36 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 			reason = fmt.Sprintf("provider exited: %v", res.ExitErr)
 		}
 		return r.finish(ctx, p, store.StatusFailed, reason, note.DigestRow{})
+	}
+}
+
+// afterAnswerWarnings records, as warnings on a run that has already filed
+// its answer, whatever happened to the session afterwards: a bad exit, an
+// interrupt, a failure, a budget or a stall. noun names the answer, "note"
+// or "reply", and one helper serves both so the two lists cannot drift.
+func (r *Runner) afterAnswerWarnings(p *prepared, ex *execution, res provider.Result, timedOut bool, stallFor time.Duration, noun string) {
+	after := ", after the " + noun + " was written"
+	if res.ExitErr != nil {
+		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
+	}
+	if ex.interrupted {
+		p.state.Warnings = append(p.state.Warnings, "interrupted after the "+noun+" was produced")
+	}
+	if ex.failure != "" {
+		// Whatever went wrong after the answer landed is still worth
+		// reading — it is the only account of a provider that died
+		// mid-sentence — but it does not make the run a failure.
+		p.state.Warnings = append(p.state.Warnings, ex.failure+after)
+	}
+	if timedOut {
+		p.state.Warnings = append(p.state.Warnings,
+			fmt.Sprintf("the session was still running when the %d minute budget expired", r.Config.Budget.MaxMinutes)+after)
+	}
+	if ex.overBudget != "" {
+		p.state.Warnings = append(p.state.Warnings, ex.overBudget+after)
+	}
+	if ex.stall.fired() {
+		p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+after)
 	}
 }
 
