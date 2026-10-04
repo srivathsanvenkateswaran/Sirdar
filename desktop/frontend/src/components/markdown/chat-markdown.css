@@ -11,10 +11,6 @@
   line-height: 1.65;
 }
 
-.cmd[dir='rtl'] {
-  line-height: 1.85;
-}
-
 .cmd > :first-child {
   margin-block-start: 0;
 }
@@ -56,7 +52,7 @@
   background: var(--sd-sunk);
   padding-inline: 5px;
   border-radius: var(--sd-radius-xs);
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   font-variant-ligatures: none;
 }
 
@@ -125,12 +121,25 @@
   line-height: 1.55;
 }
 
-.cmd-code__body pre,
-.cmd-code__body code {
+.cmd-code__body pre {
   margin: 0;
   padding: 0;
   background: transparent;
   white-space: pre;
+}
+
+/* Raised to `.cmd .cmd-code__body code` — two classes, not one — so this
+   reset outranks `.sc-agent__say code`, `.sc-doc__body code`, `.sn-md code`,
+   `.wb-md code` and `.md code`: same-specificity rules in each layout's own
+   CSS that would otherwise win on load order and paint a tinted inline-code
+   band, at inline-code's larger font size, inside every line of a block. */
+.cmd .cmd-code__body code,
+.cmd .cmd-code__body pre.shiki code {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+  font-size: inherit;
 }
 
 /* Shiki sets its own foreground per token but not the page background;
@@ -148,11 +157,11 @@
   margin-block: 0 0.75em;
 }
 
+/* No border here: the cells already draw a complete 1px grid, edges
+   included, so a border on the scroller too would double it to 2px. */
 .cmd-table__scroll {
   max-inline-size: 100%;
   overflow-x: auto;
-  border: 1px solid var(--sd-rule);
-  border-radius: var(--sd-radius-sm);
 }
 
 .cmd-table__scroll table {

@@ -1,4 +1,4 @@
-import type { Element, ElementContent } from 'hast'
+import type { Element, ElementContent, Root } from 'hast'
 import type { JSX } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import rehypeSanitize from 'rehype-sanitize'
@@ -7,6 +7,41 @@ import remarkGfm from 'remark-gfm'
 import CodeBlock from './CodeBlock'
 import TableWrapper from './TableWrapper'
 import './chat-markdown.css'
+
+/**
+ * A node shape loose enough to cover the `raw` node `mdast-util-to-hast`
+ * emits for literal HTML when no `rehype-raw` plugin is in the pipeline —
+ * a type `hast` itself does not declare, since `rehype-raw` is normally
+ * what turns it into real elements.
+ */
+interface RawCapableNode {
+  type: string
+  children?: RawCapableNode[]
+}
+
+/**
+ * Turns every `raw` node under `node` into a `text` node — the same thing
+ * react-markdown's own renderer does with a leftover `raw` node when no
+ * `rehype-raw` is present. Without this step, `rehype-sanitize`'s schema has
+ * no entry for `raw`, so it drops the node outright rather than rendering
+ * it as plain text: a generic type like `Task<IActionResult>` disappears
+ * down to `Task`, and a block like `<div dir="rtl">مرحبا</div>` vanishes
+ * entirely.
+ */
+function rawNodesToText(node: RawCapableNode): void {
+  if (!node.children) return
+  for (const child of node.children) {
+    if (child.type === 'raw') child.type = 'text'
+    else rawNodesToText(child)
+  }
+}
+
+/** Runs before `rehypeSanitize` so it never sees a `raw` node to drop. */
+function rehypeRawToText() {
+  return (tree: Root) => {
+    rawNodesToText(tree as unknown as RawCapableNode)
+  }
+}
 
 // Re-exported so a caller building a `components` override — the `path:line`
 // button in `Prose.tsx`, say — never needs its own `import ... from
@@ -82,7 +117,7 @@ export default function ChatMarkdown({ children, components, className }: ChatMa
     <div className={className ? `cmd ${className}` : 'cmd'} dir="auto">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
-        rehypePlugins={[rehypeSanitize]}
+        rehypePlugins={[rehypeRawToText, rehypeSanitize]}
         components={{ ...defaultComponents, ...components }}
       >
         {children}

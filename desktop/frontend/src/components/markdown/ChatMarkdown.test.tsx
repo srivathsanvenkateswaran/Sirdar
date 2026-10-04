@@ -108,6 +108,22 @@ describe('ChatMarkdown', () => {
     expect(screen.getByText('click me')).toBeInTheDocument()
   })
 
+  it('renders a generic type that looks like an HTML tag as literal text rather than dropping it', () => {
+    const { container } = render(<ChatMarkdown>{'Returns Task<IActionResult> from the controller.'}</ChatMarkdown>)
+    expect(container.textContent).toContain('Returns Task<IActionResult> from the controller.')
+  })
+
+  it('keeps an RTL-wrapped block of Arabic text visible rather than dropping it', () => {
+    const block = '<div dir="rtl" lang="ar">\nمرحبا بالعميل\n</div>'
+    const { container } = render(<ChatMarkdown>{block}</ChatMarkdown>)
+    expect(container.textContent).toContain('مرحبا بالعميل')
+  })
+
+  it('keeps a one-line RTL div of Arabic text visible rather than dropping it', () => {
+    const { container } = render(<ChatMarkdown>{'<div dir="rtl">مرحبا</div>'}</ChatMarkdown>)
+    expect(container.textContent).toContain('مرحبا')
+  })
+
   it('draws the reference override in place of plain inline code', () => {
     const components: Partial<Components> = {
       code: ({ children }) => <button type="button">{`ref:${children}`}</button>,

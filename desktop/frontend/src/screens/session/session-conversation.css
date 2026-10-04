@@ -958,6 +958,14 @@ code.sc-ref {
   margin-inline: auto;
 }
 
+/* The activity line sits above the composer card in the same padded
+   region; without this it keeps the pane's full width while the card
+   centres at 960px below it, so the two edges never line up. */
+.sc-composer .sd-activity {
+  inline-size: min(100%, 960px);
+  margin-inline: auto;
+}
+
 .sc-composer .composer-text {
   font-size: var(--sd-text-body);
 }

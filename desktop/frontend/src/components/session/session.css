@@ -979,6 +979,17 @@ a.sn-head__other:hover {
   padding-block: 26px 40px;
 }
 
+/* The activity line sits in `.sn-doc` directly, outside the scroller that
+   carries the 44/40 inset, so it needs its own copy of that inset plus the
+   960 cap to land on the same left edge as `.sn-note` above it: a box
+   capped at 960 plus the two insets, centred, with the insets as its own
+   padding, lines up exactly with a box inset first and capped second. */
+.sn-doc > .sd-activity {
+  max-inline-size: calc(960px + 44px + 40px);
+  margin-inline: auto;
+  padding-inline: 44px 40px;
+}
+
 .sn-note__pending {
   margin: 20px 0 0;
   font-size: var(--sd-text-body);

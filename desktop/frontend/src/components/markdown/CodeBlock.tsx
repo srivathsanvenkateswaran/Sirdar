@@ -47,7 +47,10 @@ export default function CodeBlock({ code, language }: { code: string; language?:
   }
 
   return (
-    <div className="cmd-code" data-testid="code-block">
+    // Code is always left-to-right, even inside a message `.cmd` left as
+    // `dir="auto"` picked up as right-to-left — without this, an RTL
+    // paragraph flips the code lines to right-align under it.
+    <div className="cmd-code" dir="ltr" data-testid="code-block">
       <div className="cmd-code__head">
         <span className="cmd-code__lang">{language || 'text'}</span>
         <Button size="sm" variant="ghost" icon={<CopyIcon />} onClick={() => void copy()}>
