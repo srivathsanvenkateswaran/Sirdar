@@ -3,8 +3,9 @@ import type { RunKind } from '../../api/types'
 /** What a session does to a ticket, in the order the Mode chip lists them. */
 export type SessionMode = RunKind
 
-/** The modes as the Mode chip lists them, each with what it does. */
+/** The modes as the Mode chip lists them, Session first since it is the default. */
 export const MODES: { id: SessionMode; label: string; note: string }[] = [
+  { id: 'session', label: 'Session', note: 'Answer what you ask, in chat; no note unless you save one' },
   { id: 'triage', label: 'Triage', note: 'Read the ticket and the code; write a triage note' },
   { id: 'rca', label: 'RCA', note: 'A root-cause note, from the triage note' },
   { id: 'fix', label: 'Fix', note: 'A fix on a branch, from the triage note' },
@@ -17,23 +18,29 @@ export type Access = 'read-only' | 'worktree'
  * explanation. The words are HANDOFF.md's: reads are confined to the
  * workspace, the run directory and its bundle; a fix session stands in a
  * linked worktree under `.sirdar/worktrees/<run-id>`, and Sirdar, not the
- * agent, commits and pushes.
+ * agent, commits and pushes. A session can run either way, since only it
+ * lets the person starting it pick.
  */
 export const ACCESS: { id: Access; label: string; note: string }[] = [
   {
     id: 'read-only',
     label: 'Read-only',
-    note: 'Triage and RCA read the workspace, the run directory and its bundle. Nothing is written.',
+    note: 'A session or a triage reads the workspace, the run directory and its bundle. Nothing is written.',
   },
   {
     id: 'worktree',
     label: 'Worktree',
-    note: 'Fix writes in a linked worktree under .sirdar/worktrees; the tree you work in is untouched. Sirdar commits and pushes, never the agent.',
+    note: 'A session or a fix writes in a linked worktree under .sirdar/worktrees; the tree you work in is untouched. A session commits nothing; a fix is committed and pushed by Sirdar, never the agent.',
   },
 ]
 
-/** The posture a mode runs with. */
-export function accessOf(mode: SessionMode): Access {
+/**
+ * The posture a mode runs with. A session is the one mode whose posture is
+ * a choice rather than a fact about the kind: it runs read-only unless the
+ * person starting it picks worktree, and `access` is that pick.
+ */
+export function accessOf(mode: SessionMode, access?: Access): Access {
+  if (mode === 'session') return access ?? 'read-only'
   return mode === 'fix' ? 'worktree' : 'read-only'
 }
 

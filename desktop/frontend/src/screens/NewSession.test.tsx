@@ -161,24 +161,25 @@ describe('NewSession', () => {
       'What should we look at in omni?',
     )
     expect(bar()).toHaveFocus()
-    expect(bar()).toHaveAttribute('placeholder', 'A ticket key, a #helpdesk number, or a ticket or Slack link')
+    expect(bar()).toHaveAttribute(
+      'placeholder',
+      'Ask anything, or paste a ticket key, #helpdesk number, or ticket or Slack link',
+    )
     const form = screen.getByRole('form', { name: 'Start' })
     const chips = form.querySelector('.composer-bar__chips')!
     expect(within(chips as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
       'Model claude · Sonnet',
-      'Mode: Triage',
+      'Mode: Session',
       'Access: Read-only',
     ])
     expect(screen.getByRole('img', { name: 'Claude' })).toBeInTheDocument()
-    // The send is on the screen, filled and round, off until there is a key;
-    // the footer is told to stand down rather than draw a second one.
+    // The send is on the screen, filled and round, off until there is
+    // something to say; the footer is told to stand down rather than draw a
+    // second one.
     expect(sendButton()).toHaveAttribute('data-variant', 'primary')
     expect(sendButton()).toHaveAttribute('data-icon-only', 'true')
     expect(sendButton()).toBeDisabled()
-    expect(sendButton()).toHaveAttribute(
-      'title',
-      'No ticket yet — type a key like SBX-1 or a helpdesk number like #28310, or paste a ticket or Slack link',
-    )
+    expect(sendButton()).toHaveAttribute('title', 'Type what you want done')
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Start · screen · off'))
     // The Playbook chip is gone; nothing in the bar is a fact without a menu.
     expect(screen.queryByText('Playbook')).toBeNull()
@@ -268,11 +269,13 @@ describe('NewSession', () => {
     await waitFor(() => expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-77', expect.anything()))
   })
 
-  it('carries what was typed around the key as the run\u2019s instruction, and says so in the chips', async () => {
+  it('carries what was typed around the key as the triage\u2019s instruction once Triage is pinned, and says so in the chips', async () => {
     const { onStart } = mount()
     fireEvent.change(bar(), {
       target: { value: 'OMNI-2510 check the tax rounding on invoice lines' },
     })
+    fireEvent.click(modeChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Triage/ }))
     expect(screen.getByRole('status')).toHaveTextContent('Triage · OMNI-2510 · with your note')
     expect(sendButton()).toHaveAttribute('title', 'Triage · OMNI-2510 · with your note (↵)')
     fireEvent.click(sendButton())
@@ -299,13 +302,77 @@ describe('NewSession', () => {
     expect(modeChip()).toHaveAccessibleName('Mode: Triage')
   })
 
-  it('says no ticket is named yet, and does not start, on a line with none', () => {
+  it('starts a session from an instruction alone', async () => {
     const { onStart } = mount()
-    fireEvent.change(bar(), { target: { value: 'the export is slow since Tuesday' } })
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'No ticket named yet — press Enter and I will read what you typed',
+    fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
+    expect(screen.getByRole('status')).toHaveTextContent('Session · read-only')
+    fireEvent.click(sendButton())
+    await waitFor(() =>
+      expect(onStart).toHaveBeenCalledWith(
+        'session',
+        '',
+        expect.objectContaining({ instruction: 'Why is the refund stuck?', access: 'read-only' }),
+      ),
     )
-    expect(onStart).not.toHaveBeenCalled()
+    // Never read as a triage: this line names no ticket at all.
+    expect(onStart).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts a triage from a reference alone', async () => {
+    const { onStart } = mount()
+    fireEvent.change(bar(), { target: { value: 'OMNI-2510' } })
+    expect(screen.getByRole('status')).toHaveTextContent('Triage · OMNI-2510')
+    fireEvent.click(sendButton())
+    await waitFor(() => expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-2510', expect.anything()))
+  })
+
+  it('starts a session about a ticket', async () => {
+    const { onStart } = mount()
+    fireEvent.change(bar(), { target: { value: 'OMNI-2510 was it the PR?' } })
+    expect(screen.getByRole('status')).toHaveTextContent('Session · OMNI-2510 · read-only')
+    fireEvent.click(sendButton())
+    await waitFor(() =>
+      expect(onStart).toHaveBeenCalledWith(
+        'session',
+        '',
+        expect.objectContaining({ instruction: 'was it the PR?', reference: 'OMNI-2510', access: 'read-only' }),
+      ),
+    )
+  })
+
+  it('takes /rca as RCA', async () => {
+    const { onStart } = mount({ runs: [TRIAGED] })
+    fireEvent.change(bar(), { target: { value: '/rca OMNI-2' } })
+    expect(modeChip()).toHaveAccessibleName('Mode: RCA')
+    expect(screen.getByRole('status')).toHaveTextContent('RCA · OMNI-2')
+    fireEvent.click(sendButton())
+    await waitFor(() => expect(onStart).toHaveBeenCalledWith('rca', 'OMNI-2', expect.anything()))
+  })
+
+  it('offers worktree access for a session only', () => {
+    mount()
+    fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
+    expect(accessChip()).toBeEnabled()
+    fireEvent.click(accessChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Worktree/ }))
+    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
+    expect(screen.getByRole('status')).toHaveTextContent('Session · writes in worktree')
+
+    // A fix's posture is the mode's own, not a pick a session leaves behind.
+    fireEvent.change(bar(), { target: { value: '/fix OMNI-1' } })
+    expect(accessChip()).toBeDisabled()
+    expect(accessChip()).toHaveAccessibleName('Access: Worktree. Fixed by the mode')
+  })
+
+  it('opens the session once its run appears', async () => {
+    const { onStart, onOpenRun, rerender } = mount()
+    fireEvent.change(bar(), { target: { value: 'Why is the refund stuck?' } })
+    fireEvent.click(sendButton())
+    await waitFor(() => expect(onStart).toHaveBeenCalled())
+
+    act(() => setRunJob('run-session-1', 'job-1'))
+    rerender([run({ runId: 'run-session-1', key: '', kind: 'session', status: 'preparing' })])
+    await waitFor(() => expect(onOpenRun).toHaveBeenCalledWith('run-session-1'))
   })
 
   it('starts an RCA and a fix for a key that has a triage note, from the Mode menu', async () => {
@@ -321,22 +388,19 @@ describe('NewSession', () => {
     expect(screen.getByLabelText(/Dry run/)).toBeDisabled()
   })
 
-  it('says what the mode does to the tree on the Access chip, which explains and does not change', () => {
+  it('fixes the Access chip to the mode’s own posture for a ticket mode, with no choice to make', () => {
     mount({ runs: [TRIAGED] })
-    expect(accessChip()).toHaveAccessibleName('Access: Read-only')
-    expect(accessChip()).toHaveAttribute('aria-haspopup', 'dialog')
-    fireEvent.click(accessChip())
-    const dialog = screen.getByRole('dialog', { name: 'Access' })
-    expect(within(dialog).queryByRole('menuitemradio')).toBeNull()
-    expect(dialog).toHaveTextContent('Nothing is written.')
-    expect(dialog).toHaveTextContent('Sirdar commits and pushes, never the agent.')
-    fireEvent.keyDown(dialog, { key: 'Escape' })
-
-    // Fix runs in a worktree; the chip follows the mode.
+    // A bare key defaults to Triage, whose posture is fixed, not a session's own pick.
     fireEvent.change(bar(), { target: { value: 'OMNI-2' } })
+    expect(accessChip()).toHaveAccessibleName('Access: Read-only. Fixed by the mode')
+    expect(accessChip()).toBeDisabled()
+    expect(accessChip()).toHaveAttribute('title', 'Fixed by the mode')
+
+    // Fix runs in a worktree; the chip follows the mode and stays fixed.
     fireEvent.click(modeChip())
-    fireEvent.click(screen.getByRole('menuitemradio', { name: /Fix/ }))
-    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /^Fix/ }))
+    expect(accessChip()).toHaveAccessibleName('Access: Worktree. Fixed by the mode')
+    expect(accessChip()).toBeDisabled()
   })
 
   it('starts a fix with the provider and model from the chip and dry run from More options', async () => {
@@ -638,6 +702,11 @@ describe('NewSession', () => {
       })
       const { onStart } = mount({ transport })
       fireEvent.change(bar(), { target: { value: '#25312 the total is off by one fils' } })
+      // The line names a reference and something to say about it, which
+      // reads as a session; pin Triage to test the resolution and the note
+      // it carries on that mode specifically.
+      fireEvent.click(modeChip())
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /^Triage/ }))
 
       expect(
         await screen.findByText(/Triage · #25312 → OMNI-3233 · from the helpdesk record · with your note/),
@@ -674,6 +743,8 @@ describe('NewSession', () => {
     it('says which repository the line asks to look in, and carries the words to the run', async () => {
       const { onStart } = mount({ repos: REPOS })
       fireEvent.change(bar(), { target: { value: 'SBX-1 check the POS app first' } })
+      fireEvent.click(modeChip())
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /^Triage/ }))
       expect(screen.getByRole('status')).toHaveTextContent('Triage · SBX-1 · look in Acme.Flutter.POS · with your note')
       fireEvent.click(sendButton())
       await waitFor(() =>
@@ -688,6 +759,8 @@ describe('NewSession', () => {
     it('names a repository the line mentions, configured or not', () => {
       mount({ repos: REPOS })
       fireEvent.change(bar(), { target: { value: 'SBX-1 broke after acme/Acme.Web#828 or other/Billing.Service#3' } })
+      fireEvent.click(modeChip())
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /^Triage/ }))
       expect(screen.getByRole('status')).toHaveTextContent(
         'Triage · SBX-1 · mentions Acme.Web (companion repo) · mentions Billing.Service (not configured — add it under repos:) · with your note',
       )
@@ -718,6 +791,8 @@ describe('NewSession', () => {
       })
       mount({ transport, repos: REPOS })
       fireEvent.change(bar(), { target: { value: 'SBX-1 see acme/Acme.Web#828' } })
+      fireEvent.click(modeChip())
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /^Triage/ }))
       expect(
         await screen.findByText('Triage · SBX-1 · mentions Acme.Web (companion repo) · with your note'),
       ).toBeInTheDocument()
@@ -746,6 +821,8 @@ describe('NewSession', () => {
       })
       const { onStart } = mount({ transport })
       fireEvent.change(bar(), { target: { value: `${SLACK} look at the export first` } })
+      fireEvent.click(modeChip())
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /^Triage/ }))
       expect(screen.getByRole('status')).toHaveTextContent('Reading the Slack thread…')
       expect(sendButton()).toBeDisabled()
 
@@ -868,16 +945,16 @@ describe('NewSession', () => {
         composed: { key: 'OMNI-3233', mode: 'fix', instruction: 'the rounding', confidence: 0.8 },
       })
       const { onStart } = mount({ transport, runs: [run({ key: 'OMNI-3233', kind: 'triage', status: 'completed' })] })
-      fireEvent.change(bar(), { target: { value: 'sort out the rounding on 3233' } })
+      fireEvent.change(bar(), { target: { value: 'is it OMNI-3233 or OMNI-1, fix the rounding' } })
       expect(screen.getByRole('status')).toHaveTextContent(
-        'No ticket named yet — press Enter and I will read what you typed',
+        'Two ticket keys in there — press Enter and I will work out which you meant',
       )
       expect(transport.calls.composeIntent).toEqual([])
 
       fireEvent.click(sendButton())
       await waitFor(() =>
         expect(transport.calls.composeIntent).toEqual([
-          { ws: 'ws1', text: 'sort out the rounding on 3233' },
+          { ws: 'ws1', text: 'is it OMNI-3233 or OMNI-1, fix the rounding' },
         ]),
       )
       // The reading is shown, and nothing has started on it.
@@ -912,14 +989,20 @@ describe('NewSession', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Triage · OMNI-2')
     })
 
-    it('starts on the first key when the setting is off', async () => {
+    it('starts a session about the first key when the setting is off', async () => {
       setIntentAssist('ws1', false)
       const transport = createFakeTransport({ tickets: [] })
       const { onStart } = mount({ transport })
       fireEvent.change(bar(), { target: { value: 'is OMNI-1 the same bug as OMNI-2' } })
-      expect(screen.getByRole('status')).toHaveTextContent('Triage · OMNI-1')
+      expect(screen.getByRole('status')).toHaveTextContent('Session · OMNI-1 · read-only')
       fireEvent.click(sendButton())
-      await waitFor(() => expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-1', expect.anything()))
+      await waitFor(() =>
+        expect(onStart).toHaveBeenCalledWith(
+          'session',
+          '',
+          expect.objectContaining({ reference: 'OMNI-1' }),
+        ),
+      )
       expect(transport.calls.composeIntent).toEqual([])
     })
 
@@ -929,11 +1012,11 @@ describe('NewSession', () => {
         composed: { key: 'OMNI-3233', mode: 'triage', instruction: '', confidence: 0.6 },
       })
       mount({ transport })
-      fireEvent.change(bar(), { target: { value: 'the rounding on 3233' } })
+      fireEvent.change(bar(), { target: { value: 'is it OMNI-3233 or OMNI-1' } })
       fireEvent.click(sendButton())
       expect(await screen.findByText('Confirm')).toBeInTheDocument()
 
-      fireEvent.change(bar(), { target: { value: 'the rounding on 3233 again' } })
+      fireEvent.change(bar(), { target: { value: 'is it OMNI-3233 or OMNI-1 again' } })
       expect(screen.queryByText('Confirm')).toBeNull()
     })
 
@@ -943,18 +1026,22 @@ describe('NewSession', () => {
         composed: { key: 'OMNI-1', mode: 'triage', instruction: '', confidence: 1 },
       })
       setIntentAssist('ws1', false)
-      const { onStart } = mount({ transport })
-      fireEvent.change(bar(), { target: { value: 'sort out the rounding' } })
-      expect(sendButton()).toBeDisabled()
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'No ticket yet — type a key like SBX-1 or a helpdesk number like #28310, or paste a ticket or Slack link',
-      )
+      // A start with no job to await, so busy clears once it answers and the
+      // chips can be worked again for the second half of this case.
+      const { onStart } = mount({ transport, onStart: vi.fn(async () => '') })
+      // Two keys with the setting off starts on the first at once, no call spent.
+      fireEvent.change(bar(), { target: { value: 'is OMNI-1 the same bug as OMNI-2' } })
+      fireEvent.click(sendButton())
+      await waitFor(() => expect(onStart).toHaveBeenCalled())
+      expect(transport.calls.composeIntent).toEqual([])
 
       // A line that reads cleanly never spends a call, setting or no setting.
       setIntentAssist('ws1', true)
       fireEvent.change(bar(), { target: { value: 'OMNI-1 check the rounding' } })
+      fireEvent.click(modeChip())
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /^Triage/ }))
       fireEvent.click(sendButton())
-      await waitFor(() => expect(onStart).toHaveBeenCalled())
+      await waitFor(() => expect(onStart).toHaveBeenCalledTimes(2))
       expect(transport.calls.composeIntent).toEqual([])
     })
   })

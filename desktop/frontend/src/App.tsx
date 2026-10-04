@@ -325,6 +325,14 @@ function Shell(): JSX.Element {
     (mode: SessionMode, key: string, o: StartOverrides) => {
       const shared = { provider: o.provider, model: o.model, instruction: o.instruction }
       switch (mode) {
+        case 'session':
+          return store.startSession({
+            instruction: o.instruction ?? '',
+            reference: o.reference,
+            access: o.access,
+            provider: o.provider,
+            model: o.model,
+          })
         case 'rca':
           return store.startRCA(key, { ...shared, prUrl: o.prUrl, resolution: o.resolution, slack: o.slack })
         case 'fix':

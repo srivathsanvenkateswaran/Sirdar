@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   helpdeskIdInURL,
   intentChips,
+  intentKind,
   intentRef,
   isSlackLink,
   keyInURL,
@@ -32,12 +33,12 @@ const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
     want: { key: 'OMNI-3233', mode: 'triage', instruction: '', ambiguity: '' },
   },
   {
-    name: 'a mode word after the key, with a note',
+    name: 'a mode word sharing the line with other words is prose, not a command',
     text: 'OMNI-3233 fix the tax rounding on invoice lines',
     want: {
       key: 'OMNI-3233',
-      mode: 'fix',
-      instruction: 'the tax rounding on invoice lines',
+      mode: '',
+      instruction: 'fix the tax rounding on invoice lines',
       ambiguity: '',
     },
   },
@@ -47,9 +48,9 @@ const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
     want: { key: 'OMNI-1', mode: 'fix', instruction: '', ambiguity: '' },
   },
   {
-    name: 'root cause is one phrase, not the word cause',
+    name: 'root cause for a ticket, with words around it, is prose and sets no mode',
     text: 'root cause for OMNI-9 please',
-    want: { key: 'OMNI-9', mode: 'rca', instruction: 'for please', ambiguity: '' },
+    want: { key: 'OMNI-9', mode: '', instruction: 'root cause for please', ambiguity: '' },
   },
   {
     name: 'rca is rca',
@@ -87,14 +88,14 @@ const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
     },
   },
   {
-    name: 'a short hash is not a helpdesk number',
+    name: 'a short hash is not a helpdesk number, and the line is a session with no ticket',
     text: '#123 is not a ticket',
-    want: { key: '', helpdesk: '', ambiguity: 'no-key' },
+    want: { key: '', helpdesk: '', ambiguity: '' },
   },
   {
-    name: 'prose with no ticket anywhere is ambiguous',
+    name: 'prose with no ticket anywhere is a session, not an ambiguous line',
     text: 'the export is empty again',
-    want: { key: '', helpdesk: '', mode: '', ambiguity: 'no-key' },
+    want: { key: '', helpdesk: '', mode: '', ambiguity: '' },
   },
   {
     name: 'two keys are ambiguous, and the first is still offered',
@@ -107,9 +108,9 @@ const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
     want: { key: 'OMNI-1', ambiguity: '' },
   },
   {
-    name: 'two mode words are ambiguous, and the first in the line is still offered',
+    name: 'two mode words sharing the line with other words set no mode at all',
     text: 'triage OMNI-1 then fix it',
-    want: { key: 'OMNI-1', mode: 'triage', ambiguity: 'two-modes' },
+    want: { key: 'OMNI-1', mode: '', instruction: 'triage then fix it', ambiguity: '' },
   },
   {
     name: 'the first key is the first in the line, URL or not',
@@ -152,9 +153,9 @@ const TABLE: { name: string; text: string; want: Partial<Intent> }[] = [
     },
   },
   {
-    name: 'a look-alike Slack host is just a URL',
+    name: 'a look-alike Slack host is just a URL, and the line is a session with no ticket',
     text: 'https://acme.slack.com.example.org/archives/C0123ABCD/p1712345678901234',
-    want: { slack: '', ambiguity: 'no-key' },
+    want: { slack: '', ambiguity: '' },
   },
   {
     name: 'a key with Arabic around it',
@@ -180,9 +181,9 @@ describe('parseIntent', () => {
     })
   }
 
-  it('reads the mode word out of the instruction', () => {
+  it('leaves a mode word in the instruction when it is not the whole line', () => {
     expect(parseIntent('fix OMNI-1 and leave the schema alone').instruction).toBe(
-      'and leave the schema alone',
+      'fix and leave the schema alone',
     )
   })
 
@@ -190,6 +191,76 @@ describe('parseIntent', () => {
     expect(parseIntent('OMNI-1, the customer says it started on Tuesday').instruction).toBe(
       'the customer says it started on Tuesday',
     )
+  })
+
+  it('reads a leading slash command as the mode, cut from the instruction', () => {
+    expect(parseIntent('/rca OMNI-2510')).toMatchObject({
+      key: 'OMNI-2510',
+      mode: 'rca',
+      instruction: '',
+      ambiguity: '',
+    })
+    expect(parseIntent('/fix OMNI-2510 keep it small')).toMatchObject({
+      key: 'OMNI-2510',
+      mode: 'fix',
+      instruction: 'keep it small',
+      ambiguity: '',
+    })
+    expect(parseIntent('/triage')).toMatchObject({
+      key: '',
+      mode: 'triage',
+      instruction: '',
+      ambiguity: 'no-key',
+    })
+  })
+
+  it('reads a bare mode word alone as the mode, with no instruction left', () => {
+    expect(parseIntent('triage OMNI-2510')).toMatchObject({
+      key: 'OMNI-2510',
+      mode: 'triage',
+      instruction: '',
+    })
+    expect(parseIntent('OMNI-2510 root cause')).toMatchObject({
+      key: 'OMNI-2510',
+      mode: 'rca',
+      instruction: '',
+    })
+  })
+
+  it('keeps a mode word read as prose once anything else is said alongside the key', () => {
+    expect(
+      parseIntent('Triage OMNI-2510, the customer says it started after the 3.2 release'),
+    ).toMatchObject({
+      key: 'OMNI-2510',
+      mode: '',
+      instruction: 'Triage, the customer says it started after the 3.2 release',
+    })
+  })
+
+  it('still reads two keys as ambiguous whatever word is said alongside them', () => {
+    expect(parseIntent('please fix OMNI-1 and OMNI-2')).toMatchObject({ ambiguity: 'two-keys' })
+  })
+})
+
+describe('intentKind', () => {
+  it('is a session for an instruction with no mode word and no ticket', () => {
+    const intent = parseIntent('Why is the refund for order 1234 stuck?')
+    expect(intentKind(intent)).toBe('session')
+    expect(intent.mode).toBe('')
+    expect(intent.ambiguity).toBe('')
+  })
+
+  it('is a triage for a bare key, with no instruction', () => {
+    const intent = parseIntent('OMNI-2510')
+    expect(intentKind(intent)).toBe('triage')
+    expect(intent.instruction).toBe('')
+  })
+
+  it('is a session for a key with something asked about it', () => {
+    const intent = parseIntent('OMNI-2510 was it the PR?')
+    expect(intentKind(intent)).toBe('session')
+    expect(intent.key).toBe('OMNI-2510')
+    expect(intent.instruction).toBe('was it the PR?')
   })
 })
 
@@ -244,5 +315,14 @@ describe('intentChips', () => {
       'Triage',
       'OMNI-3233',
     ])
+  })
+
+  it('names a session and its access, with no note chip and no key chip when there is none', () => {
+    expect(
+      intentChips({ mode: 'session', key: '', instruction: 'Why?', access: 'read-only' }),
+    ).toEqual(['Session', 'read-only'])
+    expect(
+      intentChips({ mode: 'session', key: 'OMNI-2510', instruction: 'was it the PR?', access: 'worktree' }),
+    ).toEqual(['Session', 'OMNI-2510', 'writes in worktree'])
   })
 })

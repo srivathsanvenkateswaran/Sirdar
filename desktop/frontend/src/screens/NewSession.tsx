@@ -10,17 +10,17 @@ import {
 import type { ComposedIntent, Intake, RepoSummary, RunSummary, Ticket, Transport, Workspace } from '../api/types'
 import ChipMenu, { type ChipMenuItem } from '../components/composer/ChipMenu'
 import ComposerCard from '../components/composer/ComposerCard'
-import { ACCESS, MODES, accessOf, type SessionMode } from '../components/composer/modes'
+import { ACCESS, MODES, accessOf, type Access, type SessionMode } from '../components/composer/modes'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import WorkspaceSwitcher from '../components/shell/WorkspaceSwitcher'
 import {
   COMPOSER_PLACEHOLDER,
   NO_KEY_REASON,
   intentChips,
+  intentKind,
   intentRef,
   parseIntent,
   type Intent,
-  type IntentMode,
 } from '../lib/composeIntent'
 import {
   FIX_THEN_NOTE,
@@ -67,6 +67,10 @@ export interface StartOverrides {
   resolution?: string
   /** Triage and RCA: the Slack link the ticket was found through, whose thread goes into the bundle. */
   slack?: string
+  /** Session only: the reference the instruction was about, when there was one. */
+  reference?: string
+  /** Session only: the posture it runs with. */
+  access?: Access
 }
 
 /** How many of the tickets that landed are listed. */
@@ -334,6 +338,8 @@ export default function NewSession(props: {
    * Null until they pick one, and then it stands.
    */
   const [pinnedMode, setPinnedMode] = useState<SessionMode | null>(null)
+  /** The posture somebody picked for a session; null until they pick one. */
+  const [pinnedAccess, setPinnedAccess] = useState<Access | null>(null)
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
   // A pick is an override of this workspace's provider and model. Switching
@@ -428,10 +434,11 @@ export default function NewSession(props: {
   /** The Slack link to carry into the bundle: only when the key came from its thread. */
   const slackLink = !confirmed && resolved?.input === 'slack' && resolved.key === key ? intent.slack : ''
   const instruction = (confirmed?.instruction ?? intent.instruction).trim()
-  // A reading never confirms 'session': composeIntent only classifies an
-  // ambiguous line about a ticket, which is always triage, RCA or fix.
-  const confirmedMode = confirmed?.mode !== 'session' ? confirmed?.mode : ''
-  const mode: SessionMode = pinnedMode ?? (confirmedMode || intent.mode || 'triage')
+  // A reading confirms a ticket's mode when the line was ambiguous about
+  // one; absent that, `intentKind` is what tells a session from a bare
+  // triage, and a session is what is left once neither says anything.
+  const mode: SessionMode = pinnedMode ?? (confirmed?.mode || intentKind(intent) || 'session')
+  const access = mode === 'session' ? (pinnedAccess ?? 'read-only') : accessOf(mode)
   const fixThen = prefs.fixThen
 
   const triaged = key ? hasTriageNote(runs, key) : true
@@ -486,10 +493,21 @@ export default function NewSession(props: {
   // --- starting -----------------------------------------------------------
 
   const begin = useCallback(
-    async (what: SessionMode, forKey: string, note: string, slack = '') => {
+    async (
+      what: SessionMode,
+      forKey: string,
+      note: string,
+      slack = '',
+      /** Session only: the reference it was about and the posture it runs with. */
+      extra?: { reference?: string; access?: Access },
+    ) => {
       if (busy) return
       setError('')
-      setStarting(forKey)
+      // A session names no key, so there is nothing for `starting` to carry
+      // while its own start is in flight; `busy` still reads `awaiting`
+      // once the job answers, which is the window that matters for the
+      // Start button and the Landed rows this state also guards.
+      setStarting(forKey || what)
       try {
         const jobId = await onStart(what, forKey, {
           provider: provider || undefined,
@@ -501,6 +519,8 @@ export default function NewSession(props: {
           prUrl: what === 'rca' ? prUrl.trim() || undefined : undefined,
           resolution: what === 'rca' ? resolution.trim() || undefined : undefined,
           slack: what !== 'fix' && slack ? slack : undefined,
+          reference: extra?.reference,
+          access: extra?.access,
         })
         if (jobId) {
           awaitingRef.current = jobId
@@ -582,41 +602,62 @@ export default function NewSession(props: {
     return out
   }, [asks, instruction, repos, foundBy, resolved])
 
+  // A reference the box names has resolved to a reason and no key: a
+  // session cannot be about a ticket that turned out not to exist, even
+  // though a session needs no ticket at all to start.
+  const sessionRefBad = ref !== '' && resolved?.key === '' && !!resolved.reason
+
   const canStart =
-    !busy && (wantsReading || (key !== '' && !(needsNote && mode !== 'triage') && !badAsk))
+    !busy &&
+    (wantsReading ||
+      (mode === 'session'
+        ? instruction !== '' && !badAsk && !sessionRefBad
+        : key !== '' && !(needsNote && mode !== 'triage') && !badAsk))
 
   /** The chips, or the one line saying why there is nothing to start yet. */
-  // This screen's own ticket modes (MODES in composer/modes.ts) never
-  // include 'session': only a later task's own screen starts one of those.
   const chips =
-    key !== ''
-      ? withRepoChips(
-          intentChips({ mode: mode as IntentMode, key, instruction, resolution: foundBy }),
-          repoChips,
-        )
-      : []
+    mode === 'session'
+      ? instruction !== ''
+        ? withRepoChips(intentChips({ mode, key, instruction, resolution: foundBy, access }), repoChips)
+        : []
+      : key !== ''
+        ? withRepoChips(intentChips({ mode, key, instruction, resolution: foundBy }), repoChips)
+        : []
   /**
    * The one line that stands in place of the chips. A key with no triage
    * note behind it stops an RCA or a fix and nothing else, so on a triage
    * it is a note under the chips rather than in place of them: most keys
    * worth typing have no note yet, and telling somebody that instead of
    * what they are about to start would be wrong on nearly every line.
+   *
+   * A session needs no ticket, so its own blocked reason is just whether
+   * there is something to say — "Type what you want done" on a box that
+   * holds only a reference, once Session has been pinned over the triage
+   * that reference alone would otherwise start.
    */
   const blocked = error
     ? error
     : wantsReading
       ? AMBIGUOUS_REASON[intent.ambiguity]
-      : needsNote && mode !== 'triage'
-        ? `RCA and Fix need a triage note for ${key} first. Start a triage.`
-        : key !== '' && badAsk
+      : mode === 'session'
+        ? badAsk
           ? askReason(badAsk)
-          : key !== ''
-            ? ''
-            : ref !== '' && (resolving || !resolved)
-              ? lookingUp(intent)
-              : resolved?.reason
-                ? resolved.reason
-                : NO_KEY_REASON
+          : sessionRefBad
+            ? resolved!.reason
+            : instruction !== ''
+              ? ''
+              : 'Type what you want done'
+        : needsNote && mode !== 'triage'
+          ? `RCA and Fix need a triage note for ${key} first. Start a triage.`
+          : key !== '' && badAsk
+            ? askReason(badAsk)
+            : key !== ''
+              ? ''
+              : ref !== '' && (resolving || !resolved)
+                ? lookingUp(intent)
+                : resolved?.reason
+                  ? resolved.reason
+                  : NO_KEY_REASON
 
   const start = useCallback(() => {
     if (!canStart) return
@@ -631,9 +672,13 @@ export default function NewSession(props: {
         .finally(() => setReading(false))
       return
     }
+    if (mode === 'session') {
+      void begin('session', '', instruction, '', { reference: intentRef(intent) || undefined, access })
+      return
+    }
     if (!key) return
     void begin(mode, key, instruction, slackLink)
-  }, [canStart, wantsReading, text, transport, workspaceId, key, mode, instruction, slackLink, begin])
+  }, [canStart, wantsReading, text, transport, workspaceId, mode, intent, key, instruction, slackLink, access, begin])
 
   useProvidePrimaryAction({
     label: busy ? 'Starting…' : wantsReading ? 'Read this' : 'Start',
@@ -652,9 +697,8 @@ export default function NewSession(props: {
 
   const modeItems: ChipMenuItem[] = MODES.map((m) => ({
     ...m,
-    disabled: needsNote && m.id !== 'triage' ? noteReason : undefined,
+    disabled: needsNote && m.id !== 'triage' && m.id !== 'session' ? noteReason : undefined,
   }))
-  const access = accessOf(mode)
 
   const sendTitle = canStart
     ? wantsReading
@@ -712,7 +756,14 @@ export default function NewSession(props: {
                   disabled={busy}
                   onSelect={(id) => setPinnedMode(id as SessionMode)}
                 />
-                <ChipMenu label="Access" value={access} items={ACCESS} disabled={busy} />
+                <ChipMenu
+                  label="Access"
+                  value={access}
+                  items={ACCESS}
+                  disabled={busy}
+                  onSelect={mode === 'session' ? (id) => setPinnedAccess(id as Access) : undefined}
+                  readOnly={mode === 'session' ? undefined : 'Fixed by the mode'}
+                />
               </>
             }
             send={{

@@ -15,8 +15,8 @@
  * to an ambiguous line is one short provider call and a Confirm step.
  */
 
-/** The three kinds of session, as the Mode selector lists them. */
-export type IntentMode = 'triage' | 'rca' | 'fix'
+/** The four kinds of session, as the Mode selector lists them. */
+export type IntentMode = 'session' | 'triage' | 'rca' | 'fix'
 
 /** Why a line cannot be read outright; '' when it can. */
 export type Ambiguity = '' | 'no-key' | 'two-keys' | 'two-modes'
@@ -70,20 +70,44 @@ const GITHUB_REF = /[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+#\d+\b/g
 const HELPDESK = /#(\d{4,})\b/g
 
 /**
- * The words that set the mode, longest first so "root cause" is read as one
- * phrase rather than as the word "cause" with "root" in front of it.
+ * A leading slash command: the only way a word in the line picks triage,
+ * RCA or fix outright. It is cut from the instruction like any other
+ * reference.
+ */
+const SLASH_MODE = /^\s*\/(triage|rca|fix)\b/i
+
+/**
+ * The phrase a line can be, once every reference is cut out of it and its
+ * own surrounding punctuation is ignored, for that phrase alone to set the
+ * mode. A word that shares the line with anything else — "fix the tax
+ * rounding", "triage OMNI-1 then fix it" — is prose, not a command, and
+ * stays in the instruction instead: the Mode chip is how a person steers an
+ * ambiguous line, not a scan of their wording for the first word it
+ * recognises.
  *
  * "resolution" is here because an RCA run is the one that drafts one, and a
  * person asking for the resolution is asking for that session.
  */
-const MODE_WORDS: { pattern: RegExp; mode: IntentMode }[] = [
-  { pattern: /\broot\s+cause\b/gi, mode: 'rca' },
-  { pattern: /\bresolution\b/gi, mode: 'rca' },
-  { pattern: /\btriage\b/gi, mode: 'triage' },
-  { pattern: /\bimplement\b/gi, mode: 'fix' },
-  { pattern: /\brca\b/gi, mode: 'rca' },
-  { pattern: /\bfix\b/gi, mode: 'fix' },
-]
+const MODE_PHRASE: Record<string, IntentMode> = {
+  triage: 'triage',
+  rca: 'rca',
+  'root cause': 'rca',
+  resolution: 'rca',
+  fix: 'fix',
+  implement: 'fix',
+}
+
+/**
+ * The mode `text` names when it is nothing but one of `MODE_PHRASE`'s words
+ * or phrases, case and surrounding punctuation ignored; '' otherwise.
+ */
+function bareModeWord(text: string): IntentMode | '' {
+  const stripped = text
+    .trim()
+    .replace(/^[\s,;:.!?'"()-]+|[\s,;:.!?'"()-]+$/g, '')
+    .toLowerCase()
+  return MODE_PHRASE[stripped] ?? ''
+}
 
 /** One matched run of characters, to be cut out of the instruction. */
 interface Span {
@@ -193,18 +217,24 @@ function withoutSpans(text: string, spans: Span[]): string {
  * finger did; a key inside a sentence has to be upper-case, or every
  * hyphenated word with a number after it would be a ticket.
  *
- * The mode is the first mode word the line uses. It is a suggestion to the
- * caller and not a decision: the Mode selector's own value wins when a
- * person has set it, which is the rule the screen applies, not this one.
+ * The mode is set by a leading slash command (`/triage`, `/rca`, `/fix`),
+ * or by the line being nothing else once its references are cut out — one
+ * mode word or phrase, on its own. Anything less bare is a session with
+ * that word left in its instruction: "fix the tax rounding" does not set
+ * the mode, because "fix" is not what the line is, it is one word in what
+ * somebody asked for. `intentKind` is what decides between a session, a
+ * triage and nothing, from this `mode` and `instruction`.
  *
  * The instruction is everything else, with the key, the URL, the helpdesk
- * number and the mode word taken out. Empty is fine and common: "OMNI-2510"
- * on its own is a triage of OMNI-2510 with nothing else asked for.
+ * number and (for a slash command or a bare mode word) the mode's own
+ * words taken out. Empty is fine and common: "OMNI-2510" on its own names
+ * no instruction, and `intentKind` reads that as a triage of OMNI-2510.
  *
- * `ambiguity` is set when the line cannot be settled here — a line with
- * words in it and no ticket anywhere, two different keys, or two different
- * mode words. The key and the mode still carry the first of each, so a
- * caller that has no fallback available can still show something.
+ * `ambiguity` is set when the line cannot be settled here: two different
+ * keys, always; `'no-key'` only when the mode is triage, RCA or fix (by
+ * slash or by the bare word) and the line names no reference — a session
+ * never needs one. The key still carries the first of two, so a caller
+ * that has no fallback available can still show something.
  */
 export function parseIntent(text: string): Intent {
   const trimmed = text.trim()
@@ -224,6 +254,16 @@ export function parseIntent(text: string): Intent {
     kept.push({ start: at, end: at + match[0].length })
   }
   const taken = (span: Span): boolean => spans.some((s) => overlaps(s, span)) || kept.some((s) => overlaps(s, span))
+
+  // A slash command is cut out like any other reference, and its mode
+  // stands regardless of what else the line says.
+  let mode: IntentMode | '' = ''
+  const slashMatch = SLASH_MODE.exec(text)
+  if (slashMatch) {
+    mode = slashMatch[1].toLowerCase() as IntentMode
+    spans.push({ start: slashMatch.index, end: slashMatch.index + slashMatch[0].length })
+  }
+
   /** Every key the line names, with where it was found, so "first" is first in the line. */
   const keys: { at: number; key: string }[] = []
   let helpdeskUrl = ''
@@ -287,37 +327,61 @@ export function parseIntent(text: string): Intent {
     if (number && !helpdeskNumbers.includes(number)) helpdeskNumbers.push(number)
   }
 
-  // Longest phrase first, so "root cause" is claimed before "cause" could
-  // be; ordered by position afterwards, so the mode the line settles on is
-  // the first one a reader meets rather than the first in this list.
-  const modes: { at: number; mode: IntentMode }[] = []
-  for (const { pattern, mode } of MODE_WORDS) {
-    for (const match of text.matchAll(pattern)) {
-      const at = match.index ?? 0
-      const span = { start: at, end: at + match[0].length }
-      if (taken(span)) continue
-      spans.push(span)
-      if (!modes.some((m) => m.mode === mode)) modes.push({ at, mode })
-    }
-  }
   keys.sort((a, b) => a.at - b.at)
-  modes.sort((a, b) => a.at - b.at)
 
   const key = keys[0]?.key ?? ''
   const helpdesk = helpdeskNumbers[0] ?? ''
-  const mode = modes[0]?.mode ?? ''
-  const instruction = withoutSpans(text, spans)
+
+  // What the line says once the slash command (if there was one) and every
+  // reference are cut out. A mode already set by a slash command stands as
+  // it is; otherwise this remainder becomes the mode, with the instruction
+  // cleared, only when it is nothing but one mode word or phrase — the one
+  // case where a word in the line is a command rather than prose.
+  const remainder = withoutSpans(text, spans)
+  let instruction = remainder
+  if (!mode) {
+    const bare = bareModeWord(remainder)
+    if (bare) {
+      mode = bare
+      instruction = ''
+    }
+  }
 
   let ambiguity: Ambiguity = ''
-  if (keys.length > 1) ambiguity = 'two-keys'
-  else if (modes.length > 1) ambiguity = 'two-modes'
-  else if (key === '' && helpdesk === '' && helpdeskUrl === '' && slack === '') ambiguity = 'no-key'
+  if (keys.length > 1) {
+    ambiguity = 'two-keys'
+  } else if (
+    (mode === 'triage' || mode === 'rca' || mode === 'fix') &&
+    key === '' &&
+    helpdesk === '' &&
+    helpdeskUrl === '' &&
+    slack === ''
+  ) {
+    ambiguity = 'no-key'
+  }
 
   return { key, helpdesk, helpdeskUrl, slack, mode, instruction, ambiguity }
 }
 
+/**
+ * What kind of run this line starts, once `parseIntent` has read it: the
+ * mode it set, outright; else a session, when there is an instruction to
+ * answer; else a triage, when there is a reference and nothing to say about
+ * it; else '', for the empty box. A session needs no reference — "Why is
+ * the refund stuck?" is a session with no ticket in it at all — which is
+ * the one way this reading differs from the Mode chip's own default before
+ * task F2: triage no longer wins a line that is really a question.
+ */
+export function intentKind(intent: Intent): IntentMode | '' {
+  if (intent.mode) return intent.mode
+  if (intent.instruction.trim() !== '') return 'session'
+  if (intentRef(intent) !== '') return 'triage'
+  return ''
+}
+
 /** What the box says while it is empty. */
-export const COMPOSER_PLACEHOLDER = 'A ticket key, a #helpdesk number, or a ticket or Slack link'
+export const COMPOSER_PLACEHOLDER =
+  'Ask anything, or paste a ticket key, #helpdesk number, or ticket or Slack link'
 
 /** Why nothing can be started, when nothing resolved. */
 export const NO_KEY_REASON =
@@ -325,9 +389,16 @@ export const NO_KEY_REASON =
 
 /** The Mode selector's word for each mode, for the chips. */
 export const MODE_LABEL: Record<IntentMode, string> = {
+  session: 'Session',
   triage: 'Triage',
   rca: 'RCA',
   fix: 'Fix',
+}
+
+/** The Access chip's word, in the spot `intentChips` puts it for a session. */
+const ACCESS_WORD: Record<'read-only' | 'worktree', string> = {
+  'read-only': 'read-only',
+  worktree: 'writes in worktree',
 }
 
 /**
@@ -335,6 +406,11 @@ export const MODE_LABEL: Record<IntentMode, string> = {
  * it — the mode, then the ticket, then whether anything else was asked for.
  * The note chip appears only when there is an instruction, because "with
  * your note" on a line that carries none says something untrue.
+ *
+ * A session's chips are different in kind, not just in word: its
+ * instruction is its task, so there is no "with your note" chip for it —
+ * and its last chip is the access it will run with, since that is the one
+ * thing about a session the Mode chip does not already say.
  */
 export function intentChips(o: {
   mode: IntentMode
@@ -346,7 +422,16 @@ export function intentChips(o: {
    * place, since it names the key.
    */
   resolution?: string
+  /** Session only: the posture it will run with. */
+  access?: 'read-only' | 'worktree'
 }): string[] {
+  if (o.mode === 'session') {
+    const chips = [MODE_LABEL.session]
+    const named = o.resolution || o.key
+    if (named) chips.push(named)
+    if (o.access) chips.push(ACCESS_WORD[o.access])
+    return chips
+  }
   const chips = [MODE_LABEL[o.mode], o.resolution || o.key]
   if (o.instruction.trim() !== '') chips.push('with your note')
   return chips
