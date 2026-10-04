@@ -129,15 +129,13 @@ func TestFixTarget(t *testing.T) {
 	}
 }
 
-// git runs one git command in dir for a test fixture. The repository is a
-// throwaway the test made; the identity is passed to this one command only.
+// git runs one git command in dir for a test fixture, a throwaway
+// repository the test made. Its commits are made with the machine's own
+// identity as it stands; the test skips on a machine with none rather than
+// inventing one.
 func git(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid",
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_NOSYSTEM=1")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
@@ -149,6 +147,9 @@ func TestReadFactsAndOrigin(t *testing.T) {
 	}
 	upstream := t.TempDir()
 	git(t, upstream, "init", "-q", "-b", "main")
+	if err := exec.Command("git", "-C", upstream, "var", "GIT_AUTHOR_IDENT").Run(); err != nil {
+		t.Skip("git has no author identity configured in this environment")
+	}
 	git(t, upstream, "commit", "-q", "--allow-empty", "-m", "one")
 
 	clone := filepath.Join(t.TempDir(), "clone")
