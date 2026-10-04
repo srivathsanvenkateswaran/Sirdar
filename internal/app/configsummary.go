@@ -1,10 +1,12 @@
 package app
 
 import (
+	"context"
 	"net/url"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 )
@@ -33,6 +35,10 @@ type ConfigSummary struct {
 	// so. It is an identity, not a credential: the same address a ticket
 	// already carries.
 	Me MeSummary `json:"me"`
+	// Repos are the repositories a session may read: the workspace's own
+	// first, then each companion from repos:, with what a read-only look
+	// at each clone says. Always a list, never null.
+	Repos []RepoSummary `json:"repos"`
 }
 
 // MeSummary is the reader's identity as the Settings "You" row shows it:
@@ -208,6 +214,7 @@ func SummariseConfigWith(cfg *config.Config, hints SourceHints) ConfigSummary {
 		Notify:      summariseNotify(cfg.Notify),
 		Webhooks:    summariseWebhooks(&cfg.Webhooks),
 		Me:          summariseMe(cfg),
+		Repos:       summariseRepos(context.Background(), cfg, time.Now()),
 	}
 }
 
