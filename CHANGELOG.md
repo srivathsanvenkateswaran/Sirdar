@@ -32,6 +32,18 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
 - A Slack link is read through the operator's Slack MCP server when there is no
   `sources.slack.token` and `slack` is in `mcp.userServers`: one short read-only session,
   the chip says `Slack (via MCP)`, and the thread is kept for half an hour.
+- `repos:` names the companion repositories a triage may read beside the workspace's own,
+  each with a `name`, a `path`, an optional `about` and an `origin` read from the clone when
+  not given. Their paths join the read scope the way `permissions.readAlso` entries do, and
+  the prompt gets a `# Repositories` section. A ticket, thread or instruction that names a
+  GitHub repository (`owner/name#N`, a `github.com` link) or a configured name makes the
+  chip and the Bundle pane say `· mentions Acme.Web (companion repo)` or `(not configured —
+  add it under repos:)`; "look in Acme.Web" or "check the POS app" in the composer is passed
+  to the session, and a name no repository has stops the start with the reason.
+  `owner/name#1234` is no longer read as helpdesk ticket `#1234`. `sirdar fix` refuses a note
+  whose proposed fix names a companion's files. `sirdar doctor` has a `repos` row (branch,
+  commits behind the last fetch, when that was; nothing fetches), and Settings › General
+  lists the repositories.
 
 Sirdar as it stands today, before the first tagged release:
 

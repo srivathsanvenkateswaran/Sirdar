@@ -79,6 +79,7 @@ rather than being silently ignored.
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below |
 | `permissions.fetch` | list of string | `[]` | Hosts a session may fetch a URL from: `docs.example.com` exactly, `*.example.com` for its subdomains, `http://localhost:3000` for a service on this machine. Empty — the default — denies every fetch; see Web fetch below |
 | `permissions.readAlso` | list of string | `[]` | Paths outside the workspace a read-class tool may still open: an absolute path or one starting with `~`, with `*` spanning `/`. Empty — the default — confines every read to the workspace, the run directory and its bundle; see Read scope below |
+| `repos` | list of object | `[]` | Companion repositories a triage may read beside the workspace's own: `name`, `path` (absolute or `~`), optional `about` and `origin`. Each path joins the read scope the way a `readAlso` entry does, and the prompt lists them. A fix still happens only in the workspace. See [More than one repository](#more-than-one-repository) |
 | `permissions.ask` | bool | `true` | A call the policy refuses but the operator could allow — a command off `permissions.bash`, an MCP tool `permissions.mcp` does not cover, a fetch to an unlisted host, a read outside the scope — blocks the run on a question instead of being refused. It is answered with Allow once, Allow for this run or Deny (`sirdar resume RUN --allow \| --allow-run \| --deny`). The answers are **per run**: they are kept on the run's `state.json`, never written here. `false` refuses the call and lets the agent carry on, as before. An eval never asks. See [Blocked runs](blocked.md) |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
 | `mcp.userServers` | list of string | `[]` | Names of servers from the Claude CLI's own user scope (`~/.claude.json`, or `$CLAUDE_CONFIG_DIR/.claude.json`) that a run sees beside the workspace's — the Slack, helpdesk or tracker connectors the operator already uses in Claude Code. A name the CLI does not have fails the load and lists the ones it has. See [Your own MCP servers](#your-own-mcp-servers-mcpuserservers) |
@@ -1128,11 +1129,74 @@ config load: the first is already in scope and the second is the whole machine.
 own root-escape rule (see above), which reads the command as text. Adding a directory to
 `readAlso` does not let `cat` reach it.
 
+A repository is better named under [`repos:`](#more-than-one-repository) than here: its path
+joins the scope exactly as a `readAlso` entry would, and it also gets a name the operator can
+type, an origin a ticket's pull request link is matched against, and a line in the prompt.
+Keep `readAlso` for directories that are not repositories — runbooks, a skills tree.
+
 Two providers are outside all of it. `provider: cursor` and `provider: agy` answer their own
 tool calls — there is no permission request for Sirdar to decide — so a read there goes wherever
 the CLI allows. `sirdar doctor` carries a warning row for each (`cursor reads`, `agy reads`),
 and every session on those providers records the same thing on its own event stream, so a run's
 log says what it could reach rather than implying the read-only posture covered it.
+
+## More than one repository
+
+A workspace is one repository, and that is where a fix is made. A triage often needs to read
+others: the frontend a ticket's screenshot comes from, the mobile app a stack trace names, the
+service a pull request in the Slack thread changed. `repos:` names them:
+
+```yaml
+repos:
+  - name: Acme.Web
+    path: ~/code/Acme.Web
+    about: Angular frontend
+  - name: Acme.Flutter.POS
+    path: ~/code/Acme.Flutter.POS
+    about: point-of-sale app
+    origin: git@github.com:acme/Acme.Flutter.POS.git   # optional
+```
+
+- **`name`** is what you type and what the chip shows. It must be unique (case aside) and may
+  not contain spaces, slashes or `#`.
+- **`path`** is the clone, absolute or starting with `~`. It may not be the workspace itself.
+  A path that does not exist yet does not fail the load; `sirdar doctor` says so. A path that is
+  not a git clone is allowed and is read as a plain directory.
+- **`origin`** defaults to what `git remote get-url origin` says in the clone, read once per
+  loaded configuration. It is what `acme/Acme.Web#828` or a `github.com/acme/Acme.Web/pull/828`
+  link in a ticket is matched against.
+- **`about`** is one line the prompt carries beside the path.
+
+What it changes:
+
+- **Read scope.** Each path joins the scope a read-class tool is judged against, exactly as a
+  [`permissions.readAlso`](#read-scope) entry would. `Bash` is still not judged by it.
+- **The prompt** gets a `# Repositories` section: the workspace repository first, as the only
+  place a fix is made, then each companion with its path, origin and `about`. The session is told
+  to look in the companion a ticket's pull request, stack trace or file path points at, and, when
+  the cause is in a companion, to write `proposedFix.files` as `<name>/<path>`.
+- **Mentions.** When the ticket, its thread, the Slack thread or your own words name a GitHub
+  repository — a `github.com` link or `owner/name#N` — or a configured repository by name, the
+  New session chip says so, and so does the Bundle pane's ticket card:
+  `· mentions Acme.Web (companion repo)`, or for one no origin matches,
+  `· mentions Billing.Service (not configured — add it under repos:)`. The workspace's own
+  repository is not worth a word. `owner/name#1234` is never read as helpdesk ticket `#1234`.
+- **Asking for a repository.** "look in Acme.Web", "check the POS app", "in the reports repo"
+  resolve by name, case aside: the configured name, the last segment of the path, or the last
+  dot- or dash-separated part of the name (`POS` for `Acme.Flutter.POS`) when only one
+  repository has it. The chip reads `· look in Acme.Flutter.POS` and the prompt tells the
+  session the operator asked for it. A name that resolves to nothing — and looks like a
+  repository: a dotted name such as `Billing.Service`, `owner/name`, or a word followed by
+  "repo" or "app" — stops the start with `Billing.Service is not a configured repository`;
+  one that matches several says which. "check the logs" asks for nothing.
+- **Fix stays here.** `sirdar fix` refuses a note whose `proposedFix.files` names a companion
+  (`Acme.Web/src/…`, or an absolute path inside its clone) before it cuts a branch:
+  `fix: the fix is in Acme.Web; run Sirdar from that repository`. A later round may make the
+  target selectable.
+- **Doctor and Settings.** `sirdar doctor` has a `repos` row naming each companion with its
+  branch, how far behind its upstream the last fetch left it, and when that fetch was —
+  `Acme.Web: main · 2 behind origin/main · fetched 3 days ago`. A missing clone is a warning.
+  Nothing here fetches. Settings › General lists the same under Repositories.
 
 ## Web fetch
 
