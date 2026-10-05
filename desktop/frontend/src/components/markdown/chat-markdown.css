@@ -61,7 +61,7 @@
    this keeps its lines apart against the inline rule above, belt-and-braces
    if something ever renders a `pre > code` `.cmd code` doesn't expect. */
 .cmd pre code {
-  white-space: pre;
+  white-space: pre-wrap;
 }
 
 .cmd blockquote {
@@ -115,7 +115,6 @@
   margin: 0;
   padding-block: var(--sd-space-2);
   padding-inline: var(--sd-space-3);
-  overflow-x: auto;
   font-family: var(--sd-font-mono);
   font-size: 0.85em;
   line-height: 1.55;
@@ -125,7 +124,8 @@
   margin: 0;
   padding: 0;
   background: transparent;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* Raised to `.cmd .cmd-code__body code` — two classes, not one — so this
@@ -138,8 +138,37 @@
   margin: 0;
   padding: 0;
   background: transparent;
-  white-space: pre;
+  /* Long lines wrap rather than scroll: a draft message to a customer or a
+     JSON line of 800 characters is read, not scanned sideways, and a
+     horizontal scrollbar at the foot of a tall block is out of reach. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-size: inherit;
+}
+
+/* A folded block shows at most this much, wrapped lines included. */
+.cmd-code[data-folded] .cmd-code__body {
+  max-block-size: 18em;
+  overflow: hidden;
+}
+
+.cmd-code__fold {
+  display: block;
+  inline-size: 100%;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 0;
+  border-block-start: 1px solid var(--sd-rule);
+  background: var(--sd-sunk);
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.cmd-code__fold:hover {
+  color: var(--sd-ink);
 }
 
 /* Shiki sets its own foreground per token but not the page background;
