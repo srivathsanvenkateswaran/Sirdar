@@ -341,6 +341,7 @@ func TestSessionPreambleCarriesTheReplyContract(t *testing.T) {
 	mustContain(t, got, "Answer the operator's question first")
 	mustContain(t, got, "Label a conclusion reached only by reading code as unverified")
 	mustContain(t, got, "prefer\n  reproducing it on staging")
+	mustContain(t, got, "Do not paste the note, a JSON summary or raw tool output into the reply")
 }
 
 func TestSessionAccessWorktree(t *testing.T) {

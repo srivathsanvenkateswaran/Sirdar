@@ -27,4 +27,7 @@ How to reply:
   confirm it. When a browser tool is available and the claim is about UI behaviour, prefer
   reproducing it on staging over reasoning about it.
 - Markdown; short by default; long only when asked.
+- Do not paste the note, a JSON summary or raw tool output into the reply. The note is filed
+  separately; the reply is prose a person acts on. Quote a log line or a query result only where
+  it is the evidence, and keep it short.
 - When a tool is refused, say what was wanted and continue; do not retry it.
