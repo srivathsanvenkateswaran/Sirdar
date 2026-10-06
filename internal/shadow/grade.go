@@ -8,7 +8,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -87,9 +86,18 @@ type RCATruth struct {
 // operator triage is only another triage, which can be wrong too, so a
 // grade on it alone is provisional.
 func Basis(outcomes []Entry) (basis string, final bool, ok bool) {
+	return basisOf(outcomes, true)
+}
+
+// basisOf is Basis with the choice of counting pull requests. Grade leaves
+// them out when none could be read, because a PR nobody could read is not
+// truth the judge was shown.
+func basisOf(outcomes []Entry, countPRs bool) (basis string, final bool, ok bool) {
 	var hasPR, hasRes, hasRCA, hasManual, hasTriage bool
-	valid, _ := prURLsOf(outcomes)
-	hasPR = len(valid) > 0
+	if countPRs {
+		valid, _ := prURLsOf(outcomes)
+		hasPR = len(valid) > 0
+	}
 	for _, o := range outcomes {
 		if strings.TrimSpace(o.Resolution) != "" {
 			hasRes = true
@@ -225,17 +233,17 @@ type promptBuilder struct {
 	n int
 }
 
-// evidenceTag matches anything in quoted text that a reader could take
-// for the start of an evidence element's opening or closing tag.
-var evidenceTag = regexp.MustCompile(`(?i)<\s*/?\s*evidence`)
+// lessThan turns every less-than sign in quoted text, ASCII or fullwidth,
+// into an entity. With no "<" left, no spacing, joiner or case trick in the
+// text can form a tag, so quoted text can neither close the fence it sits
+// in nor open one of its own.
+var lessThan = strings.NewReplacer("<", "&lt;", "\uff1c", "&lt;")
 
 func (p *promptBuilder) evidence(source, text string) {
 	if strings.TrimSpace(text) == "" {
 		return
 	}
-	// The tag's "<" becomes "&lt;", so quoted text can neither close the
-	// fence it sits in nor open one of its own.
-	text = evidenceTag.ReplaceAllStringFunc(text, func(m string) string { return "&lt;" + m[1:] })
+	text = lessThan.Replace(text)
 	p.n++
 	fmt.Fprintf(&p.b, "<evidence source=%q id=\"%d\">\n%s\n</evidence>\n", source, p.n, text)
 }
@@ -313,6 +321,7 @@ func Grade(ctx context.Context, judge Judge, in GradeInput) (Entry, error) {
 
 	var warnings []string
 	var set eval.PullRequestSet
+	prRead := false
 	urls, invalid := prURLsOf(in.Outcomes)
 	if len(invalid) > 0 {
 		warnings = append(warnings, "PR URLs dropped as invalid: "+strings.Join(invalid, ", "))
@@ -325,6 +334,7 @@ func Grade(ctx context.Context, judge Judge, in GradeInput) (Entry, error) {
 			warnings = append(warnings, "PR files unread: "+firstLine(err.Error()))
 		} else {
 			set = got
+			prRead = prSetHasText(got)
 			score := eval.ScoreTriage(resultJSON, text, set.Files)
 			line.PRFilesHit = fractionOf(score.PRFilesHit)
 			line.CodeRefsPathOverlap = fractionOf(score.CodeRefsPathOverlap)
@@ -332,9 +342,19 @@ func Grade(ctx context.Context, judge Judge, in GradeInput) (Entry, error) {
 	}
 	line.Warning = strings.Join(warnings, "; ")
 
-	// A basis earned by a PR URL alone means nothing when the PR could
-	// not be read: the judge would grade against no truth at all and the
-	// grade would still be marked final. Wait for the next tick instead.
+	// A pull request that could not be read, or read back empty, gave the
+	// judge nothing, so it cannot be what the grade stands on: the basis is
+	// whatever truth remains, which may make the grade provisional.
+	if !prRead {
+		if basis, final, ok = basisOf(in.Outcomes, false); !ok {
+			return Entry{}, ErrNotEnoughTruth
+		}
+		line.Basis, line.Final = basis, final
+	}
+
+	// A basis can still stand on a line with no text in it, such as an
+	// operator RCA whose result.json was unreadable. The judge would then
+	// grade against nothing, so wait for the next tick instead.
 	truth := TruthOf(in.Outcomes, set)
 	if !truth.hasText() {
 		return Entry{}, ErrNotEnoughTruth
@@ -375,15 +395,8 @@ func Grade(ctx context.Context, judge Judge, in GradeInput) (Entry, error) {
 
 // hasText reports whether there is anything for the judge to read.
 func (t Truth) hasText() bool {
-	if len(t.Resolutions) > 0 || len(t.RCAs) > 0 || len(t.OperatorTriage) > 0 || len(t.Files) > 0 || len(t.Diff) > 0 {
-		return true
-	}
-	for _, pr := range t.PRs {
-		if strings.TrimSpace(pr.Title+pr.Body) != "" {
-			return true
-		}
-	}
-	return false
+	return len(t.Resolutions) > 0 || len(t.RCAs) > 0 || len(t.OperatorTriage) > 0 ||
+		prSetHasText(eval.PullRequestSet{PRs: t.PRs, Files: t.Files, Diff: t.Diff})
 }
 
 // Ungradable closes a key whose window passed with no outcome strong
@@ -441,3 +454,17 @@ type JudgeError struct {
 
 func (e *JudgeError) Error() string { return e.Err.Error() }
 func (e *JudgeError) Unwrap() error { return e.Err }
+
+// prSetHasText reports whether a pull request read gave anything a judge
+// could compare against: a title or body, a changed file, or a diff.
+func prSetHasText(set eval.PullRequestSet) bool {
+	if len(set.Files) > 0 || len(set.Diff) > 0 {
+		return true
+	}
+	for _, pr := range set.PRs {
+		if strings.TrimSpace(pr.Title+pr.Body) != "" {
+			return true
+		}
+	}
+	return false
+}
