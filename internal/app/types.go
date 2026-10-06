@@ -167,6 +167,36 @@ type RunDetail struct {
 	// steer. `model` above is the one it is on now. A run that never
 	// changed omits this.
 	ModelSegments []ModelSegmentInfo `json:"modelSegments,omitempty"`
+	// Gathered is bundle/context/index.json: the lookups Sirdar ran before the agent started.
+	Gathered []GatheredInfo `json:"gathered,omitempty"`
+	// Reproduction is the triage note's reproduction outcome, when it has one.
+	Reproduction *ReproductionInfo `json:"reproduction,omitempty"`
+}
+
+// GatheredInfo is one lookup a run made while gathering context, before it
+// started working, as the run detail screen reads it — gather.Entry's wire
+// shape, with any row gather marked denied already dropped: a human
+// reading gathered context has no use for a door that stayed shut.
+type GatheredInfo struct {
+	Name      string `json:"name"`
+	File      string `json:"file,omitempty"`
+	Kind      string `json:"kind"`
+	Status    string `json:"status"`
+	Reason    string `json:"reason,omitempty"`
+	Call      string `json:"call"`
+	Summary   string `json:"summary,omitempty"`
+	Diff      string `json:"diff,omitempty"`
+	Bytes     int    `json:"bytes"`
+	DiffBytes int    `json:"diffBytes,omitempty"`
+	TookMs    int64  `json:"tookMs"`
+}
+
+// ReproductionInfo is whether a run asked to reproduce the ticket on
+// staging managed to, and where it tried, read off the triage note's
+// `reproduction` object.
+type ReproductionInfo struct {
+	Outcome string `json:"outcome"`
+	Where   string `json:"where,omitempty"`
 }
 
 // QuestionInfo is a blocked run's question. Text is always set; Decision is
@@ -794,6 +824,8 @@ func DetailFor(root string, s store.State, self config.Identity) RunDetail {
 	for _, seg := range s.ModelSegments {
 		d.ModelSegments = append(d.ModelSegments, ModelSegmentInfo{At: wireTime(seg.At), Model: seg.Model, Why: seg.Why})
 	}
+	d.Gathered = gatheredInfosOf(dir)
+	d.Reproduction = reproductionOf(dir)
 	return d
 }
 

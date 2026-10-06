@@ -135,10 +135,10 @@ func resolveUnder(dir, name string) (string, error) {
 	if clean == "/" {
 		return "", refused
 	}
-	// Only files under the bundle's attachments directory are served: not
-	// ticket.json, not the thread, not the prompt beside them, and not the
-	// directory itself — the route has no listing.
-	if !strings.HasPrefix(clean, "/attachments/") {
+	// Only files under the bundle's attachments or context directory are
+	// served: not ticket.json, not the thread, not the prompt beside them,
+	// and not either directory itself — neither route has a listing.
+	if !strings.HasPrefix(clean, "/attachments/") && !strings.HasPrefix(clean, "/context/") {
 		return "", refused
 	}
 	full := filepath.Join(dir, filepath.FromSlash(strings.TrimPrefix(clean, "/")))

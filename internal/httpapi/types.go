@@ -14,6 +14,7 @@ type (
 	RunSummary           = app.RunSummary
 	RunDetail            = app.RunDetail
 	Attachment           = app.Attachment
+	GatheredInfo         = app.GatheredInfo
 	SearchHit            = app.SearchHit
 	RunDiff              = app.RunDiff
 	DiffFile             = app.DiffFile

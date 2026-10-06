@@ -97,6 +97,8 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/prompt", s.prompt)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/bundle/attachments", s.attachments)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/bundle/attachments/{name...}", s.attachmentFile)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/bundle/context", s.gathered)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/bundle/context/{name...}", s.contextFile)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/diff", s.runDiff)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/diff/drop", s.dropHunk)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/triage", s.startTriage)
@@ -353,6 +355,36 @@ func (s *server) attachments(w http.ResponseWriter, r *http.Request) {
 // there and a path that was not allowed.
 func (s *server) attachmentFile(w http.ResponseWriter, r *http.Request) {
 	full, ctype, err := s.svc.AttachmentFile(r.PathValue("id"), r.PathValue("runId"), path.Join("attachments", r.PathValue("name")))
+	s.serveBundleFile(w, r, full, ctype, err)
+}
+
+// gathered lists what the run gathered before it started working:
+// bundle/context/index.json, converted to its wire shape.
+func (s *server) gathered(w http.ResponseWriter, r *http.Request) {
+	list, err := s.svc.Gathered(r.PathValue("id"), r.PathValue("runId"))
+	if err != nil {
+		s.failDocument(w, err)
+		return
+	}
+	if list == nil {
+		list = []GatheredInfo{}
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// contextFile serves one gathered file out of bundle/context/, the same
+// way attachmentFile serves bundle/attachments/: through AttachmentFile,
+// which guards both directories identically.
+func (s *server) contextFile(w http.ResponseWriter, r *http.Request) {
+	full, ctype, err := s.svc.AttachmentFile(r.PathValue("id"), r.PathValue("runId"), path.Join("context", r.PathValue("name")))
+	s.serveBundleFile(w, r, full, ctype, err)
+}
+
+// serveBundleFile is attachmentFile and contextFile's shared body: open
+// the resolved path, refuse anything that is not a plain file, and serve
+// it with the headers that keep somebody else's file from being sniffed
+// into a document or run in the app's own origin.
+func (s *server) serveBundleFile(w http.ResponseWriter, r *http.Request, full, ctype string, err error) {
 	if err != nil {
 		writeError(w, http.StatusNotFound, "not_found", "no such attachment")
 		return
@@ -369,9 +401,6 @@ func (s *server) attachmentFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", ctype)
-	// A helpdesk attachment is somebody else's file. Nothing in it is
-	// allowed to be sniffed into a document, and nothing in it is allowed
-	// to run in the app's origin.
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	http.ServeContent(w, r, filepath.Base(full), info.ModTime(), f)

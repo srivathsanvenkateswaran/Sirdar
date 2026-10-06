@@ -31,6 +31,7 @@ var bridgeMethods = []string{
 	"Note",
 	"Prompt",
 	"Attachments",
+	"Gathered",
 	"RunDiff",
 	"DropHunk",
 	"StartTriage",
@@ -109,6 +110,18 @@ var bridgeOnlyMethods = map[string]string{
 	"AttachmentDataURL": "inlines an attachment, which WKWebView will not load over file://",
 }
 
+// boundAheadOfTheFrontend are methods bound on *Bridge for a screen built
+// on a sibling branch of the investigation-skeleton work, whose
+// transport.ts has not merged into this branch yet. The run detail
+// screen's gathered-context panel (sk-S9) calls Gathered; until that
+// branch and this one join, frontendBridgeCalls cannot see the call, so
+// the reverse direction of TestFrontendBridgeCallsExist would otherwise
+// fail for a binding the frontend genuinely uses. Remove the entry once
+// the merge lands bindingsPath's call to it.
+var boundAheadOfTheFrontend = map[string]string{
+	"Gathered": "desktop/frontend/src/api/transport.ts gains this call when sk-S9 merges",
+}
+
 // bindingsPath is the frontend's own declaration of what it calls on the
 // bridge. Wails generates typed bindings at build time, but that directory
 // is not in the repository, so the frontend reaches window.go.main.Bridge
@@ -176,7 +189,7 @@ func TestFrontendBridgeCallsExist(t *testing.T) {
 	}
 	for i := 0; i < bridge.NumMethod(); i++ {
 		name := bridge.Method(i).Name
-		if !called[name] {
+		if !called[name] && boundAheadOfTheFrontend[name] == "" {
 			t.Errorf("Bridge.%s is bound but the frontend's BridgeBindings does not name it", name)
 		}
 	}

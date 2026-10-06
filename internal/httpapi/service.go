@@ -35,6 +35,10 @@ type Service interface {
 	// serve it as, refusing anything outside the run's own bundle.
 	Attachments(wsID, runID string) ([]Attachment, error)
 	AttachmentFile(wsID, runID, name string) (string, string, error)
+	// Gathered lists bundle/context/index.json: the lookups Sirdar ran
+	// before the agent started. AttachmentFile also serves the files
+	// under context/, so there is no separate ContextFile method.
+	Gathered(wsID, runID string) ([]GatheredInfo, error)
 	RunDiff(wsID, runID string) (RunDiff, error)
 	DropHunk(ctx context.Context, wsID, runID, path string, hunk int, etag string) (RunDiff, error)
 	StartTriage(ctx context.Context, wsID string, keys []string, o TriageOptions) (JobID, error)

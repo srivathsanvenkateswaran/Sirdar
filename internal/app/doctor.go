@@ -56,6 +56,13 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 		checks = append(checks, c)
 	}
 	checks = append(checks, fetchCheck(cfg), transcribeCheck(cfg))
+	checks = append(checks, playbooksCheck(cfg))
+	if cfg.GatherEnabled() {
+		checks = append(checks, gatherCheck(cfg))
+	}
+	if cfg.ReproConfigured() {
+		checks = append(checks, reproCheck(cfg))
+	}
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
 	return levelled(checks)
 }
