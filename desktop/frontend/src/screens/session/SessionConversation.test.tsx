@@ -394,10 +394,15 @@ describe('SessionConversation', () => {
     it('keeps the box for an answer in words, which goes without a decision', async () => {
       const f = fake({ detail: ASKING, events: fixEvents('blocked'), diff: FIX_DIFF })
       renderScene(f, { runId: FIX_DETAIL.runId })
-      const box = await screen.findByRole('textbox', { name: 'Answer' })
+      // A test id is cheap to find; polling the whole document by role, with
+      // the patch pane and transcript mounted, can outlast the timeout under
+      // a loaded worker. Once the bar is up, the role queries stay in the form.
+      await screen.findByTestId('decision-bar')
+      const form = screen.getByRole('form')
+      const box = within(form).getByRole('textbox', { name: 'Answer' })
       expect(box).toHaveAttribute('placeholder', 'A note for the agent goes with Allow or Deny. Sent alone, it allows nothing')
       fireEvent.change(box, { target: { value: 'Run only the ledger package.' } })
-      fireEvent.click(send(/^Answer/))
+      fireEvent.click(within(form).getByRole('button', { name: /^Answer/ }))
       await waitFor(() => expect(f.transport.resume).toHaveBeenCalledWith('ws1', FIX_DETAIL.runId, 'Run only the ledger package.', ''))
     })
   })

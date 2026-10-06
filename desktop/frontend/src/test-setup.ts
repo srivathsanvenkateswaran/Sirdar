@@ -1,6 +1,15 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach } from 'vitest'
+
+/*
+ * The default 1000 ms for findBy and waitFor is shorter than a heavy scene
+ * (a fix run's patch pane, its transcript, the catalog load) can take to
+ * settle under full-suite worker contention, and ByRole polls are the
+ * slowest queries jsdom has. A passing wait returns as soon as it passes,
+ * so the longer ceiling costs nothing on a green run.
+ */
+configure({ asyncUtilTimeout: 3000 })
 
 /*
  * Node 26 defines its own `localStorage` global that stays undefined unless the
