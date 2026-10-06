@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -90,7 +91,12 @@ func (g Grant) Label() string {
 	if len(g.Patterns) > 0 {
 		labels := make([]string, 0, len(g.Patterns))
 		for _, p := range g.Patterns {
-			labels = append(labels, strings.TrimSuffix(p, " *"))
+			label := strings.TrimSuffix(p, " *")
+			if g.Kind == AskMCP {
+				// A repro navigate grant reads as the tool to the host.
+				label = strings.Replace(label, " host:", " to ", 1)
+			}
+			labels = append(labels, label)
 		}
 		return strings.Join(labels, ", ")
 	}
@@ -291,6 +297,15 @@ func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (Permissio
 		ask.Kind = AskMCP
 		ask.Summary = clip(compactArgs(input))
 		ask.Patterns = []string{tool}
+		// A repro navigate is granted per host, as a fetch is: "allow
+		// for this run" on one off-host page is not leave to browse
+		// anywhere. A URL with no host leaves nothing to grant.
+		if host, ok := p.Repro.navigateHost(tool, input); ok {
+			if host == "" {
+				return PermissionAsk{}, false
+			}
+			ask.Patterns = []string{navigatePattern(tool, host)}
+		}
 		return ask, true
 	case FetchTools[tool]:
 		ask.Kind = AskFetch
@@ -403,6 +418,14 @@ func (p *PermissionPolicy) allowsWith(kind, tool string, input json.RawMessage, 
 	}
 	switch kind {
 	case AskMCP, AskTool:
+		// A repro navigate is covered only by a grant naming its host;
+		// a bare tool-name pattern does not reach it.
+		if host, ok := p.Repro.navigateHost(tool, input); ok {
+			if host == "" {
+				return false
+			}
+			return slices.Contains(patterns, navigatePattern(tool, host))
+		}
 		if !IsReadTool(tool) {
 			for _, pat := range patterns {
 				if pat == tool {
@@ -413,7 +436,9 @@ func (p *PermissionPolicy) allowsWith(kind, tool string, input json.RawMessage, 
 		}
 	}
 	w := *p
-	w.Grants, w.Ask = nil, false
+	// The repro guard's decide moves confinement, and this is a dry run:
+	// it must leave the browser's state as the real decision left it.
+	w.Grants, w.Ask, w.Repro = nil, false, nil
 	switch kind {
 	case AskBash:
 		w.BashAllow = append(append([]string(nil), p.BashAllow...), patterns...)

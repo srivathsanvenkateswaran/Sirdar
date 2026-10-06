@@ -302,7 +302,14 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 		if g.Verdict == VerdictDeny {
 			return Decision{Allow: false, Message: deniedMessage(g), Granted: g.Verdict}
 		}
-		return Decision{Allow: true, Message: grantedMessage(g), Granted: g.Verdict}
+		msg := grantedMessage(g)
+		// A repro call the guard refused keeps the guard's reason beside
+		// the grant, so the transcript shows the browser left the repro
+		// hosts with the operator's leave.
+		if strings.Contains(d.Message, reproNotConfined) {
+			msg += " (" + reproNotConfined + ")"
+		}
+		return Decision{Allow: true, Message: msg, Granted: g.Verdict}
 	}
 	if p.Ask && p.askable(ask, tool, input) {
 		d.Ask = &ask

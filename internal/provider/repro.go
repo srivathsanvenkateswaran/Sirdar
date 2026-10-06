@@ -84,23 +84,68 @@ func (g *ReproGuard) browserTool(tool string) (string, bool) {
 	return strings.TrimPrefix(tool, prefix), true
 }
 
+// reproArgs decodes a call's arguments the way the browser server reads
+// them: exact keys, and the last of a duplicated key. Decoding into a
+// struct would not do: encoding/json matches field names without regard to
+// case and keeps whichever spelling comes last, so {"url": <evil>, "URL":
+// <staging>} would be judged on the staging URL while Playwright navigates
+// to the evil one. False means the input is not a JSON object.
+func reproArgs(input json.RawMessage) (map[string]json.RawMessage, bool) {
+	var args map[string]json.RawMessage
+	if len(input) == 0 || json.Unmarshal(input, &args) != nil || args == nil {
+		return nil, false
+	}
+	return args, true
+}
+
+// stringArg is args[key] when it is a JSON string, and "" otherwise.
+func stringArg(args map[string]json.RawMessage, key string) string {
+	var s string
+	if raw, ok := args[key]; ok {
+		_ = json.Unmarshal(raw, &s)
+	}
+	return s
+}
+
+// urlHost is the host a URL names, lower-cased and without a trailing dot,
+// or "" when it names none.
+func urlHost(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+}
+
+// unconfine drops confinement, holding g.mu.
+func (g *ReproGuard) unconfine() { g.confined, g.host = false, "" }
+
 // decide answers for a call on the repro server, or reports false to fall through.
 // ordinary is the decision the workspace's MCP rules give the call; the
 // guard defers to it wherever it has nothing to add.
 func (g *ReproGuard) decide(tool string, input json.RawMessage, ordinary func() Decision) (Decision, bool) {
-	// Codex hands the policy no arguments, so there is no URL to judge and
-	// no field to inspect: the guard steps aside and the ordinary rules
-	// answer, which is why reproduction is never active on codex.
-	if g == nil || len(input) == 0 {
+	if g == nil {
 		return Decision{}, false
 	}
 	name, ok := g.browserTool(tool)
 	if !ok {
 		return Decision{}, false
 	}
+	args, ok := reproArgs(input)
+	if !ok {
+		// Codex hands the policy no arguments, and an ACP agent may leave
+		// rawInput out: there is no URL to judge and no field to inspect,
+		// so the ordinary rules answer. The call may still move the
+		// browser, which is why confinement drops: nothing the guard could
+		// not see is ever auto-allowed afterwards.
+		g.mu.Lock()
+		g.unconfine()
+		g.mu.Unlock()
+		return Decision{}, false
+	}
 	// Before confinement: a credential is refused on a staging host too,
 	// because the agent typing one puts it in the transcript.
-	if g.credentialCall(tool, input) {
+	if credentialArgs(name, args) {
 		return Decision{Allow: false, Message: CredentialRefusal}, true
 	}
 
@@ -108,14 +153,29 @@ func (g *ReproGuard) decide(tool string, input json.RawMessage, ordinary func() 
 	defer g.mu.Unlock()
 	switch {
 	case name == "browser_navigate":
-		return g.navigate(input), true
-	case name == "browser_navigate_back" || (name == "browser_tabs" && tabsAction(input) != "list"):
-		// The destination is a page the guard never checked, so the
-		// browser is unconfined until the next repro navigation.
+		return g.navigate(args), true
+	case name == "browser_navigate_back" || name == "browser_run_code" ||
+		(name == "browser_tabs" && stringArg(args, "action") != "list"):
+		// The destination is a page the guard never checked — run_code
+		// can navigate as freely as it likes — so the browser is
+		// unconfined until the next repro navigation, whoever allowed
+		// this call.
 		d := ordinary()
-		g.confined, g.host = false, ""
+		g.unconfine()
 		return d, true
-	case reproInteraction[name] || (name == "browser_evaluate" && g.Evaluate):
+	case name == "browser_evaluate":
+		if g.Evaluate && g.confined {
+			return Decision{Allow: true, Message: "repro host " + g.host}, true
+		}
+		// Script the guard did not vouch for can move the page as well
+		// as read it, so after it the guard trusts nothing it saw before.
+		d := ordinary()
+		if g.Evaluate && !d.Allow {
+			d.Message += " (" + reproNotConfined + ")"
+		}
+		g.unconfine()
+		return d, true
+	case reproInteraction[name]:
 		if g.confined {
 			return Decision{Allow: true, Message: "repro host " + g.host}, true
 		}
@@ -131,66 +191,93 @@ func (g *ReproGuard) decide(tool string, input json.RawMessage, ordinary func() 
 // navigate judges a browser_navigate, holding g.mu. It overrides a
 // permissions.mcp entry for the tool: a workspace that listed
 // browser_navigate before reproduction existed listed it for any URL.
-func (g *ReproGuard) navigate(input json.RawMessage) Decision {
-	var args struct {
-		URL string `json:"url"`
+func (g *ReproGuard) navigate(args map[string]json.RawMessage) Decision {
+	raw := strings.TrimSpace(stringArg(args, "url"))
+	host := urlHost(raw)
+	fetch := DecideFetchURL(g.Hosts, raw)
+	if fetch.Allow && host != "" {
+		g.confined, g.host = true, host
+		return Decision{Allow: true, Message: "repro host " + host}
 	}
-	_ = json.Unmarshal(input, &args)
-	raw := strings.TrimSpace(args.URL)
-	if DecideFetchURL(g.Hosts, raw).Allow {
-		u, _ := url.Parse(raw)
-		g.confined, g.host = true, strings.ToLower(u.Hostname())
-		return Decision{Allow: true, Message: "repro host " + g.host}
-	}
-	g.confined, g.host = false, ""
-	host := ""
-	if u, err := url.Parse(raw); err == nil {
-		host = strings.ToLower(u.Hostname())
-	}
-	if host == "" {
+	g.unconfine()
+	switch {
+	case host == "":
 		return Decision{Allow: false, Message: "Sirdar policy: " + reproNotConfined + "; the URL does not parse"}
+	case g.listed(host):
+		// A repro host refused anyway — plain http, userinfo, an address
+		// spelled oddly — gets the fetch matcher's own reason, since "not
+		// in repro.hosts" would be false.
+		return Decision{Allow: false, Message: "Sirdar policy: " + reproNotConfined + "; " +
+			strings.TrimPrefix(fetch.Message, "Sirdar policy: ")}
 	}
 	return Decision{Allow: false, Message: "Sirdar policy: " + reproNotConfined + "; " + host +
 		" is not in repro.hosts (" + strings.Join(g.Hosts, ", ") + ")"}
 }
 
-// tabsAction is the action a browser_tabs call names.
-func tabsAction(input json.RawMessage) string {
-	var args struct {
-		Action string `json:"action"`
+// listed reports whether host matches one of repro.hosts.
+func (g *ReproGuard) listed(host string) bool {
+	for _, pattern := range g.Hosts {
+		if matchFetchHost(pattern, host) {
+			return true
+		}
 	}
-	_ = json.Unmarshal(input, &args)
-	return args.Action
+	return false
 }
+
+// navigateHost is the pure half of a navigate judgement, for the grant
+// machinery: whether the guard governs this call as a repro navigate, and
+// the host it names ("" when none). It reads no guard state and changes
+// none, so a dry run (allowsWith, askable, a grant lookup) cannot move
+// confinement.
+func (g *ReproGuard) navigateHost(tool string, input json.RawMessage) (string, bool) {
+	if g == nil {
+		return "", false
+	}
+	if name, ok := g.browserTool(tool); !ok || name != "browser_navigate" {
+		return "", false
+	}
+	args, ok := reproArgs(input)
+	if !ok {
+		return "", false
+	}
+	return urlHost(stringArg(args, "url")), true
+}
+
+// navigatePattern is what an operator's grant on an off-host repro
+// navigate covers: that tool to that one host. A bare tool name would turn
+// "allow evil.example for this run" into "allow every host for this run",
+// which is the confinement the guard exists for.
+func navigatePattern(tool, host string) string { return tool + " host:" + host }
 
 // credentialCall reports whether the call types into a credential-shaped
 // field. askFor consults it too, so the refusal is never put to the
 // operator: no grant lets the agent type a password.
 func (g *ReproGuard) credentialCall(tool string, input json.RawMessage) bool {
-	if g == nil || len(input) == 0 {
+	if g == nil {
 		return false
 	}
 	name, ok := g.browserTool(tool)
 	if !ok {
 		return false
 	}
+	args, ok := reproArgs(input)
+	return ok && credentialArgs(name, args)
+}
+
+// credentialArgs is credentialCall on decoded arguments: browser_type's
+// element, and every browser_fill_form field's name and type.
+func credentialArgs(name string, args map[string]json.RawMessage) bool {
 	switch name {
 	case "browser_type":
-		var args struct {
-			Element string `json:"element"`
-		}
-		_ = json.Unmarshal(input, &args)
-		return credentialField.MatchString(args.Element)
+		return credentialField.MatchString(stringArg(args, "element"))
 	case "browser_fill_form":
-		var args struct {
-			Fields []struct {
-				Name string `json:"name"`
-				Type string `json:"type"`
-			} `json:"fields"`
-		}
-		_ = json.Unmarshal(input, &args)
-		for _, f := range args.Fields {
-			if credentialField.MatchString(f.Name) || credentialField.MatchString(f.Type) {
+		// Element by element, so one malformed field does not hide the
+		// others from the check.
+		var fields []json.RawMessage
+		_ = json.Unmarshal(args["fields"], &fields)
+		for _, raw := range fields {
+			f, _ := reproArgs(raw)
+			if credentialField.MatchString(stringArg(f, "name")) || credentialField.MatchString(stringArg(f, "type")) {
 				return true
 			}
 		}

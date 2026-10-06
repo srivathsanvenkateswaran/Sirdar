@@ -227,7 +227,6 @@ func TestReproOtherServerUntouched(t *testing.T) {
 		{"mcp__grafana__query_x", `{"q":"up"}`},
 		{"mcp__grafana__browser_click", `{"element":"Save"}`},
 		{"mcp__playwright__browser_file_upload", `{"paths":["/etc/passwd"]}`},
-		{"mcp__playwright__browser_run_code", `{"code":"1"}`},
 		{"mcp__playwright__browser_install", `{}`},
 		{"mcp__playwright__browser_snapshot", `{}`},
 	}
@@ -239,5 +238,226 @@ func TestReproOtherServerUntouched(t *testing.T) {
 	}
 	if !guarded.Repro.Confined() {
 		t.Error("a call the guard does not govern changed confinement")
+	}
+}
+
+// TestReproArgsAreReadByExactKey: Playwright reads arguments with
+// JSON.parse — exact key, last duplicate wins — so the guard has to judge
+// the same value. encoding/json's struct decoding matches keys without
+// regard to case, which would let a second, differently-cased key carry
+// the URL the guard checks while the browser follows the first.
+func TestReproArgsAreReadByExactKey(t *testing.T) {
+	p := reproPolicy(false)
+	d := decideJSON(p, pwNavigate, `{"url":"https://evil.example/","URL":"https://staging.oxo.example/"}`)
+	if d.Allow || p.Repro.Confined() {
+		t.Fatalf("navigate judged on URL rather than url: %+v, confined=%v", d, p.Repro.Confined())
+	}
+	if d := decideJSON(p, pwNavigate, `{"URL":"https://evil.example/","url":"https://staging.oxo.example/"}`); !d.Allow {
+		t.Errorf("navigate whose url is on-host refused: %s", d.Message)
+	}
+	confine(t, p)
+	if d := decideJSON(p, pwNavigate, `{"url":"https://staging.oxo.example/","url":"https://evil.example/"}`); d.Allow || p.Repro.Confined() {
+		t.Errorf("duplicate url: the last one is the one Playwright follows; got %+v", d)
+	}
+
+	confine(t, p)
+	decideJSON(p, "mcp__playwright__browser_tabs", `{"action":"new","Action":"list"}`)
+	if p.Repro.Confined() {
+		t.Error("tabs action new read as list through a differently-cased key")
+	}
+	confine(t, p)
+	decideJSON(p, "mcp__playwright__browser_tabs", `{"action":"list","action":"select"}`)
+	if p.Repro.Confined() {
+		t.Error("duplicate tabs action: the last one is the one Playwright acts on")
+	}
+
+	confine(t, p)
+	for _, input := range []string{
+		`{"element":"Password","Element":"Search","text":"x"}`,
+		`{"element":"Search","element":"Password","text":"x"}`,
+	} {
+		if d := decideJSON(p, pwType, input); d.Allow || d.Message != CredentialRefusal || d.Ask != nil {
+			t.Errorf("browser_type %s: got %+v", input, d)
+		}
+	}
+	for _, input := range []string{
+		`{"fields":[{"name":"Password","Name":"Search","type":"textbox"}]}`,
+		`{"fields":[{"name":"Password","type":"textbox"}],"Fields":[]}`,
+		`{"fields":[{"type":"password","Type":"textbox","name":"x"}]}`,
+		`{"fields":["junk",{"name":"PIN","type":"textbox"}]}`,
+	} {
+		if d := decideJSON(p, "mcp__playwright__browser_fill_form", input); d.Allow || d.Message != CredentialRefusal || d.Ask != nil {
+			t.Errorf("browser_fill_form %s: got %+v", input, d)
+		}
+	}
+}
+
+// TestReproArgumentlessCallUnconfines: an ACP agent may leave rawInput out
+// of a permission request. The guard cannot judge such a call, so the
+// ordinary rule answers, and since it may have moved the browser,
+// confinement drops and nothing is auto-allowed on the strength of it.
+func TestReproArgumentlessCallUnconfines(t *testing.T) {
+	p := reproPolicy(false)
+	confine(t, p)
+	if d := p.Decide(pwNavigate, nil); !d.Allow {
+		t.Fatalf("argumentless navigate: %s, want permissions.mcp's allow", d.Message)
+	}
+	if p.Repro.Confined() {
+		t.Fatal("argumentless navigate left the guard confined")
+	}
+
+	for _, input := range []string{"", "null", "[]", `"x"`, "{"} {
+		confine(t, p)
+		d := p.Decide(pwType, json.RawMessage(input))
+		if d.Allow {
+			t.Errorf("browser_type %q while confined was auto-allowed", input)
+		}
+		if p.Repro.Confined() {
+			t.Errorf("browser_type %q left the guard confined", input)
+		}
+	}
+}
+
+// TestReproScriptUnconfines: browser_run_code always, and browser_evaluate
+// whenever the guard did not vouch for it, run script that can navigate,
+// so after either the guard trusts nothing it saw before — whoever
+// allowed the call.
+func TestReproScriptUnconfines(t *testing.T) {
+	const runCode, evaluate = "mcp__playwright__browser_run_code", "mcp__playwright__browser_evaluate"
+	for _, c := range []struct {
+		tool     string
+		evaluate bool
+	}{{runCode, false}, {runCode, true}, {evaluate, false}} {
+		p := reproPolicy(c.evaluate)
+		confine(t, p)
+		if d := decideJSON(p, c.tool, `{"code":"1","function":"() => 1"}`); d.Allow || d.Ask == nil {
+			t.Errorf("%s (evaluate=%v): got %+v, want the ordinary refusal, askable", c.tool, c.evaluate, d)
+		}
+		if p.Repro.Confined() {
+			t.Errorf("%s (evaluate=%v) left the guard confined", c.tool, c.evaluate)
+		}
+
+		// The same when an operator's grant lets it through.
+		p = reproPolicy(c.evaluate)
+		p.Grants = NewGrants(Grant{Verdict: VerdictAllowRun, Kind: AskMCP, Tool: c.tool, Patterns: []string{c.tool}})
+		confine(t, p)
+		if d := decideJSON(p, c.tool, `{"code":"2","function":"() => 2"}`); !d.Allow {
+			t.Errorf("%s granted: %s", c.tool, d.Message)
+		}
+		if p.Repro.Confined() {
+			t.Errorf("%s allowed by a grant left the guard confined", c.tool)
+		}
+	}
+
+	// Vouched for — Evaluate on and confined — evaluate keeps confinement.
+	p := reproPolicy(true)
+	confine(t, p)
+	if d := decideJSON(p, evaluate, `{"function":"() => 1"}`); !d.Allow || !p.Repro.Confined() {
+		t.Errorf("evaluate with the flag while confined: %+v, confined=%v", d, p.Repro.Confined())
+	}
+}
+
+// TestReproNavigateGrantIsPerHost: "allow for this run" on an off-host
+// navigate lets the agent back to that host, not to every host, and a
+// denial of one host is not a denial of another (spec §4.2).
+func TestReproNavigateGrantIsPerHost(t *testing.T) {
+	p := reproPolicy(false)
+	d := decideJSON(p, pwNavigate, `{"url":"https://a.example/x"}`)
+	if d.Ask == nil {
+		t.Fatalf("off-host navigate not askable: %+v", d)
+	}
+	if want := []string{pwNavigate + " host:a.example"}; !reflect.DeepEqual(d.Ask.Patterns, want) {
+		t.Fatalf("ask patterns %v, want %v", d.Ask.Patterns, want)
+	}
+	grant := GrantFor(*d.Ask, VerdictAllowRun, "")
+	if got := grant.Label(); got != pwNavigate+" to a.example" {
+		t.Errorf("grant label %q", got)
+	}
+	p.Grants = NewGrants(grant)
+
+	confine(t, p)
+	d = decideJSON(p, pwNavigate, `{"url":"https://a.example/other"}`)
+	if !d.Allow || d.Granted != VerdictAllowRun {
+		t.Fatalf("navigate to the granted host: %+v", d)
+	}
+	if d.Message != "allowed by you for this run (browser not confined to repro hosts)" {
+		t.Errorf("granted message %q does not carry the repro reason", d.Message)
+	}
+	if p.Repro.Confined() {
+		t.Error("a grant-allowed off-host navigate left the guard confined")
+	}
+	if d := decideJSON(p, pwClick, `{"element":"Save"}`); d.Allow {
+		t.Error("click after a grant-allowed off-host navigate was auto-allowed")
+	}
+
+	d = decideJSON(p, pwNavigate, `{"url":"https://b.example/"}`)
+	if d.Allow || d.Ask == nil {
+		t.Fatalf("navigate to another host after a grant for a.example: %+v", d)
+	}
+
+	// A grant naming the bare tool, as one from before host-scoping
+	// would, covers no repro navigate.
+	p.Grants = NewGrants(Grant{Verdict: VerdictAllowRun, Kind: AskMCP, Tool: pwNavigate, Patterns: []string{pwNavigate}})
+	if d := decideJSON(p, pwNavigate, `{"url":"https://c.example/"}`); d.Allow {
+		t.Error("a bare tool-name grant allowed an off-host navigate")
+	}
+
+	// Deny on a.example is not a deny on b.example.
+	q := reproPolicy(false)
+	d = decideJSON(q, pwNavigate, `{"url":"https://a.example/"}`)
+	q.Grants = NewGrants(GrantFor(*d.Ask, VerdictDeny, "no"))
+	if d := decideJSON(q, pwNavigate, `{"url":"https://a.example/again"}`); d.Allow || d.Granted != VerdictDeny {
+		t.Errorf("denied host: %+v", d)
+	}
+	if d := decideJSON(q, pwNavigate, `{"url":"https://b.example/"}`); d.Granted != "" || d.Ask == nil {
+		t.Errorf("another host after a deny on a.example: %+v, want a fresh question", d)
+	}
+
+	// A grant interaction tool shows the repro reason too.
+	r := reproPolicy(false)
+	r.Grants = NewGrants(Grant{Verdict: VerdictAllowRun, Kind: AskMCP, Tool: pwClick, Patterns: []string{pwClick}})
+	if d := decideJSON(r, pwClick, `{"element":"Save"}`); !d.Allow ||
+		d.Message != "allowed by you for this run (browser not confined to repro hosts)" {
+		t.Errorf("granted click: %+v", d)
+	}
+}
+
+// TestReproDryRunsLeaveConfinement: the grant machinery asks "would this
+// call be allowed with these patterns" without making it. Those dry runs
+// must never reach the guard's decide, which moves confinement.
+func TestReproDryRunsLeaveConfinement(t *testing.T) {
+	p := reproPolicy(false)
+	p.Grants = NewGrants(Grant{Verdict: VerdictAllowRun, Kind: AskMCP, Tool: pwNavigate,
+		Patterns: []string{pwNavigate + " host:a.example"}})
+	confine(t, p)
+	evil := json.RawMessage(`{"url":"https://evil.example/"}`)
+	for _, kind := range []string{AskMCP, AskTool, AskFetch, AskBash} {
+		p.allowsWith(kind, pwNavigate, evil, []string{"x", pwNavigate + " host:evil.example"})
+	}
+	ask, ok := p.askFor(pwNavigate, evil)
+	if !ok {
+		t.Fatal("off-host navigate not askable")
+	}
+	p.askable(ask, pwNavigate, evil)
+	p.Grants.find(p, ask, pwNavigate, evil)
+	if !p.Repro.Confined() {
+		t.Fatal("a dry run changed confinement")
+	}
+}
+
+// TestReproRefusedListedHostSaysWhy: a repro host refused for a reason of
+// its own — plain http, userinfo — is not "not in repro.hosts".
+func TestReproRefusedListedHostSaysWhy(t *testing.T) {
+	p := reproPolicy(false)
+	d := decideJSON(p, pwNavigate, `{"url":"http://staging.oxo.example/"}`)
+	if d.Allow || strings.Contains(d.Message, "is not in repro.hosts") ||
+		!strings.HasPrefix(d.Message, "Sirdar policy: browser not confined to repro hosts; ") ||
+		!strings.Contains(d.Message, "is http") {
+		t.Errorf("http repro host: %q", d.Message)
+	}
+
+	d = decideJSON(p, pwNavigate, `{"url":"https://STAGING.oxo.example./"}`)
+	if !d.Allow || d.Message != "repro host staging.oxo.example" {
+		t.Errorf("trailing-dot host: %+v", d)
 	}
 }
