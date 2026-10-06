@@ -670,3 +670,70 @@ a.si-key:hover {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* ---------- gathered ---------- */
+
+.si-gathered {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.si-gathered__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  min-block-size: 28px;
+  padding-inline: var(--sd-space-2);
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: none;
+  color: var(--sd-ink);
+  font: inherit;
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  cursor: pointer;
+}
+
+.si-gathered__row:hover {
+  background: var(--sd-nav-hover);
+}
+
+.si-gathered__summary {
+  flex: 1;
+  min-inline-size: 0;
+  color: var(--sd-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.si-gathered__status {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  text-transform: uppercase;
+}
+
+.si-gathered__status[data-status='failed'] {
+  color: var(--sd-st-failed);
+}
+
+/* ---------- other playbooks (listed, not loaded) ---------- */
+
+.si-pb--other {
+  flex-wrap: wrap;
+}
+
+.si-pb__about {
+  color: var(--sd-ink-3);
+}
+
+.si-pb__chip {
+  padding-inline: var(--sd-space-2);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+}

@@ -26,6 +26,20 @@ export interface Playbook {
   body: string
 }
 
+/**
+ * One playbook the prompt named but did not load, from the `## Other
+ * playbooks` listing: its name, the `about:` frontmatter it carries
+ * (empty when it has none), the `when` keyword that matched the ticket
+ * (empty when it is listed for some other reason — kinds, say), and the
+ * file path a click reads with `transport.playbook`.
+ */
+export interface OtherPlaybook {
+  name: string
+  about: string
+  matched: string
+  path: string
+}
+
 export interface Bundle {
   facts: { key: string; value: string }[]
   thread: BundleMessage[]
@@ -33,6 +47,8 @@ export interface Bundle {
   slack: BundleMessage[]
   files: string[]
   playbooks: Playbook[]
+  /** The `## Other playbooks` listing: playbooks the prompt named but did not load in full. */
+  otherPlaybooks: OtherPlaybook[]
   /**
    * What the `# Repositories` section says about other repositories, in the
    * chip's words: "mentions Acme.Web (companion repo)", "look in Acme.Web".
@@ -140,26 +156,63 @@ function slack(prompt: string): BundleMessage[] {
   return out.map((m) => ({ ...m, text: m.text.trim() }))
 }
 
-function playbooks(prompt: string): Playbook[] {
+/**
+ * A top-level heading that ends the Playbooks section, wherever it starts:
+ * `# Playbooks` for a prompt with none to list, `# Workspace knowledge —
+ * consult when relevant` for one that lists some it chose not to load.
+ */
+const PLAYBOOKS_START = /^# (Playbooks|Workspace knowledge\b.*)$/
+/**
+ * The sections that can follow Playbooks in a prompt. A playbook's own body
+ * carries `# Environment` and `## How to use it` headings, so only one of
+ * these, not any `#`-heading, ends the list.
+ */
+const PLAYBOOKS_STOP =
+  /^# (Ticket|Output|Language|Schema|Conversation|Gathered context|Reproduce on staging|Task|Operator's request|Repositories|Access)\b/
+/** One `## Other playbooks` listing line: name, optional about, optional matched keyword, and the file path. */
+const OTHER_PLAYBOOK_LINE =
+  /^- (\S+)(?: — (.*?))?(?: Matched "([^"]+)"; read before querying\.)? `([^`]+)`$/
+
+/**
+ * The Playbooks section: the playbooks loaded in full, and — after a
+ * `## Other playbooks` heading — the ones the prompt only listed. The
+ * heading ends whichever loaded playbook's body came before it, so that
+ * body never swallows the listing that follows.
+ */
+function playbooksSection(prompt: string): { playbooks: Playbook[]; otherPlaybooks: OtherPlaybook[] } {
   const lines = prompt.split('\n')
-  const start = lines.findIndex((l) => /^# Playbooks\s*$/.test(l))
-  if (start === -1) return []
-  const out: Playbook[] = []
+  const start = lines.findIndex((l) => PLAYBOOKS_START.test(l))
+  if (start === -1) return { playbooks: [], otherPlaybooks: [] }
+  const playbooksOut: Playbook[] = []
+  const otherOut: OtherPlaybook[] = []
   let current: Playbook | undefined
-  // A playbook's own body carries `# Environment` and `## How to use it`
-  // headings, so only the prompt's next top-level section ends the list.
+  let inOther = false
   for (const line of lines.slice(start + 1)) {
-    if (/^# (Ticket|Output|Language|Schema)\b/.test(line)) break
+    if (PLAYBOOKS_STOP.test(line)) break
+    if (/^## Other playbooks\s*$/.test(line)) {
+      if (current) playbooksOut.push(current)
+      current = undefined
+      inOther = true
+      continue
+    }
+    if (inOther) {
+      const m = OTHER_PLAYBOOK_LINE.exec(line)
+      if (m) otherOut.push({ name: m[1], about: m[2] ?? '', matched: m[3] ?? '', path: m[4] })
+      continue
+    }
     const head = /^## (\d{2}-[\w-]+)\s*$/.exec(line)
     if (head) {
-      if (current) out.push(current)
+      if (current) playbooksOut.push(current)
       current = { name: head[1], body: '' }
       continue
     }
     if (current) current.body = current.body ? `${current.body}\n${line}` : line
   }
-  if (current) out.push(current)
-  return out.map((p) => ({ ...p, body: p.body.trim() }))
+  if (current) playbooksOut.push(current)
+  return {
+    playbooks: playbooksOut.map((p) => ({ ...p, body: p.body.trim() })),
+    otherPlaybooks: otherOut,
+  }
 }
 
 /** The `Files:` block: one bundle-relative path per line, `(none)` for an empty bundle. */
@@ -180,12 +233,14 @@ function files(prompt: string): string[] {
 
 /** Everything the Bundle pane draws, read out of the prompt. */
 export function parseBundle(prompt: string): Bundle {
+  const { playbooks, otherPlaybooks } = playbooksSection(prompt)
   return {
     facts: facts(prompt),
     thread: thread(prompt),
     slack: slack(prompt),
     files: files(prompt),
-    playbooks: playbooks(prompt),
+    playbooks,
+    otherPlaybooks,
     repos: repos(prompt),
   }
 }

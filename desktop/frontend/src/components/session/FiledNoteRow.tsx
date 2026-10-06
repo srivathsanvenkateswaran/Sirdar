@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type JSX } from 'react'
-import type { RunSummary, Transport } from '../../api/types'
+import type { ReproductionInfo, RunSummary, Transport } from '../../api/types'
 import { setRunJob } from '../../lib/jobs'
 import { noteStem } from '../../lib/replyRun'
 import { withoutCode } from './useSessionModel'
@@ -7,8 +7,15 @@ import './filed-note.css'
 
 const WARNING_PREFIX = /^note not filed:\s*/i
 
+/** The word for a reproduction outcome, the way the filed-note row says it. */
+const REPRODUCTION_WORD: Record<ReproductionInfo['outcome'], string> = {
+  reproduced: 'Reproduced on staging',
+  not_reproduced: 'Not reproduced',
+  not_attempted: 'Reproduction not attempted',
+}
+
 export interface FiledNoteRowProps {
-  run: RunSummary
+  run: RunSummary & { reproduction?: ReproductionInfo }
   /** Opens the Note tab beside the transcript. */
   onOpenNote: () => void
   /** Runs one note turn again; resolves once the job has started. */
@@ -61,6 +68,11 @@ export default function FiledNoteRow({ run, onOpenNote, onUpdateNote, updating, 
         <button type="button" className="sd-filed__btn" dir="auto" onClick={onOpenNote}>
           {noteStem(last)}
         </button>
+        {run.reproduction ? (
+          <span className="sd-filed__repro" data-outcome={run.reproduction.outcome}>
+            {REPRODUCTION_WORD[run.reproduction.outcome]}
+          </span>
+        ) : null}
         {update(true)}
         {failed}
       </div>

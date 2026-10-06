@@ -231,3 +231,29 @@ describe('the session model, before the run is read', () => {
     })
   })
 })
+
+describe('the session model, on a gather event', () => {
+  const f = triageFixture()
+
+  function gatherEvent(payload: Record<string, unknown>): IndexedEvent {
+    return { index: 1, event: { t: f.detail.startedAt, kind: 'gather', payload } }
+  }
+
+  it('becomes a system item, carrying the tool and the text', () => {
+    const model = buildSessionModel(f.detail, [gatherEvent({ tool: 'command', text: 'ran a lookup' })])
+    const system = model.path.find((p) => p.kind === 'system')
+    expect(system).toMatchObject({ kind: 'system', text: 'command: ran a lookup' })
+  })
+
+  it('reads failed, so a denied or failed lookup draws red', () => {
+    const model = buildSessionModel(f.detail, [gatherEvent({ tool: 'command', text: 'refused', decision: 'denied' })])
+    const system = model.path.find((p) => p.kind === 'system')
+    expect(system).toMatchObject({ tone: 'failed' })
+  })
+
+  it('shows the gather and note phase summary lines without Show everything', () => {
+    const summary: IndexedEvent = { index: 1, event: { t: f.detail.startedAt, kind: 'system', payload: { text: 'Gathering context: 2 lookups' } } }
+    const model = buildSessionModel(f.detail, [summary])
+    expect(model.path.some((p) => p.kind === 'system' && p.text === 'Gathering context: 2 lookups')).toBe(true)
+  })
+})

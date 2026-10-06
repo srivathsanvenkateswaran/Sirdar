@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { IndexedEvent } from '../../lib/events'
-import { duringNote, NOTE_LABEL, readActivity, STALL_MS } from '../../lib/activity'
+import { duringNote, GATHER_LABEL, NOTE_LABEL, readActivity, STALL_MS } from '../../lib/activity'
 import { duration, tokens } from '../../lib/format'
 import './live-activity.css'
 
@@ -34,6 +34,18 @@ export default function LiveActivity({ events, working, phase }: LiveActivityPro
   // ticking every second recomputes just the two numbers below it, not the
   // whole tail-walk `readActivity` does.
   const read = useMemo(() => (working ? readActivity(events) : undefined), [events, working])
+
+  // Gathering happens while the run is `preparing`, not `running`, so the
+  // layouts never pass `working` for it; the line still has to draw.
+  if (phase === 'gather') {
+    return (
+      <div className="sd-activity" role="status" aria-live="off" data-what="gather" data-testid="live-activity">
+        <span className="sd-activity__dot" aria-hidden="true" />
+        <span className="sd-activity__label">{GATHER_LABEL}</span>
+      </div>
+    )
+  }
+
   const filing = working && phase === 'note'
   const parsed = filing && read ? duringNote(read) : read
   if (!parsed) {

@@ -111,6 +111,33 @@ describe('the playbooks list', () => {
   })
 })
 
+describe('frontmatter chips and errors', () => {
+  it('shows a chip per kind and per when keyword', async () => {
+    const t = fake()
+    const base = await t.playbooks('ws1')
+    t.playbooks = async () => [{ ...base[0], kinds: ['triage'], when: ['database'] }, base[1]]
+    open(t)
+    await screen.findByText('Helpdesk')
+
+    const helpdesk = row('Helpdesk')
+    expect(within(helpdesk).getByText('triage')).toBeInTheDocument()
+    expect(within(helpdesk).getByText('database')).toBeInTheDocument()
+    // The row with neither keeps today's look: no chips line.
+    expect(row('Logs').querySelector('.playbook-row__chips')).toBeNull()
+  })
+
+  it('shows the frontmatter error in the error token colour', async () => {
+    const t = fake()
+    const base = await t.playbooks('ws1')
+    t.playbooks = async () => [{ ...base[0], frontmatterError: 'when: must be a list of strings' }, base[1]]
+    open(t)
+    await screen.findByText('Helpdesk')
+
+    const helpdesk = row('Helpdesk')
+    expect(within(helpdesk).getByText('Frontmatter ignored: when: must be a list of strings')).toBeInTheDocument()
+  })
+})
+
 describe('the empty state', () => {
   it('explains what a playbook is in two sentences and scaffolds the starting set', async () => {
     const t = fake({ playbooks: {} })

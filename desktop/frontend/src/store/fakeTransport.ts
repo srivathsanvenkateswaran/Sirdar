@@ -652,6 +652,7 @@ export function createFakeTransport(seed: {
     },
     prompt: async (_ws, runId) => seed.sessions?.[runId]?.prompt ?? '',
     attachments: async (_ws, runId) => seed.sessions?.[runId]?.attachments ?? [],
+    gathered: async (_ws, runId) => seed.sessions?.[runId]?.gathered ?? [],
     attachmentURL: async (_ws, runId, path) => {
       const found = (seed.sessions?.[runId]?.attachments ?? []).find((a) => a.path === path)
       if (!found) throw new Error(`not_found: no attachment at ${path}`)

@@ -7,6 +7,7 @@ import type {
   ConfigSummary,
   ModelList,
   EvalReport,
+  GatheredInfo,
   GoldenEntry,
   HelpdeskLink,
   Intake,
@@ -302,6 +303,10 @@ export function createHTTPTransport(): Transport {
       getJSON<Attachment[]>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/bundle/attachments`,
       ),
+    gathered: (ws, runId) =>
+      getJSON<GatheredInfo[]>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/bundle/context`,
+      ),
     // The route is the URL: the browser loads the bytes straight into the
     // <img> or the player, so nothing is copied through this process.
     attachmentURL: async (ws, runId, path) =>
@@ -523,6 +528,7 @@ interface BridgeBindings {
   OpenConfig(ws: string): Promise<void>
   OpenNote(ws: string, runId: string, path: string): Promise<void>
   Attachments(ws: string, runId: string): Promise<Attachment[] | null>
+  Gathered(ws: string, runId: string): Promise<GatheredInfo[] | null>
   AttachmentDataURL(ws: string, runId: string, name: string): Promise<string>
   OpenRunDir(ws: string, runId: string): Promise<void>
   StartSession(ws: string, o: { reference: string; instruction: string; access: string; provider: string; model: string }): Promise<SessionStarted>
@@ -604,6 +610,7 @@ export function createWailsTransport(): Transport {
     note: (ws, runId, kind) => bridge().Note(ws, runId, kind),
     prompt: (ws, runId) => bridge().Prompt(ws, runId),
     attachments: async (ws, runId) => list(await bridge().Attachments(ws, runId)),
+    gathered: async (ws, runId) => list(await bridge().Gathered(ws, runId)),
     // No HTTP origin in the desktop shell, so the bytes come back inline.
     attachmentURL: (ws, runId, path) => bridge().AttachmentDataURL(ws, runId, path),
     startSession: (ws, o) =>

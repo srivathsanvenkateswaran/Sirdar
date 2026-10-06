@@ -554,6 +554,29 @@
   -webkit-line-clamp: 2;
 }
 
+/* One chip per `kinds:` entry and per `when:` keyword a playbook's frontmatter names. */
+.playbook-row__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-1);
+}
+
+.playbook-row__chip {
+  padding-inline: var(--sd-space-2);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  unicode-bidi: plaintext;
+}
+
+/* Frontmatter the parser could not read; the playbook still loads, in full. */
+.playbook-row__error {
+  color: var(--sd-st-failed);
+  font-size: var(--sd-text-micro);
+  unicode-bidi: plaintext;
+}
+
 .playbook-row__actions {
   display: flex;
   align-items: center;

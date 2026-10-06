@@ -110,6 +110,13 @@ describe('LiveActivity', () => {
     expect(screen.queryByTestId('live-activity')).toBeNull()
   })
 
+  it('says gathering context during the gather phase, even while the run is not working', () => {
+    render(<LiveActivity events={[]} working={false} phase="gather" />)
+    const line = screen.getByRole('status')
+    expect(line).toHaveAttribute('data-what', 'gather')
+    expect(line).toHaveTextContent('Gathering context…')
+  })
+
   it('updates the label when a new event arrives', () => {
     vi.setSystemTime(at('28:50'))
     const base = [blockStart('28:20', 0, { type: 'tool_use', name: 'mcp__metabase__run_query' })]

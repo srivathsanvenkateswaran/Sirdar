@@ -48,3 +48,15 @@
 .sd-filed__error {
   color: var(--sd-st-failed);
 }
+
+.sd-filed__repro {
+  color: var(--sd-ink-3);
+}
+
+.sd-filed__repro[data-outcome='reproduced'] {
+  color: var(--sd-st-done);
+}
+
+.sd-filed__repro[data-outcome='not_reproduced'] {
+  color: var(--sd-st-failed);
+}
