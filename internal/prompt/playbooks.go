@@ -186,7 +186,10 @@ func FrontmatterWarnings(all []Playbook) []string {
 // written, but the listing and the desktop app describe the playbook by
 // what it says, not by the broken YAML above it.
 func TitleAndLede(body string) (title, lede string) {
-	if _, rest, _, closed := splitFrontmatter(strings.TrimPrefix(body, "\uFEFF")); closed {
+	// A byte-order mark is no part of the title: an editor that saves one
+	// would otherwise leave "\uFEFF# Title" for TrimSpace, which keeps it.
+	body = strings.TrimPrefix(body, "\uFEFF")
+	if _, rest, _, closed := splitFrontmatter(body); closed {
 		body = rest
 	}
 	var para []string

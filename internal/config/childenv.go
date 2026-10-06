@@ -4,8 +4,8 @@ import "strings"
 
 // ChildEnv is the environment a run's agent session and gather steps get:
 // base minus every variable a configured credential reference names, plus
-// SIRDAR_BILLING. It mirrors internal/run's childEnv so that `sirdar
-// doctor` resolves programs and MCP servers in the same environment a run
+// SIRDAR_BILLING. Runs and `sirdar doctor` both build it here, so the
+// doctor resolves programs and MCP servers in the same environment a run
 // will, rather than in this process's whole one, which still holds the
 // helpdesk's token. A nil base is taken as empty, never as os.Environ():
 // the caller says which environment it is stripping.
@@ -30,8 +30,16 @@ func (c *Config) ChildEnv(base []string) []string {
 // helpdesk's tokens, OAuth client and refresh secrets, the model endpoint's
 // API key, and every notify destination's webhook URL, secret and header.
 // Each of them is something a session could use to act as Sirdar, so none
-// of them is left in a child's environment. internal/run keeps its own copy
-// of this list for runs; the two must name the same fields.
+// of them is left in a child's environment.
+//
+// An OAuth grant's client secret and refresh token matter more here, not
+// less, than a plain access token: a refresh token read out of the agent's
+// environment mints access tokens until somebody revokes it at the Zoho
+// console, and Help Scout's clientId/clientSecret pair mints tokens on
+// demand, so it outlives every token it has issued. The model's API key
+// belongs to Sirdar, not the session: the loop authenticates the chat calls
+// itself. An incoming webhook URL is a bearer credential: a session that
+// could read one could post to the team's channel as Sirdar.
 func (c *Config) CredentialEnvNames() map[string]bool {
 	names := make(map[string]bool)
 	if c == nil {
