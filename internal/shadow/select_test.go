@@ -50,6 +50,8 @@ func TestSelect(t *testing.T) {
 		}
 	}
 
+	onA := []Listed{bug("A", 0)}
+
 	nineToday := []Entry{}
 	for i := 1; i <= 9; i++ {
 		k := fmt.Sprintf("K%d", i)
@@ -120,34 +122,40 @@ func TestSelect(t *testing.T) {
 		{
 			name:    "retry after failed provider exited",
 			entries: retried("A", "failed", "provider exited", time.Hour),
+			listed:  onA,
 			policy:  base,
 			start:   []string{"A"},
 		},
 		{
 			name:    "no retry after a not_found failure",
 			entries: retried("A", "failed", "not_found: no such issue", time.Hour),
+			listed:  onA,
 			policy:  base,
 		},
 		{
 			name:    "no retry within one interval",
 			entries: retried("A", "failed", "provider exited", time.Minute),
+			listed:  onA,
 			policy:  base,
 		},
 		{
 			name:    "retry after blocked interrupted",
 			entries: retried("A", "blocked", "interrupted", time.Hour),
+			listed:  onA,
 			policy:  base,
 			start:   []string{"A"},
 		},
 		{
 			name:    "retry after blocked on a rate limit",
 			entries: retried("A", "blocked", "rate limited until 14:00", time.Hour),
+			listed:  onA,
 			policy:  base,
 			start:   []string{"A"},
 		},
 		{
 			name:    "no retry after blocked on a question",
 			entries: retried("A", "blocked", "asked: which tenant?", time.Hour),
+			listed:  onA,
 			policy:  base,
 		},
 		{
@@ -155,6 +163,7 @@ func TestSelect(t *testing.T) {
 			entries: append(retried("A", "failed", "provider exited", 90*time.Minute),
 				started("A", "r2", 2, time.Hour),
 				finished("A", "r2", "failed", "provider exited", 30*time.Minute)),
+			listed: onA,
 			policy: base,
 		},
 		{
@@ -195,8 +204,44 @@ func TestSelect(t *testing.T) {
 			name: "first attempts before retries",
 			entries: append(retried("R", "failed", "provider exited", time.Hour),
 				seen("N", 10*time.Minute)),
+			listed: []Listed{bug("N", 0), bug("R", 0)},
 			policy: base,
 			start:  []string{"N", "R"},
+		},
+		{
+			name:    "seen key no longer listed is not started",
+			entries: []Entry{seen("A", 10*time.Minute), seen("B", 10*time.Minute)},
+			listed:  []Listed{bug("B", 0)},
+			policy:  base,
+			start:   []string{"B"},
+		},
+		{
+			name:    "failed attempt no longer listed is not retried",
+			entries: retried("A", "failed", "provider exited", time.Hour),
+			policy:  base,
+		},
+		{
+			name:    "a key moved to an excluded status is not retried",
+			entries: retried("A", "failed", "provider exited", time.Hour),
+			listed:  []Listed{{Key: "A", Type: "bug", Status: "Done"}},
+			policy:  with(func(p *Policy) { p.Statuses = []string{"open"} }),
+		},
+		{
+			name:    "a listed key held back by concurrency stays a candidate",
+			entries: []Entry{seen("A", 10*time.Minute)},
+			listed:  onA,
+			policy:  with(func(p *Policy) { p.Concurrency = 1 }),
+			start:   []string{"A"},
+		},
+		{
+			name: "run cap named before USD cap when both are reached",
+			entries: append(append([]Entry{}, nineToday...),
+				seen("K10", 2*time.Hour), started("K10", "rK10", 1, time.Hour),
+				Entry{At: ago(30 * time.Minute), Ev: "finished", Key: "K10", RunID: "rK10", Status: "completed", CostUSD: 10}),
+			listed: []Listed{bug("A", time.Minute)},
+			policy: base,
+			seen:   []string{"A"},
+			capHit: "daily run cap reached (10 of 10)",
 		},
 	}
 	for _, c := range cases {
@@ -269,7 +314,7 @@ func TestSelectDetails(t *testing.T) {
 		{At: now.Add(-3 * time.Hour), Ev: "seen", Key: "A"},
 		{At: now.Add(-2 * time.Hour), Ev: "started", Key: "A", RunID: "r1", Attempt: 1},
 		{At: now.Add(-time.Hour), Ev: "finished", Key: "A", RunID: "r1", Status: "blocked", Reason: "model limit: weekly"},
-	}, nil, now, Policy{Concurrency: 1, MaxPerDay: 1, MaxUSDPerDay: 1, Interval: time.Minute}, 0, 0)
+	}, []Listed{{Key: "A", Type: "bug"}}, now, Policy{Concurrency: 1, MaxPerDay: 1, MaxUSDPerDay: 1, Interval: time.Minute}, 0, 0)
 	if len(retry.Start) != 1 || retry.Start[0] != (Start{Key: "A", Attempt: 2, RetryOf: "r1"}) {
 		t.Errorf("retry start = %+v", retry.Start)
 	}

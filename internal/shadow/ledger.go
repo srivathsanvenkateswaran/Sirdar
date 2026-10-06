@@ -132,6 +132,15 @@ func Append(root string, e Entry) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("shadow: %w", err)
 	}
+	// A crash mid-write leaves a last line with no newline. Appending
+	// straight after it would glue this line onto the fragment and Read
+	// would drop both, so the fragment is closed off first; it stays
+	// unparseable on its own and Read skips just it.
+	if torn, err := endsTorn(path); err != nil {
+		return fmt.Errorf("shadow: %w", err)
+	} else if torn {
+		line = append([]byte{'\n'}, line...)
+	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("shadow: %w", err)
@@ -141,6 +150,28 @@ func Append(root string, e Entry) error {
 		return fmt.Errorf("shadow: append ledger: %w", err)
 	}
 	return f.Close()
+}
+
+// endsTorn reports whether the ledger is non-empty and its last byte is not
+// a newline. A missing ledger is not torn.
+func endsTorn(path string) (bool, error) {
+	f, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || info.Size() == 0 {
+		return false, err
+	}
+	last := make([]byte, 1)
+	if _, err := f.ReadAt(last, info.Size()-1); err != nil {
+		return false, err
+	}
+	return last[0] != '\n', nil
 }
 
 // Read returns every ledger line in file order. A workspace that never ran

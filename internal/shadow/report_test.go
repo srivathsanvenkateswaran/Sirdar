@@ -174,10 +174,11 @@ func TestReportLead(t *testing.T) {
 		shadowRun{key: "A", startedAgo: 3 * time.Hour, grade: "confirmed", final: true, lead: &plus},
 		shadowRun{key: "B", startedAgo: 2 * time.Hour, grade: "wrong", final: true, lead: &minus},
 		shadowRun{key: "C", startedAgo: time.Hour, grade: "partial", final: true},
+		shadowRun{key: "D", startedAgo: 30 * time.Minute, grade: "partial", final: false, lead: &plus},
 	)
 	h := Report(entries, since30()).Headline
 	if h.ReadyBefore != 1 || h.ReadyOf != 2 {
-		t.Errorf("ready = %d of %d, want 1 of 2", h.ReadyBefore, h.ReadyOf)
+		t.Errorf("ready = %d of %d, want 1 of 2 (the provisional grade left out)", h.ReadyBefore, h.ReadyOf)
 	}
 }
 

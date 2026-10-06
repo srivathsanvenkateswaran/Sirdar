@@ -124,16 +124,16 @@ func Report(entries []Entry, since time.Time) ShadowReport {
 		if r.Status == "completed" {
 			elapsed = append(elapsed, r.ElapsedSec)
 		}
-		if r.Grade != "" && r.LeadMinutes != nil {
+		if !r.Final || !gradedGrades[r.Grade] {
+			continue
+		}
+		h.Graded++
+		if r.LeadMinutes != nil {
 			h.ReadyOf++
 			if *r.LeadMinutes > 0 {
 				h.ReadyBefore++
 			}
 		}
-		if !r.Final || !gradedGrades[r.Grade] {
-			continue
-		}
-		h.Graded++
 		class := r.Classification
 		if class == "" {
 			class = "unknown"

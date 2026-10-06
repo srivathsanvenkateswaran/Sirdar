@@ -186,3 +186,28 @@ func TestPausedUntil(t *testing.T) {
 		t.Error("paused after the pause expired")
 	}
 }
+
+func TestAppendAfterTornLine(t *testing.T) {
+	root := t.TempDir()
+	if err := Append(root, Entry{At: t0, Ev: "seen", Key: "A"}); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(LedgerPath(root), os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(`{"v":1,"at":"2026`); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	if err := Append(root, Entry{At: t0, Ev: "finished", Key: "A", RunID: "r1", Status: "blocked", Reason: "interrupted"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Read(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[1].Ev != "finished" || got[1].RunID != "r1" {
+		t.Fatalf("got %+v, want the seen line and the finished line appended after the torn one", got)
+	}
+}

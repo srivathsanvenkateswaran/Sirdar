@@ -138,6 +138,17 @@ func Select(entries []Entry, listed []Listed, now time.Time, p Policy, inFlight 
 		start      Start
 		finishedAt time.Time
 	}
+	// A key from an earlier tick starts only while it is still on the
+	// operator's list: one that left it was closed or handed to someone
+	// else, and a run on it would grade against nobody's work. The type and
+	// since filters applied when the key was first seen; only the status
+	// filter is re-checked, so a move to an excluded status drops it.
+	onQueue := map[string]bool{}
+	for _, t := range listed {
+		if statusMatches(p.Statuses, t.Status) {
+			onQueue[t.Key] = true
+		}
+	}
 	var retries []retry
 	for key, t := range tickets {
 		if len(t.Attempts) == 0 {
@@ -149,10 +160,12 @@ func Select(entries []Entry, listed []Listed, now time.Time, p Policy, inFlight 
 					Reason: fmt.Sprintf("stale: seen %dh ago and never started", int(age.Hours()))})
 				continue
 			}
-			firsts = append(firsts, candidate{key, t.CreatedAt})
+			if onQueue[key] {
+				firsts = append(firsts, candidate{key, t.CreatedAt})
+			}
 			continue
 		}
-		if len(t.Attempts) >= MaxAttempts {
+		if len(t.Attempts) >= MaxAttempts || !onQueue[key] {
 			continue
 		}
 		last := t.Latest()
@@ -196,15 +209,15 @@ func Select(entries []Entry, listed []Listed, now time.Time, p Policy, inFlight 
 		if inFlight+len(plan.Start) >= p.Concurrency {
 			break
 		}
+		if s.Attempt == 1 && day.Runs+newFirsts >= p.MaxPerDay {
+			plan.CapHit = fmt.Sprintf("daily run cap reached (%d of %d)", day.Runs+newFirsts, p.MaxPerDay)
+			break
+		}
 		if day.USD >= p.MaxUSDPerDay {
 			plan.CapHit = fmt.Sprintf("daily USD cap reached ($%.2f of $%.2f)", day.USD, p.MaxUSDPerDay)
 			break
 		}
 		if s.Attempt == 1 {
-			if day.Runs+newFirsts >= p.MaxPerDay {
-				plan.CapHit = fmt.Sprintf("daily run cap reached (%d of %d)", day.Runs+newFirsts, p.MaxPerDay)
-				break
-			}
 			newFirsts++
 		}
 		plan.Start = append(plan.Start, s)
