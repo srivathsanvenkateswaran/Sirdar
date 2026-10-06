@@ -343,6 +343,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
             helpdeskKey={detail.helpdeskKey}
             onOpenFolder={openBundleFolder}
             folderPath={detail.bundleDir}
+            revision={`${detail.status}/${detail.phase ?? ''}`}
           />
         </Drawer>
         <Drawer

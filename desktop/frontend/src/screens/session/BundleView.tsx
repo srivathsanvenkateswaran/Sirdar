@@ -29,6 +29,11 @@ export interface BundleViewProps {
   folderPath?: string
   /** Told what the prompt carried once it is read, for a tab's count or an outline. */
   onLoaded?: (bundle: import('../../components/session/bundleModel').Bundle | null) => void
+  /**
+   * Changes whenever the run moves on (its status and phase), so the pane
+   * re-reads what the run gathered; see BundlePane.
+   */
+  revision?: string
 }
 
 export default function BundleView(props: BundleViewProps): JSX.Element {
