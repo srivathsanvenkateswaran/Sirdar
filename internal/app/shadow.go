@@ -828,6 +828,9 @@ func (s *Service) shadowQuotaReason(cfg *config.Config) string {
 	if limit <= 0 {
 		return ""
 	}
+	// A process that never ran Start has an empty meter, and an empty
+	// meter would let every run through whatever the provider last said.
+	s.quotaScanned.Do(s.scanQuota)
 	type window struct {
 		name   string
 		util   float64

@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/shadow"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
@@ -111,5 +113,54 @@ func TestQueueLiveSteerRefusesShadow(t *testing.T) {
 	_, _, err := QueueLiveSteer(root, runID, "look at the ledger", "", time.Now())
 	if !errors.Is(err, ErrSteerRefused) || !strings.Contains(err.Error(), "shadow run") {
 		t.Fatalf("QueueLiveSteer = %v, want ErrSteerRefused naming a shadow run", err)
+	}
+}
+
+// TestShadowQuotaPauseWithoutStart: `sirdar shadow run` and `shadow watch
+// --once` never call Start, so the quota recorded in the event logs has to
+// reach the gate some other way, or a backfill at 88% of the seven-day
+// window would still start.
+func TestShadowQuotaPauseWithoutStart(t *testing.T) {
+	for _, path := range []string{"run", "poll"} {
+		t.Run(path, func(t *testing.T) {
+			root := newWorkspace(t)
+			writeConfig(t, root, shadowConfig(5, ""))
+			raw := strings.Replace(claudeRateLimitRaw, `"seven_day":{"utilization":0.4`, `"seven_day":{"utilization":0.88`, 1)
+			writeTriageState(t, root, "OMNI-9", "20261006T080000Z-op01", store.StatusCompleted, time.Now().Add(-2*time.Hour), false)
+			writeEventLog(t, root, "OMNI-9", "20261006T080000Z-op01",
+				fmt.Sprintf(`{"t":%q,"kind":"rate_limited","payload":{"raw":%s}}`, time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano), raw))
+			tr := &shadowTracker{}
+			tr.set(ticket.TrackerTicket{Key: "OMNI-1", Title: "Export fails", Type: "bug", Status: "open", CreatedAt: time.Now()})
+			svc := New(newRegistry(t, root), stubBuilder(&stubProvider{script: completes()}, tr, stubHelpdesk{}), Options{})
+			wsID := WorkspaceID(root)
+
+			switch path {
+			case "run":
+				started, err := svc.shadowRun(context.Background(), wsID, []string{"OMNI-1"}, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(started) != 1 || !strings.HasPrefix(started[0].Skipped, "seven-day quota at 88%") {
+					t.Fatalf("started %+v, want OMNI-1 skipped on the seven-day quota", started)
+				}
+			case "poll":
+				st, err := svc.shadowPoll(context.Background(), wsID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if st.State != "paused" || !strings.HasPrefix(st.Reason, "seven-day quota at 88%") {
+					t.Fatalf("status %s %q, want paused on the seven-day quota", st.State, st.Reason)
+				}
+			}
+			entries, err := shadow.Read(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range entries {
+				if e.Ev == "started" {
+					t.Fatalf("a run started over the quota: %+v", e)
+				}
+			}
+		})
 	}
 }

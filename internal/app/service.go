@@ -96,6 +96,10 @@ type Service struct {
 	opts    Options
 	watcher *Watcher
 	quota   *quotaTracker
+	// quotaScanned guards the scan of the recorded quota, which Start runs
+	// and the shadow gate runs on first use in a process that never calls
+	// Start (`sirdar shadow run`, `shadow watch --once`).
+	quotaScanned sync.Once
 	// live is the cursor the in-process event sink and the watcher's tail
 	// share, so a line published by one is not published again by the
 	// other. See live.go.
@@ -158,7 +162,7 @@ func New(reg *Registry, build DepsBuilder, opts Options) *Service {
 // Start reads the quota already recorded in the workspaces' event logs and
 // begins watching. Watching stops when ctx is cancelled or Stop is called.
 func (s *Service) Start(ctx context.Context) {
-	s.scanQuota()
+	s.quotaScanned.Do(s.scanQuota)
 	s.watcher.Start(ctx)
 	// The watcher's first sweep ran inside Start and reported every run
 	// already on disk; what it reports from here on is change.
