@@ -270,13 +270,28 @@ func inFlightIDs(w *shadowWatch) []string {
 }
 
 // shadowInFlightUSD is what the runs still going have spent so far, read
-// from their state files, so the daily cap counts money already gone. A
-// resumed run's state carries the whole run's cost, and what its earlier
+// from their state files, so the daily cap counts money already gone. The
+// runs are this process's, ours, and every attempt the ledger shows started
+// and not finished: a `shadow run` or `shadow status` in another process
+// must count serve's runs too. An attempt a crash left unfinished counts
+// until recovery writes its line, which is right, since its money is spent.
+// A resumed run's state carries the whole run's cost, and what its earlier
 // attempts spent is already on their finished lines, so only the rest is
 // counted here.
-func shadowInFlightUSD(root string, runIDs []string, entries []shadow.Entry) float64 {
+func shadowInFlightUSD(root string, ours []string, entries []shadow.Entry) float64 {
+	ids := map[string]bool{}
+	for _, id := range ours {
+		ids[id] = true
+	}
+	for _, t := range shadow.Fold(entries) {
+		for _, a := range t.Attempts {
+			if a.Finished == nil && a.Started.RunID != "" {
+				ids[a.Started.RunID] = true
+			}
+		}
+	}
 	var usd float64
-	for _, id := range runIDs {
+	for id := range ids {
 		if _, st, err := store.Open(root, id); err == nil {
 			usd += max(0, st.Usage.CostUSD-shadowPriorCost(entries, id))
 		}
@@ -1320,6 +1335,17 @@ func (s *Service) shadowRunOne(ctx context.Context, ws Workspace, cfg *config.Co
 	if err != nil {
 		return res, err
 	}
+	// A second attempt beside one still going would run the ticket twice
+	// at once, and only the first attempt counts toward maxPerDay. An
+	// attempt a crash left unfinished is skipped too, until recovery in a
+	// watcher's tick closes it.
+	t := shadow.Fold(entries)[key]
+	if t != nil {
+		if a := t.Latest(); a != nil && a.Finished == nil {
+			res.Skipped = fmt.Sprintf("a shadow run of %s is still going (%s)", key, a.Started.RunID)
+			return res, nil
+		}
+	}
 	w := s.shadowWatch(ws.ID, ws.Root)
 	s.shadow.mu.Lock()
 	ids := inFlightIDs(w)
@@ -1335,7 +1361,6 @@ func (s *Service) shadowRunOne(ctx context.Context, ws Workspace, cfg *config.Co
 		return res, nil
 	}
 
-	t := shadow.Fold(entries)[key]
 	if t == nil || t.SeenAt.IsZero() {
 		if !fetched {
 			if got, err := tr.Get(ctx, key); err == nil {

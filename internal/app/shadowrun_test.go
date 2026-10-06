@@ -182,3 +182,69 @@ func TestResumeRefusesShadow(t *testing.T) {
 		t.Errorf("err = %q, want %q", err, want)
 	}
 }
+
+// TestShadowInFlightSpendFromTheLedger: serve's run in flight is in the
+// ledger as a started line with no finished one, and its spend so far is in
+// its state file. A `shadow run` or `shadow status` in another process has
+// no record of it in memory, and must still count it.
+func TestShadowInFlightSpendFromTheLedger(t *testing.T) {
+	root := newWorkspace(t)
+	writeConfig(t, root, shadowConfig(5, "  maxUSDPerDay: 0.5\n"))
+	const runID = "20261006T090000Z-sv01"
+	now := time.Now()
+	dir := filepath.Join(root, ".sirdar", "runs", "OMNI-2", runID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := store.State{RunID: runID, Key: "OMNI-2", Kind: store.KindTriage, Status: store.StatusRunning,
+		Provider: "claude", StartedAt: now, UpdatedAt: now, Shadow: true, Usage: store.Usage{CostUSD: 0.8}}
+	if err := (store.Run{Dir: dir}).WriteState(st); err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []shadow.Entry{
+		{At: now.Add(-time.Minute), Ev: "seen", Key: "OMNI-2"},
+		{At: now, Ev: "started", Key: "OMNI-2", RunID: runID, Attempt: 1, PID: os.Getpid(), Host: hostName()},
+	} {
+		if err := shadow.Append(root, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tr := &shadowTracker{}
+	svc := New(newRegistry(t, root), stubBuilder(&stubProvider{script: completes()}, tr, stubHelpdesk{}), Options{})
+	wsID := WorkspaceID(root)
+
+	status, err := svc.shadowStatus(wsID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Today.USD != 0.8 {
+		t.Errorf("today.usd = %v, want the 0.8 serve's run has spent", status.Today.USD)
+	}
+	started, err := svc.shadowRun(context.Background(), wsID, []string{"OMNI-1"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(started) != 1 || !strings.HasPrefix(started[0].Skipped, "daily USD cap reached") {
+		t.Fatalf("started %+v, want OMNI-1 skipped on the daily USD cap", started)
+	}
+}
+
+// TestShadowRunSkipsAKeyInFlight: a second attempt started beside one still
+// going would be a concurrent run of the same ticket that the daily run cap
+// never counts.
+func TestShadowRunSkipsAKeyInFlight(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	f.append(t, shadow.Entry{At: now.Add(-time.Minute), Ev: "seen", Key: "OMNI-1"})
+	f.append(t, shadow.Entry{At: now, Ev: "started", Key: "OMNI-1", RunID: "20261006T043000Z-sv01", Attempt: 1, PID: os.Getpid(), Host: hostName()})
+	started, err := f.svc.shadowRun(context.Background(), f.wsID, []string{"OMNI-1"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "a shadow run of OMNI-1 is still going (20261006T043000Z-sv01)"; len(started) != 1 || started[0].Skipped != want || started[0].RunID != "" {
+		t.Fatalf("started %+v, want skipped %q", started, want)
+	}
+	if n := len(ofEv(f.ledger(t), "started")); n != 1 {
+		t.Errorf("%d started lines, want only the one in flight", n)
+	}
+}
