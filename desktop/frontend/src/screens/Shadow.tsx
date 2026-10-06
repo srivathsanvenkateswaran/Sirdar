@@ -164,6 +164,12 @@ function RowDrawer(props: {
   return (
     <Drawer open title={row.key} meta={usd(row.costUSD)} onClose={onClose} width={480}>
       <div className="shadow-drawer">
+        {/* The table clips the title to a column; this is where it reads whole. */}
+        {row.title ? (
+          <p className="shadow-drawer__title" dir="auto">
+            {row.title}
+          </p>
+        ) : null}
         <section className="shadow-drawer__section">
           <h3 className="shadow-drawer__head">Grade</h3>
           <p className="shadow-drawer__line">

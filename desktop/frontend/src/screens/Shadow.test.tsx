@@ -132,6 +132,18 @@ describe('Shadow', () => {
     expect(onOpenRun).toHaveBeenCalledWith('r1')
   })
 
+  it('shows the whole ticket title at the top of the drawer, which the table clips', async () => {
+    const long = 'تصدير كشف الحساب يتجاوز المهلة عند استيراد أكثر من عشرة آلاف سطر من فرع الرياض'
+    const report = shadowReport()
+    report.rows = [shadowRow({ title: long }), ...report.rows.slice(1)]
+    mount(undefined, { shadowReport: report })
+    fireEvent.click(await screen.findByRole('button', { name: long }))
+    const drawer = screen.getByRole('dialog', { name: 'OMNI-1' })
+    const title = within(drawer).getByText(long)
+    expect(title).toHaveAttribute('dir', 'auto')
+    expect(drawer.querySelector('.shadow-drawer')?.firstElementChild).toBe(title)
+  })
+
   it('records an outcome by hand from the drawer and shows the grade it came back with', async () => {
     const report = shadowReport()
     report.rows = [shadowRow({ grade: '', gradeReason: '', final: false }), ...report.rows.slice(1)]
