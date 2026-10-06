@@ -91,6 +91,10 @@ type Options struct {
 	// Shadow marks the run as a shadow measurement (see store.State.Shadow). It implies NoNotify.
 	Shadow bool
 
+	// NoReproduce leaves the staging reproduction out of a shadow run, for
+	// shadow.reproduce: false. It has no effect on a run that is not a shadow.
+	NoReproduce bool
+
 	// NoNotify silences the run-completion notification for this
 	// invocation, for a batch being re-run that the channel has already
 	// heard about.

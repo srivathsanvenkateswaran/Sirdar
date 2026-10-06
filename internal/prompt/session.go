@@ -167,6 +167,9 @@ func TriageReply(in TriageInput) string {
 	if s := reproSection(in.Repro); s != "" {
 		sections = append(sections, s)
 	}
+	if s := shadowSection(in.Shadow); s != "" {
+		sections = append(sections, s)
+	}
 	sections = append(sections, taskSection(replyLead(in.Instruction), in.Instruction))
 	return strings.Join(sections, "\n\n") + "\n"
 }

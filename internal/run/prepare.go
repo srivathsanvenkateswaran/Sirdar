@@ -262,6 +262,15 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes
 	p.state.Budget.MaxUSD = cfg.Budget.MaxUSD
+	// What an rca was handed is kept on the run, because the PR it read
+	// belongs on the register's RCA row and the resolution is what a later
+	// comparison of the rca against the shadow triage needs to see.
+	if kind == store.KindRCA && rca != nil && (rca.PRURL != "" || rca.Resolution != "") {
+		p.state.RCAInputs = &store.RCAInputs{
+			PRURL:      strings.TrimSpace(rca.PRURL),
+			Resolution: clipRunes(rca.Resolution, store.RCAResolutionMax),
+		}
+	}
 	if err := rn.WriteState(p.state); err != nil {
 		return p, err
 	}
@@ -338,7 +347,13 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	// it did not get it on this run.
 	var repro *prompt.ReproPrompt
 	if cfg.ReproConfigured() {
-		if plan, reason := r.reproFor(p); plan != nil {
+		if plan, reason := r.reproFor(p); plan != nil && o.Shadow && o.NoReproduce {
+			// The workspace turned reproduction off for shadow runs. Only the
+			// prompt loses it: the session's guard still confines the browser
+			// to the staging hosts, which can only make the run safer, and
+			// with no section the agent is given no reason to browse.
+			p.state.Warnings = append(p.state.Warnings, "staging reproduction off: shadow.reproduce is false")
+		} else if plan != nil {
 			repro = &prompt.ReproPrompt{Server: plan.Server, Hosts: plan.Hosts}
 			r.prepareLine(p, log, "system", eventPayload{Text: "Reproduction on staging: " +
 				strings.Join(plan.Hosts, ", ") + " through mcp__" + plan.Server + "__ tools"})
@@ -363,6 +378,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		CustomerLanguage:    cfg.CustomerLanguage(),
 		Repositories:        repositories(cfg, bundle, slackMD, p.state.Instruction),
 		Repro:               repro,
+		Shadow:              o.Shadow,
 	}
 
 	switch kind {
@@ -413,6 +429,15 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return p, err
 	}
 	return p, nil
+}
+
+// clipRunes is s cut to at most n runes, so a cut never splits a
+// character in two.
+func clipRunes(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n])
 }
 
 // rcaTriageNote settles which triage note an rca run reviews: the one

@@ -952,3 +952,30 @@ func TestNoReferenceSessionGathered(t *testing.T) {
 		t.Error("gathered context comes before the workspace knowledge")
 	}
 }
+
+func TestShadowPromptNotice(t *testing.T) {
+	in := fixedTriageInput()
+	in.Shadow = true
+	reply := TriageReply(in)
+	mustContain(t, reply, ShadowHeading)
+	mustContain(t, reply, ShadowNotice)
+	if task := strings.Index(reply, "# Task"); task < 0 || strings.Index(reply, ShadowNotice) > task {
+		t.Errorf("the shadow notice does not come before the task section:\n%s", reply)
+	}
+
+	note := Triage(in)
+	notice := strings.Index(note, ShadowNotice)
+	preamble := strings.Index(note, strings.TrimRight(preambleMD, "\n"))
+	language := strings.Index(note, languageSection(in.NotesLanguage, in.CustomerLanguage))
+	if notice < 0 || preamble < 0 || language < 0 || notice < preamble || notice > language {
+		t.Errorf("the shadow notice is not between the preamble and the language section (preamble %d, notice %d, language %d)",
+			preamble, notice, language)
+	}
+
+	in.Shadow = false
+	for _, p := range []string{TriageReply(in), Triage(in)} {
+		if strings.Contains(p, ShadowHeading) || strings.Contains(p, ShadowNotice) {
+			t.Error("a run that is not a shadow carries the unattended-run section")
+		}
+	}
+}
