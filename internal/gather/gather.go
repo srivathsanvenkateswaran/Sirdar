@@ -24,6 +24,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -93,8 +95,10 @@ const IndexFile = "index.json"
 
 // parallel is how many rows run at once. Four keeps a ticket naming five
 // PRs from taking five times as long, without starting a dozen gh and git
-// processes against one laptop. A test that needs the byte cap to bite in
-// a known order sets it to 1.
+// processes against one laptop. A test that needs the byte cap or the
+// deadline to bite in a known order sets it to 1; such a test, and every
+// test that calls Run, must stay serial (no t.Parallel), because this is
+// shared package state.
 var parallel = 4
 
 // job is one unit of work. A PR's job settles two rows, its own and its
@@ -112,6 +116,7 @@ type gatherer struct {
 
 	mu      sync.Mutex
 	entries []Entry
+	names   map[string]bool // planned row names, lower-cased
 	written int
 
 	doneMu sync.Mutex
@@ -149,24 +154,27 @@ func Run(ctx context.Context, in Input) Result {
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(g.cfg.Gather.TotalSeconds)*time.Second)
 	defer cancel()
 
+	// Jobs are handed a slot in plan order, so the rows that run before
+	// the deadline or the byte cap are the first ones planned, not
+	// whichever goroutine the scheduler happened to wake.
 	sem := make(chan struct{}, parallel)
 	var wg sync.WaitGroup
-	for _, j := range jobs {
+	for n, j := range jobs {
+		select {
+		case sem <- struct{}{}:
+		case <-ctx.Done():
+		}
+		if ctx.Err() != nil {
+			for _, rest := range jobs[n:] {
+				g.skipAll(rest.rows, "gather deadline")
+			}
+			break
+		}
 		j := j
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			select {
-			case sem <- struct{}{}:
-			case <-ctx.Done():
-				g.skipAll(j.rows, "gather deadline")
-				return
-			}
 			defer func() { <-sem }()
-			if ctx.Err() != nil {
-				g.skipAll(j.rows, "gather deadline")
-				return
-			}
 			j.run(ctx, g)
 		}()
 	}
@@ -225,8 +233,21 @@ func (g *gatherer) done(e Entry) {
 	g.in.Done(e)
 }
 
-// addRow appends a planned row and returns its index.
+// addRow appends a planned row and returns its index. The row's name is
+// made unique first, since it is also its file's name: two values that
+// fileSafe to the same text, step x on value y beside a step called x-y,
+// or one repository number under two owners would otherwise write over
+// each other. Names are compared without case, as macOS and Windows
+// compare file names.
 func (g *gatherer) addRow(e Entry) int {
+	if g.names == nil {
+		g.names = map[string]bool{}
+	}
+	base := e.Name
+	for n := 2; g.names[strings.ToLower(e.Name)]; n++ {
+		e.Name = base + "-" + strconv.Itoa(n)
+	}
+	g.names[strings.ToLower(e.Name)] = true
 	g.entries = append(g.entries, e)
 	return len(g.entries) - 1
 }

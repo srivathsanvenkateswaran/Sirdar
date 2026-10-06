@@ -413,7 +413,7 @@ func (g *gatherer) judgeCommand(p *provider.PermissionPolicy, argv []string) (bi
 	if d := decideLine(p, DisplayLine(argv)); !d.Allow {
 		return "", StatusDenied, d.Message
 	}
-	bin, err := lookPath(argv[0], g.in.Env, g.in.GOOS)
+	bin, err := lookPath(argv[0], g.in.Env, g.in.GOOS, g.cfg.Root)
 	if err != nil {
 		return "", StatusFailed, argv[0] + " is not on PATH"
 	}
@@ -638,10 +638,10 @@ func (r execResult) verdict(timeoutSeconds int) (string, string) {
 // environment, in the workspace root, in a process group of its own so a
 // timeout takes down whatever it started too. Stdout is kept to max bytes
 // and counted beyond that; stderr keeps its tail.
-func (g *gatherer) exec(ctx context.Context, timeout time.Duration, bin string, args []string, max int) execResult {
+func (g *gatherer) exec(ctx context.Context, timeout time.Duration, bin string, args []string, limit int) execResult {
 	sctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	res := execResult{out: &capture{max: max}, stderr: &tail{max: stderrTail}}
+	res := execResult{out: &capture{max: limit}, stderr: &tail{max: stderrTail}}
 	cmd := exec.CommandContext(sctx, bin, args...)
 	cmd.Dir = g.cfg.Root
 	cmd.Env = g.in.Env
@@ -663,10 +663,14 @@ func (g *gatherer) exec(ctx context.Context, timeout time.Duration, bin string, 
 }
 
 // lookPath finds a program the way the run's own children would: on the
-// PATH in env, not this process's. A name with a directory in it is taken
-// as given. On Windows the PATHEXT extensions are tried, which is how a
-// bare "tool" turns out to be tool.bat.
-func lookPath(name string, env []string, goos string) (string, error) {
+// PATH in env, not this process's. A name with a directory in it is the
+// workspace's: a relative one is resolved against root, which is where
+// the command runs, so the file checked is the file run. A relative PATH
+// entry is skipped, because it names a directory only relative to
+// whichever process is asking. The answer is always absolute, so exec
+// never searches again. On Windows the PATHEXT extensions are tried, which
+// is how a bare "tool" turns out to be tool.bat.
+func lookPath(name string, env []string, goos, root string) (string, error) {
 	windows := goos == "windows"
 	exts := []string{""}
 	if windows && filepath.Ext(name) == "" {
@@ -697,8 +701,15 @@ func lookPath(name string, env []string, goos string) (string, error) {
 	}
 
 	if strings.ContainsAny(name, `/\`) {
-		if p, ok := try(name); ok {
-			return p, nil
+		p := name
+		if !filepath.IsAbs(p) {
+			if root == "" {
+				return "", fmt.Errorf("%s: a relative program needs a workspace root", name)
+			}
+			p = filepath.Join(root, p)
+		}
+		if found, ok := try(p); ok {
+			return found, nil
 		}
 		return "", fmt.Errorf("%s: not found", name)
 	}
@@ -711,7 +722,7 @@ func lookPath(name string, env []string, goos string) (string, error) {
 		sep = ";"
 	}
 	for _, dir := range strings.Split(path, sep) {
-		if dir == "" {
+		if dir == "" || !filepath.IsAbs(dir) {
 			continue
 		}
 		if p, ok := try(filepath.Join(dir, name)); ok {

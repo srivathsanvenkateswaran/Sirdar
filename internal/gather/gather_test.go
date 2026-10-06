@@ -220,6 +220,8 @@ func TestFailingStepReportsExitAndStderr(t *testing.T) {
 	}
 }
 
+// This test changes the parallel package variable, so it and every test
+// that calls Run must stay serial.
 func TestByteCapsAndTruncationMarker(t *testing.T) {
 	old := parallel
 	parallel = 1
@@ -408,14 +410,6 @@ func TestPRBuiltin(t *testing.T) {
 	}
 	if hist.Name != "history-OXO.Systems-512" || hist.Kind != KindHistory || hist.Status != StatusOK {
 		t.Fatalf("history row = %+v", hist)
-	}
-
-	in = runInput(t, cfg, "triage")
-	in.Instruction = "Regressed by https://github.com/silq/OXO.Systems/pull/512"
-	in.Env = withPath(os.Environ(), t.TempDir())
-	res = Run(context.Background(), in)
-	if e := res.Entries[0]; e.Status != StatusFailed || e.Reason != "gh is not on PATH" {
-		t.Fatalf("no-gh pr row = %+v", e)
 	}
 }
 

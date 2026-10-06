@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
@@ -170,7 +172,7 @@ func (g *gatherer) readPR(ctx context.Context, ref PRRef, i int) (prView, bool) 
 		return view, false
 	}
 
-	gh, err := lookPath("gh", g.in.Env, g.in.GOOS)
+	gh, err := lookPath("gh", g.in.Env, g.in.GOOS, g.cfg.Root)
 	if err != nil {
 		return fail(StatusFailed, "gh is not on PATH")
 	}
@@ -350,10 +352,20 @@ type historyResult struct {
 // between and before: the good and bad versions a bisect would start
 // from. Nothing here fetches; a clone behind origin says so and stops.
 func (g *gatherer) history(ctx context.Context, clone, sha string, merged bool, paths []string) historyResult {
-	if sha == "" {
-		return historyResult{status: StatusFailed, reason: "the pull request names no commit"}
+	// The commit id and the paths come from gh's JSON, which is the
+	// pull request author's text as much as GitHub's, and both go into
+	// git's argv. The id must be an object name and nothing else (spec
+	// §9); a path must carry no shell syntax, so the line the allow-list
+	// judges cannot read differently from the argv that runs.
+	if !commitID.MatchString(sha) {
+		return historyResult{status: StatusFailed, reason: "the pull request names no valid commit"}
 	}
-	git, err := lookPath("git", g.in.Env, g.in.GOOS)
+	for _, p := range paths {
+		if !safePath(p) {
+			return historyResult{status: StatusFailed, reason: fmt.Sprintf("the pull request's file %q carries shell syntax, so its history was not read", p)}
+		}
+	}
+	git, err := lookPath("git", g.in.Env, g.in.GOOS, g.cfg.Root)
 	if err != nil {
 		return historyResult{status: StatusFailed, reason: "git is not on PATH"}
 	}
@@ -401,6 +413,9 @@ func (g *gatherer) history(ctx context.Context, clone, sha string, merged bool, 
 	if res.err == nil {
 		first = firstLine(tags, 200)
 	}
+	if strings.HasPrefix(first, "-") {
+		return dashTag(first)
+	}
 	firstDate := ""
 	if first != "" {
 		d, res, stop := run("log", "-1", "--format=%cI", first)
@@ -417,6 +432,9 @@ func (g *gatherer) history(ctx context.Context, clone, sha string, merged bool, 
 	}
 	if res.err != nil {
 		prev = ""
+	}
+	if strings.HasPrefix(prev, "-") {
+		return dashTag(prev)
 	}
 	head, res, stop := run("log", "-1", "--format=%cI", "HEAD")
 	if stop != nil {
@@ -497,4 +515,25 @@ func orNone(s string) string {
 		return "None."
 	}
 	return s
+}
+
+// commitID is a git object name as gh reports one: hex, at least an
+// abbreviation's length, at most a SHA-256 id's.
+var commitID = regexp.MustCompile(`^[0-9a-f]{7,64}$`)
+
+// safePath reports whether a PR's file path is free of the characters the
+// value rule refuses, bar whitespace, which real paths carry.
+func safePath(p string) bool {
+	for _, r := range p {
+		if unicode.IsControl(r) || strings.ContainsRune("'\"`$;|&<>\\", r) {
+			return false
+		}
+	}
+	return p != ""
+}
+
+// dashTag refuses a tag name read back from the clone that git would
+// take for a flag in the next query.
+func dashTag(tag string) historyResult {
+	return historyResult{status: StatusFailed, reason: fmt.Sprintf("the clone has a tag named %q, which would be read as a flag", tag)}
 }

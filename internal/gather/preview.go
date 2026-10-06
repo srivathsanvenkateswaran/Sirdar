@@ -32,7 +32,7 @@ const previewValue = "x"
 // env's PATH, "" when it does not, so a missing gh shows up before a run
 // needs it.
 func Preview(cfg *config.Config, env []string) (rows []PreviewRow, ghPath string) {
-	ghPath, _ = lookPath("gh", env, runtime.GOOS)
+	ghPath, _ = lookPath("gh", env, runtime.GOOS, cfg.Root)
 	g := &gatherer{in: Input{Config: cfg, Env: env, GOOS: runtime.GOOS}, cfg: cfg}
 
 	for _, s := range cfg.Gather.Steps {
