@@ -92,6 +92,7 @@ rather than being silently ignored.
 | `notify.generic[].url` | string | none (required) | Receiver for the event as JSON; `https`, or `http` on loopback |
 | `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally — except a name that looks like a credential (`Authorization`, or one ending in `-Token`, `-Key` or `-Secret`), which must be a reference |
 | `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
+| `shadow` | object | off | The background watcher that triages your tickets unattended and grades its answers; see [Shadow mode](#shadow-mode) |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `attachments.transcribe` | object, optional | unset | Turn audio attachments into text with a command you name; absent means no audio is transcribed. See Audio transcription below |
 | `attachments.transcribe.command` | string | none (required with the block) | The command template, split into argv and never run through a shell: `{in}` is the audio file, `{out}` an output path without an extension, `{outdir}` a directory to write into |
@@ -900,6 +901,70 @@ repro:
   server: playwright                                     # MCP server name, default "playwright"
   kinds: [triage, session]                               # default; rca is not allowed
 ```
+
+## Shadow mode
+
+The `shadow` block configures a watcher that polls the tracker for your tickets, triages each new
+one in the background, and later grades its answer against what actually happened to the ticket.
+It is off unless `enabled` is true. Every key below is optional; this is the block with its
+defaults written out:
+
+```yaml
+shadow:
+  enabled: false
+  interval: 15m
+  assignee: me
+  types: [bug]
+  statuses: []
+  since: armed
+  maxPerDay: 10
+  maxUSDPerDay: 10
+  concurrency: 1
+  model: ""
+  pauseAtQuota: 0.85
+  yieldToOperator: true
+  reproduce: true
+  outcomes:
+    interval: 6h
+    windowDays: 30
+    tracker: true
+  judge:
+    model: ""
+  digest:
+    enabled: false
+    at: "09:00"
+    webhookUrl: ""
+```
+
+| Key | Default | Validation |
+|---|---|---|
+| `enabled` | `false` | `true` requires `sources.tracker` |
+| `interval` | `15m` | a duration from `5m` to `24h` |
+| `assignee` | `me` | non-empty after trimming; `me` resolves the way the Queue lane's does |
+| `types` | `sources.tracker.queue.types`, else `[bug]` | folded like `queue.types`; a list that is present but names nothing is rejected (use `["*"]` for every type) |
+| `statuses` | `[]` (the adapter's own open default) | each entry non-empty after trimming |
+| `since` | `armed` | `armed`, a date (`2006-01-02`, midnight local time) or an RFC 3339 time. `armed` means from the moment shadow mode was first turned on |
+| `maxPerDay` | `10` | 1 to 100 shadow runs a day |
+| `maxUSDPerDay` | `10` | > 0 and ≤ 500; when `concurrency` > 1, at least `concurrency` × `budget.maxUsd` |
+| `concurrency` | `1` | 1 to 4 shadow runs at once |
+| `model` | `""` (the workspace model) | trimmed |
+| `pauseAtQuota` | `0.85` | `0` (never pause for quota), or 0 < x ≤ 1 |
+| `yieldToOperator` | `true` | defers new shadow runs while one of yours is preparing or running |
+| `reproduce` | `true` | lets a shadow run use the staging reproduction step |
+| `outcomes.interval` | `6h` | a duration from `15m` to `7d` |
+| `outcomes.windowDays` | `30` | 1 to 180 |
+| `outcomes.tracker` | `true` | asks the tracker for a ticket's outcome, when its adapter can answer |
+| `judge.model` | `""` (the workspace model) | trimmed |
+| `digest.enabled` | `false` | |
+| `digest.at` | `09:00` | `HH:MM`, 00–23 and 00–59 |
+| `digest.webhookUrl` | `""` | required when `digest.enabled` is true; a credential reference (`env:`, `keychain:`, `file:`, `cmd:`), never the URL. The host must be `hooks.slack.com`, which is checked when the digest is sent and by `sirdar doctor` |
+
+Durations take Go's syntax (`90m`, `1h30m`) or a whole number of days with a `d` suffix (`7d`).
+Every validation error starts `config: shadow.<key>:`, and a misspelled key fails the load like
+anywhere else in this file.
+
+A shadow run leaves nothing outside `.sirdar/`: no vault note, no register row, no notification,
+and no tracker or helpdesk write. What it did is recorded in the ledger at `.sirdar/shadow.jsonl`.
 
 ## `permissions.bash` glob semantics
 
