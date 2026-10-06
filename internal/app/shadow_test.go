@@ -1136,3 +1136,29 @@ func TestShadowRunLongTitle(t *testing.T) {
 	f.waitLedger(t, "finished", 1)
 	f.waitIdle(t)
 }
+
+// TestShadowPauseLines: the operator's pause and a limit's pause say who
+// wrote them, which is how PausedUntil lets the operator shorten their own
+// pause while a limit can only lengthen it.
+func TestShadowPauseLines(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	if _, err := f.svc.shadowPause(f.wsID, 24*time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	p, ok := shadowPauseFor(store.State{Status: store.StatusBlocked, Reason: "rate limited"}, f.clock.Now())
+	if !ok {
+		t.Fatal("no pause for a rate limit")
+	}
+	f.append(t, p)
+	st, err := f.svc.shadowPause(f.wsID, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := wireTime(f.clock.Now().Add(time.Hour)); st.State != "paused" || st.PausedUntil != want {
+		t.Errorf("status %s until %q, want paused until %q", st.State, st.PausedUntil, want)
+	}
+	lines := ofEv(f.ledger(t), "paused")
+	if len(lines) != 3 || lines[0].By != "operator" || lines[1].By != shadow.PauseByLimit || lines[2].By != "operator" {
+		t.Errorf("paused lines %s", dumpLedger(lines))
+	}
+}

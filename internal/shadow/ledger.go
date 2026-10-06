@@ -49,7 +49,7 @@ type Entry struct {
 	Key string    `json:"key,omitempty"`
 
 	Since *time.Time `json:"since,omitempty"` // armed
-	By    string     `json:"by,omitempty"`    // armed, resumed
+	By    string     `json:"by,omitempty"`    // armed, resumed; paused: operator or limit, none on older lines
 
 	Title     string     `json:"title,omitempty"`     // seen
 	Type      string     `json:"type,omitempty"`      // seen
@@ -333,24 +333,39 @@ func Armed(entries []Entry) (since time.Time, ok bool) {
 	return time.Time{}, false
 }
 
-// PausedUntil reports whether the watcher is paused at now. Every paused
-// line after the newest resumed line counts and the latest until among them
-// wins, because an automatic pause (a run already in flight hitting a rate
-// limit) is written while the operator's pause may still be in force, and
-// the shorter one must not end the operator's pause early. A resumed line
-// lifts every pause before it, and a pause whose until has passed is over
+// PauseByLimit marks a paused line written because a run hit a rate or
+// model limit. A paused line without it is the operator's, which is what
+// every paused line written before the field existed was taken to be.
+const PauseByLimit = "limit"
+
+// PausedUntil reports whether the watcher is paused at now. The operator's
+// newest pause sets the pause, replacing their earlier ones, so they can
+// shorten it as well as lengthen it. A limit's pause written after it can
+// only lengthen it: runs already in flight keep going after shadow pause,
+// and one that hits a rate limit must not end the operator's pause early.
+// Without an operator pause, the latest limit pause holds. A resumed line
+// clears every pause before it, and a pause whose until has passed is over
 // without anyone writing a line for it.
 func PausedUntil(entries []Entry, now time.Time) (until time.Time, reason string, paused bool) {
+	consider := func(e Entry) {
+		if e.Until == nil || !e.Until.After(now) {
+			return
+		}
+		if !paused || e.Until.After(until) {
+			until, reason, paused = *e.Until, e.Reason, true
+		}
+	}
 	for i := len(entries) - 1; i >= 0; i-- {
 		e := entries[i]
 		if e.Ev == "resumed" {
 			break
 		}
-		if e.Ev != "paused" || e.Until == nil || !e.Until.After(now) {
+		if e.Ev != "paused" {
 			continue
 		}
-		if !paused || e.Until.After(until) {
-			until, reason, paused = *e.Until, e.Reason, true
+		consider(e)
+		if e.By != PauseByLimit {
+			break
 		}
 	}
 	return until, reason, paused

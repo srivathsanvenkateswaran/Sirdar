@@ -236,27 +236,37 @@ func TestAppendAfterTornLine(t *testing.T) {
 	}
 }
 
-// An automatic pause written while the operator's pause is in force (a run
-// already in flight hit a rate limit) must not end the operator's pause
-// early: the latest until since the last resume wins.
-func TestPausedUntilKeepsTheLongerOperatorPause(t *testing.T) {
+// TestPausedUntilOperatorAndLimit: the operator's newest pause sets the
+// pause, and a limit's pause written after it can only lengthen it.
+func TestPausedUntilOperatorAndLimit(t *testing.T) {
 	now := t0
-	day := now.Add(24 * time.Hour)
-	half := now.Add(30 * time.Minute)
-	entries := []Entry{
-		{At: now.Add(-time.Hour), Ev: "paused", Until: &day, Reason: "paused by the operator"},
-		{At: now, Ev: "paused", Until: &half, Reason: "rate limited"},
+	at := func(d time.Duration) *time.Time { u := now.Add(d); return &u }
+	op := func(written, d time.Duration) Entry {
+		return Entry{At: now.Add(written), Ev: "paused", Until: at(d), Reason: "paused by the operator", By: "operator"}
 	}
-	until, reason, ok := PausedUntil(entries, now.Add(time.Hour))
-	if !ok || !until.Equal(day) || reason != "paused by the operator" {
-		t.Fatalf("PausedUntil = %v, %q, %v; want the operator's 24h pause", until, reason, ok)
+	limit := func(written, d time.Duration) Entry {
+		return Entry{At: now.Add(written), Ev: "paused", Until: at(d), Reason: "rate limited", By: PauseByLimit}
 	}
-	until, reason, ok = PausedUntil(entries, now)
-	if !ok || !until.Equal(day) || reason != "paused by the operator" {
-		t.Fatalf("PausedUntil at the automatic pause = %v, %q, %v; want the operator's 24h pause", until, reason, ok)
+	cases := []struct {
+		name    string
+		entries []Entry
+		until   time.Duration
+		reason  string
+	}{
+		{"operator 24h then operator 1h", []Entry{op(-2*time.Minute, 24*time.Hour), op(-time.Minute, time.Hour)}, time.Hour, "paused by the operator"},
+		{"operator 24h then limit 30m", []Entry{op(-2*time.Minute, 24*time.Hour), limit(-time.Minute, 30*time.Minute)}, 24 * time.Hour, "paused by the operator"},
+		{"operator 1h then limit 3h", []Entry{op(-2*time.Minute, time.Hour), limit(-time.Minute, 3*time.Hour)}, 3 * time.Hour, "rate limited"},
+		{"limit 3h before the operator's 1h does not count", []Entry{limit(-2*time.Minute, 3*time.Hour), op(-time.Minute, time.Hour)}, time.Hour, "paused by the operator"},
+		{"an old line without by is the operator's", []Entry{op(-2*time.Minute, 24*time.Hour), {At: now.Add(-time.Minute), Ev: "paused", Until: at(time.Hour), Reason: "paused by the operator"}}, time.Hour, "paused by the operator"},
 	}
-	resumed := append(append([]Entry{}, entries...), Entry{At: now.Add(time.Minute), Ev: "resumed", By: "operator"})
-	if _, _, ok := PausedUntil(resumed, now.Add(time.Hour)); ok {
-		t.Fatal("paused after a later resumed line")
+	for _, c := range cases {
+		until, reason, ok := PausedUntil(c.entries, now)
+		if !ok || !until.Equal(now.Add(c.until)) || reason != c.reason {
+			t.Errorf("%s: PausedUntil = %v, %q, %v; want +%v %q", c.name, until.Sub(now), reason, ok, c.until, c.reason)
+		}
+	}
+	resumed := []Entry{op(-2*time.Minute, 24*time.Hour), limit(-time.Minute, 30*time.Minute), {At: now, Ev: "resumed", By: "operator"}}
+	if _, _, ok := PausedUntil(resumed, now); ok {
+		t.Error("paused after a later resumed line")
 	}
 }

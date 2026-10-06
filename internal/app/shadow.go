@@ -337,7 +337,7 @@ func (s *Service) shadowPause(wsID string, d time.Duration) (ShadowStatus, error
 	}
 	now := s.now()
 	until := now.Add(d)
-	if err := shadow.Append(ws.Root, shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "paused by the operator"}); err != nil {
+	if err := shadow.Append(ws.Root, shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "paused by the operator", By: "operator"}); err != nil {
 		return ShadowStatus{}, err
 	}
 	return s.shadowPublish(ws, cfg), nil
@@ -1262,10 +1262,10 @@ func shadowPauseFor(st store.State, now time.Time) (shadow.Entry, bool) {
 				until = t
 			}
 		}
-		return shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "rate limited"}, true
+		return shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "rate limited", By: shadow.PauseByLimit}, true
 	case runner.ModelLimited(st.Reason) != "":
 		until := now.Add(shadowModelPause)
-		return shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "model limit"}, true
+		return shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "model limit", By: shadow.PauseByLimit}, true
 	}
 	return shadow.Entry{}, false
 }
