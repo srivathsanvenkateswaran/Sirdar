@@ -463,9 +463,10 @@ func TestBreachInTheNoteTurnFailsTheRunAndClearsThePhase(t *testing.T) {
 // the two together are over it. The run is held to the total, the note
 // session is told what is left, and the run's usage is the sum. The note
 // session resumes the reply's, so its $6 is the conversation's running
-// total: $3 of its own.
+// total: $3 of its own. The note turn's own cap is off here, so the turns
+// it is told are what the run budget left rather than phases.note.maxTurns.
 func TestBudgetCoversBothTurnsTogether(t *testing.T) {
-	cfg := newWorkspace(t)
+	cfg := newWorkspaceWith(t, configYAML+"phases:\n  note:\n    maxTurns: 0\n")
 	p := &stubProvider{script: replyEventsThenNote([]provider.Event{
 		{Kind: provider.EvUsage, Turns: 2, CostUSD: 3},
 		{Kind: provider.EvFinal, Text: "The ledger skips zero rows."},
