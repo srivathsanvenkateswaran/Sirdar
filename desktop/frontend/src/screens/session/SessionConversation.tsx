@@ -34,6 +34,7 @@ import ProviderMark from '../../ui/provider-mark'
 import { stateWord } from '../../ui/status-badge'
 import Banner from '../../ui/banner'
 import { useOptionalStore } from '../../store/useAppStore'
+import type { ToastLink } from '../../store/appStore'
 import AnswerCard, { SupersededAnswer } from './AnswerCard'
 import AskCard from './AskCard'
 import BundleView from './BundleView'
@@ -116,6 +117,18 @@ function withLocalQueued(record: QueuedSteer[] | undefined, local: QueuedSteer[]
 
 /** Why a shadow run's composer is off: the server refuses its steers, and the reader is told where to go instead. */
 const SHADOW_REASON = 'Shadow runs are measurements. Start a session to continue this work.'
+
+/** Where a remembered message waits for review. */
+const PLAYBOOKS_LINK: ToastLink = { label: 'Open Playbooks', to: { name: 'settings', page: 'playbooks' } }
+
+/** The button under an operator message that offers it to the playbooks. */
+function RememberButton({ busy, onRemember }: { busy: boolean; onRemember: () => void }): JSX.Element {
+  return (
+    <button type="button" className="sc-you__remember" disabled={busy} onClick={onRemember}>
+      {busy ? 'Remembering…' : 'Remember this'}
+    </button>
+  )
+}
 
 export interface SessionConversationProps {
   transport: Transport
@@ -434,7 +447,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
       setRemembering((prev) => [...prev, index])
       try {
         const made = await transport.remember(workspaceId, runId, index)
-        store?.toast(`Suggested an addition to ${made.playbook}. Review it in Settings › Playbooks.`)
+        store?.toast(`Suggested an addition to ${made.playbook}. Review it in Settings › Playbooks.`, 'info', PLAYBOOKS_LINK)
       } catch (err: unknown) {
         store?.toast(withoutCode(err), 'error')
       } finally {
@@ -576,9 +589,10 @@ export default function SessionConversation(props: SessionConversationProps): JS
           </div>
         )
       case 'you': {
-        // A grant is a click, not words, and an echo of a send has no line
-        // in the log yet for the service to read back.
-        const rememberable = !shadow && item.event !== 'grant' && Number.isInteger(item.index)
+        // A grant is a click, not words; an echo of a send has no line in
+        // the log yet for the service to read back; and an empty answer —
+        // the one a model-limit Continue logs — says nothing to keep.
+        const rememberable = !shadow && item.event !== 'grant' && Number.isInteger(item.index) && item.text.trim() !== ''
         const busy = remembering.includes(item.index)
         return (
           <div key={item.index} className="sc-you" data-item={item.index} data-testid="you-bubble" data-busy={busy || undefined}>
@@ -598,11 +612,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               ) : null}
             </div>
             <div dir="auto">{item.text}</div>
-            {rememberable ? (
-              <button type="button" className="sc-you__remember" disabled={busy} onClick={() => void remember(item.index)}>
-                {busy ? 'Remembering…' : 'Remember this'}
-              </button>
-            ) : null}
+            {rememberable ? <RememberButton busy={busy} onRemember={() => void remember(item.index)} /> : null}
           </div>
         )
       }
@@ -706,6 +716,23 @@ export default function SessionConversation(props: SessionConversationProps): JS
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model.items, ...drawnWith],
   )
+
+  /*
+   * What the operator asked for when they started the run. It is not in the
+   * log, so it is drawn ahead of it; the service reads it back as index 0.
+   */
+  const instruction = (detail?.instruction ?? '').trim()
+  const askedBubble = instruction ? (
+    <div className="sc-you" data-testid="instruction-bubble" data-busy={remembering.includes(0) || undefined}>
+      <div className="sc-you__meta">
+        <span>You</span>
+        <span>·</span>
+        <span>started the run</span>
+      </div>
+      <div dir="auto">{instruction}</div>
+      {shadow ? null : <RememberButton busy={remembering.includes(0)} onRemember={() => void remember(0)} />}
+    </div>
+  ) : null
 
   if (loadError || !detail) {
     return (
@@ -835,6 +862,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
             dir="ltr"
           >
             <div className="sc-flow">
+              {askedBubble}
               {model.items.length === 0 ? (
                 <p className="sc-empty-flow">
                   {events.length === 0 ? 'No events yet. They appear here as the agent works.' : 'Nothing the agent did or said yet.'}

@@ -40,6 +40,14 @@ export interface Toast {
   id: number
   tone: 'info' | 'error'
   text: string
+  /** Where the outcome can be read, for a toast that names a place: Settings › Playbooks for a remembered message. */
+  link?: ToastLink
+}
+
+/** A toast's one link: the words on it and the screen it opens. */
+export interface ToastLink {
+  label: string
+  to: Screen
 }
 
 /**
@@ -235,8 +243,10 @@ export interface AppStore {
   /** The sidebar's "Search notes" over the current workspace. Rejections are the caller's to show. */
   search(q: string): Promise<SearchHit[]>
   refresh(): Promise<void>
-  toast(text: string, tone?: Toast['tone']): void
+  toast(text: string, tone?: Toast['tone'], link?: ToastLink): void
   dismissToast(id: number): void
+  /** Opens the screen a toast links to, and lets the toast go. */
+  followToast(id: number): void
   dispose(): void
 }
 
@@ -358,14 +368,19 @@ export function createAppStore(transport: Transport): AppStore {
     emit()
   }
 
-  function toast(text: string, tone: Toast['tone'] = 'info'): void {
+  function toast(text: string, tone: Toast['tone'] = 'info', link?: ToastLink): void {
     toastSeq += 1
-    const entry: Toast = { id: toastSeq, tone, text }
+    const entry: Toast = link ? { id: toastSeq, tone, text, link } : { id: toastSeq, tone, text }
     set({ toasts: [...state.toasts, entry] })
   }
 
   function dismissToast(id: number): void {
     set({ toasts: state.toasts.filter((t) => t.id !== id) })
+  }
+
+  function followToast(id: number): void {
+    const to = state.toasts.find((t) => t.id === id)?.link?.to
+    set({ toasts: state.toasts.filter((t) => t.id !== id), ...(to ? { screen: to } : {}) })
   }
 
   async function loadRuns(workspaceId: string): Promise<void> {
@@ -865,6 +880,7 @@ export function createAppStore(transport: Transport): AppStore {
 
     toast,
     dismissToast,
+    followToast,
 
     dispose() {
       disposed = true

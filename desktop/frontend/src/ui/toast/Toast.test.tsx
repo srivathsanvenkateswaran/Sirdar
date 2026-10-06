@@ -30,6 +30,19 @@ describe('Toasts', () => {
     expect(container.querySelector('.sd-toast')).toHaveAttribute('data-tone', 'error')
   })
 
+  it('carries a link to where the outcome can be read, and follows it', () => {
+    const onLink = vi.fn()
+    render(
+      <Toasts
+        toasts={[{ id: 4, tone: 'info', text: 'Suggested an addition.', link: { label: 'Open Playbooks' } }]}
+        onDismiss={() => {}}
+        onLink={onLink}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Open Playbooks' }))
+    expect(onLink).toHaveBeenCalledWith(4)
+  })
+
   it('dismisses on click', () => {
     const onDismiss = vi.fn()
     render(<Toasts toasts={[{ id: 3, tone: 'info', text: 'Done.' }]} onDismiss={onDismiss} />)

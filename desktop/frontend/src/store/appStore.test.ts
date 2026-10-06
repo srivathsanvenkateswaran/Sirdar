@@ -109,6 +109,16 @@ describe('createAppStore', () => {
     expect(state.toasts).toEqual([])
   })
 
+  it('keeps a toast\'s link, and following it opens the screen it names', () => {
+    store = createAppStore(createFakeTransport())
+    store.toast('Suggested an addition.', 'info', { label: 'Open Playbooks', to: { name: 'settings', page: 'playbooks' } })
+    const [entry] = store.getState().toasts
+    expect(entry.link).toEqual({ label: 'Open Playbooks', to: { name: 'settings', page: 'playbooks' } })
+    store.followToast(entry.id)
+    expect(store.getState().screen).toEqual({ name: 'settings', page: 'playbooks' })
+    expect(store.getState().toasts).toEqual([])
+  })
+
   it('reports a real queue failure as an error toast', async () => {
     const transport = createFakeTransport()
     transport.failQueue(new Error('connection refused'))

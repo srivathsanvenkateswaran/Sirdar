@@ -16,6 +16,9 @@ Built. `desktop/frontend/src/ui/toast/`. It replaces `.toasts` and `.toast` in
   2px `border-inline-start` in the tone's hue, `--sd-radius-sm`,
   `--sd-shadow-soft`.
 - `span.sd-toast__text` — `dir="auto"`, so an Arabic message lays itself out.
+- `button.sd-toast__link` — optional, when the toast carries `link` and the
+  stack an `onLink`: accent text, underlined, opening where the outcome can be
+  read (Settings › Playbooks after Remember this).
 - `button.sd-toast__dismiss` — 24px, `aria-label="Dismiss"`.
 
 ## States
@@ -52,8 +55,9 @@ Built. `desktop/frontend/src/ui/toast/`. It replaces `.toasts` and `.toast` in
   "Add a workspace before starting a run."
 - **Do** let a toast dismiss itself after its time is up, and let it be
   dismissed by hand before then.
-- **Don't** put a control other than Dismiss in a toast. A toast that can
-  disappear cannot hold the only route to an action.
+- **Don't** put a control other than Dismiss in a toast, besides one link to
+  a place the reader can also reach without it. A toast that can disappear
+  cannot hold the only route to an action.
 - **Do** keep the region polite. A toast that interrupts a screen reader
   mid-sentence to report a success is worse than no toast.
 
@@ -73,3 +77,7 @@ Added. Initial spec from `styles.css` `.toast`. `right`/`bottom` become
 `inset-inline-end`/`inset-block-end`; `border-left` becomes
 `border-inline-start`; the dismiss target grows from a bare glyph to 24px; the
 dismiss delay becomes a prop so the gallery can hold a specimen open.
+
+### 2026-10-06
+An optional link, for a toast that names a place: Remember this links to
+Settings › Playbooks. The place stays reachable without it.

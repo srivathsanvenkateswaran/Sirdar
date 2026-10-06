@@ -213,7 +213,8 @@ const ConnectedToasts = memo(function ConnectedToasts(): JSX.Element {
   const store = useStore()
   const toasts = useAppState((s) => s.toasts)
   const dismissToast = useCallback((id: number) => store.dismissToast(id), [store])
-  return <Toasts toasts={toasts} onDismiss={dismissToast} />
+  const followToast = useCallback((id: number) => store.followToast(id), [store])
+  return <Toasts toasts={toasts} onDismiss={dismissToast} onLink={followToast} />
 })
 
 function Shell(): JSX.Element {

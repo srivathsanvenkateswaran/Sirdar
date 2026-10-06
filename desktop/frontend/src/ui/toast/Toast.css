@@ -43,6 +43,23 @@
   overflow-wrap: anywhere;
 }
 
+/* The one link a toast may carry: text, not a button's chrome, so Dismiss stays the toast's only control in look. */
+.sd-toast__link {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sd-accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.sd-toast__link:hover {
+  color: var(--sd-ink);
+}
+
 .sd-toast__dismiss {
   flex: none;
   min-width: 24px;

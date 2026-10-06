@@ -508,11 +508,14 @@ function startingTarget(s: PlaybookSuggestion, names: string[]): { target: strin
 function SuggestionRow({
   suggestion,
   names,
+  ready,
   onAccept,
   onDismiss,
 }: {
   suggestion: PlaybookSuggestion
   names: string[]
+  /** The playbook list has been read; until then a listed target would be taken for a new one. */
+  ready: boolean
   onAccept: (input: AcceptSuggestionInput) => Promise<void>
   onDismiss: () => Promise<void>
 }): JSX.Element {
@@ -666,7 +669,7 @@ function SuggestionRow({
             <Button size="sm" variant="ghost" busy={busy === 'dismiss'} onClick={() => void run('dismiss', onDismiss)}>
               Dismiss
             </Button>
-            <Button size="sm" variant="pale" onClick={startEditing} disabled={busy !== ''}>
+            <Button size="sm" variant="pale" onClick={startEditing} disabled={busy !== '' || !ready}>
               Accept
             </Button>
           </div>
@@ -791,6 +794,7 @@ export default function PlaybooksPage({
                 key={s.id}
                 suggestion={s}
                 names={taken}
+                ready={list.status === 'done'}
                 onAccept={(input) => playbooks.accept(s.id, input)}
                 onDismiss={() => playbooks.dismiss(s.id)}
               />

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Transport } from '../../api/types'
@@ -501,6 +501,23 @@ describe('pending suggestions', () => {
       </PrimaryActionProvider>,
     )
     expect(await screen.findByTestId('suggestion-row')).toBeInTheDocument()
+  })
+
+  it('holds Accept until the playbook list is read, so a known target is not called new', async () => {
+    const t = fake({ playbooks: BOOKS, suggestions: [REMEMBERED] })
+    let release: () => void = () => {}
+    const read = t.playbooks
+    t.playbooks = (ws) =>
+      new Promise((resolve) => {
+        release = () => void read(ws).then(resolve)
+      })
+    open(t)
+    const row = await screen.findByTestId('suggestion-row')
+    expect(within(row).getByRole('button', { name: 'Accept' })).toBeDisabled()
+    await act(async () => release())
+    await waitFor(() => expect(within(row).getByRole('button', { name: 'Accept' })).toBeEnabled())
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept' }))
+    expect(within(row).queryByRole('option', { name: /\(new\)/ })).toBeNull()
   })
 
   it('dismisses a suggestion and the row goes once the list is read again', async () => {

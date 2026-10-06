@@ -1,7 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { FixStart, NoteKind, PermissionDecision, SourcesSummary, Transport } from '../api/types'
 import { modelOf } from '../components/session/model'
-import RunHeader from '../components/session/RunHeader'
+import RunHeader, { LayoutSwitcher } from '../components/session/RunHeader'
 import { useSessionModel, withoutCode } from '../components/session/useSessionModel'
 import { LIVE, useRunFeed, withEcho, type RunFeed } from '../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
@@ -118,6 +118,15 @@ export default function Session(props: SessionProps): JSX.Element {
   // A shadow run opens in the conversation layout whatever the preference:
   // that is the layout that draws it read-only, the way the service treats it.
   const shown: SessionLayout = detail?.shadow ? 'conversation' : layout
+  // The header's switcher says so, rather than showing a preference this
+  // run is not drawn in. Held in a memo: the header is memoised on its props.
+  const shadowSwitcher = useMemo(
+    () =>
+      detail?.shadow ? (
+        <LayoutSwitcher value="conversation" onChange={setSessionLayout} lockedBecause="Shadow runs open in Conversation, the read-only layout" />
+      ) : undefined,
+    [detail?.shadow],
+  )
 
   // The frame is always here, switch or no switch: adding it only while the
   // switch is on would remount the layout it is meant to keep on screen.
@@ -131,6 +140,7 @@ export default function Session(props: SessionProps): JSX.Element {
           variant={shown === 'workbench' ? 'workbench' : 'default'}
           notePath={notePath}
           fallbackModel={fallbackModel}
+          switcher={shadowSwitcher}
           transport={transport}
           workspaceId={workspaceId}
         />

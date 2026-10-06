@@ -7,11 +7,15 @@ export interface ToastItem {
   id: number
   tone: ToastTone
   text: string
+  /** A link to where the outcome can be read. It is never the only way there: the place it opens is reachable without it. */
+  link?: { label: string }
 }
 
 export interface ToastsProps {
   toasts: ToastItem[]
   onDismiss: (id: number) => void
+  /** Follows a toast's link; a toast with a link and no handler draws none. */
+  onLink?: (id: number) => void
   /** How long a toast stays before it dismisses itself. */
   dismissAfterMs?: number
 }
@@ -21,10 +25,12 @@ const DEFAULT_DISMISS_MS = 7000
 function ToastRow({
   toast,
   onDismiss,
+  onLink,
   dismissAfterMs,
 }: {
   toast: ToastItem
   onDismiss: (id: number) => void
+  onLink?: (id: number) => void
   dismissAfterMs: number
 }): JSX.Element {
   useEffect(() => {
@@ -37,6 +43,11 @@ function ToastRow({
       <span className="sd-toast__text" dir="auto">
         {toast.text}
       </span>
+      {toast.link && onLink ? (
+        <button type="button" className="sd-toast__link" onClick={() => onLink(toast.id)}>
+          {toast.link.label}
+        </button>
+      ) : null}
       <button
         type="button"
         className="sd-toast__dismiss"
@@ -61,6 +72,7 @@ function ToastRow({
 export default function Toasts({
   toasts,
   onDismiss,
+  onLink,
   dismissAfterMs = DEFAULT_DISMISS_MS,
 }: ToastsProps): JSX.Element | null {
   if (toasts.length === 0) return null
@@ -71,6 +83,7 @@ export default function Toasts({
           key={toast.id}
           toast={toast}
           onDismiss={onDismiss}
+          onLink={onLink}
           dismissAfterMs={dismissAfterMs}
         />
       ))}

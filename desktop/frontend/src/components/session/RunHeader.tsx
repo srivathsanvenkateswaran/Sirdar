@@ -42,9 +42,12 @@ const LAYOUT_ICONS: Record<SessionLayout, JSX.Element> = {
 export function LayoutSwitcher({
   value,
   onChange,
+  lockedBecause,
 }: {
   value: SessionLayout
   onChange: (layout: SessionLayout) => void
+  /** Why the switcher is held on `value` for this run; every option is disabled and says so. */
+  lockedBecause?: string
 }): JSX.Element {
   return (
     <div className="sn-switch" role="radiogroup" aria-label="Session layout">
@@ -56,7 +59,8 @@ export function LayoutSwitcher({
           className="sn-switch__opt"
           aria-checked={o.id === value}
           aria-label={o.label}
-          title={`${o.label} layout`}
+          title={lockedBecause ?? `${o.label} layout`}
+          disabled={lockedBecause !== undefined}
           onClick={() => onChange(o.id)}
         >
           {LAYOUT_ICONS[o.id]}

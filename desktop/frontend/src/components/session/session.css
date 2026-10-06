@@ -440,6 +440,16 @@ a.sn-head__other:hover {
   color: var(--sd-ink);
 }
 
+/* Held for a run that opens in one layout only: the options stay readable, and do not answer the pointer. */
+.sn-switch__opt:disabled {
+  cursor: default;
+}
+
+.sn-switch__opt:disabled:not([aria-checked='true']):hover {
+  background: transparent;
+  color: var(--sd-ink-3);
+}
+
 /* ------------------------------------------------------------- the path */
 
 .sn-path {

@@ -1048,6 +1048,27 @@ describe('SessionConversation', () => {
       expect(screen.getByText('Shadow run. Nothing was filed, sent or registered')).toBeInTheDocument()
     })
 
+    it('shows Conversation in the header switcher, disabled, and says why', async () => {
+      setSessionLayout('document')
+      const f = fake({ detail: SHADOW })
+      renderScene(f)
+      await screen.findByTestId('conversation')
+      const group = screen.getByRole('radiogroup', { name: 'Session layout' })
+      expect(within(group).getByRole('radio', { name: 'Conversation' })).toHaveAttribute('aria-checked', 'true')
+      for (const radio of within(group).getAllByRole('radio')) {
+        expect(radio).toBeDisabled()
+        expect(radio).toHaveAttribute('title', 'Shadow runs open in Conversation, the read-only layout')
+      }
+    })
+
+    it('shows its instruction with no Remember this', async () => {
+      const f = fake({ detail: { ...SHADOW, instruction: 'Check the tax rounding first' } })
+      renderScene(f)
+      const asked = await screen.findByTestId('instruction-bubble')
+      expect(asked).toHaveTextContent('Check the tax rounding first')
+      expect(within(asked).queryByRole('button', { name: 'Remember this' })).toBeNull()
+    })
+
     it('offers no Remember this on its messages', async () => {
       const f = fake({ detail: SHADOW })
       renderScene(f)
@@ -1100,7 +1121,10 @@ describe('SessionConversation', () => {
       expect(busy).toBeDisabled()
 
       await act(async () => release())
-      expect(toast).toHaveBeenCalledWith('Suggested an addition to 20-orders.md. Review it in Settings › Playbooks.')
+      expect(toast).toHaveBeenCalledWith('Suggested an addition to 20-orders.md. Review it in Settings › Playbooks.', 'info', {
+        label: 'Open Playbooks',
+        to: { name: 'settings', page: 'playbooks' },
+      })
       expect(within(bubble).getByRole('button', { name: 'Remember this' })).toBeEnabled()
     })
 
@@ -1115,6 +1139,31 @@ describe('SessionConversation', () => {
       await waitFor(() => expect(toast).toHaveBeenCalledTimes(1))
       expect(toast.mock.calls[0][0]).toMatch(/its messages are not remembered/)
       expect(toast.mock.calls[0][1]).toBe('error')
+    })
+
+    it('offers the run\'s instruction as index 0', async () => {
+      const f = fake({ detail: { ...TRIAGE_DETAIL, instruction: 'Check the tax rounding first' } })
+      f.transport.remember = vi.fn(async (_ws: string, runId: string) => suggestion({ runId }))
+      withStore(f)
+      const asked = await screen.findByTestId('instruction-bubble')
+      expect(within(asked).getByText('Check the tax rounding first')).toHaveAttribute('dir', 'auto')
+      fireEvent.click(within(asked).getByRole('button', { name: 'Remember this' }))
+      await waitFor(() => expect(f.transport.remember).toHaveBeenCalledWith('ws1', TRIAGE_DETAIL.runId, 0))
+    })
+
+    it('draws no instruction when the run was started with none worth keeping', async () => {
+      const f = fake({ detail: { ...TRIAGE_DETAIL, instruction: '   ' } })
+      withStore(f)
+      await screen.findByTestId('you-bubble')
+      expect(screen.queryByTestId('instruction-bubble')).toBeNull()
+    })
+
+    it('offers nothing on a message with no words, like the answer a model-limit Continue logs', async () => {
+      const events: RunEvent[] = [init('2026-09-15T12:11:05Z', ROOT), { t: '2026-09-15T12:11:09Z', kind: 'answer', payload: { text: '  ' } }]
+      const f = fake({ events })
+      withStore(f)
+      await screen.findByTestId('you-bubble')
+      expect(screen.queryByRole('button', { name: 'Remember this' })).toBeNull()
     })
 
     it('offers nothing on a permission grant', async () => {
