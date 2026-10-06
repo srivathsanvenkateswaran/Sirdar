@@ -16,7 +16,7 @@ type ReproPrompt struct {
 // that the reply has to say what reproduced and what did not. "" when the
 // run has no browser or no hosts.
 func reproSection(r *ReproPrompt) string {
-	if r == nil {
+	if r == nil || r.Server == "" || len(r.Hosts) == 0 {
 		return ""
 	}
 	return "# Reproduce on staging\n\n" +

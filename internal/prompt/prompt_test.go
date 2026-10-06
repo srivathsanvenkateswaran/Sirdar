@@ -857,8 +857,14 @@ func TestReproSectionText(t *testing.T) {
 	if got := reproSection(fixedRepro()); got != reproSectionWant {
 		t.Errorf("reproSection:\n--- got ---\n%s\n--- want ---\n%s", got, reproSectionWant)
 	}
-	if got := reproSection(nil); got != "" {
-		t.Errorf("reproSection(nil) = %q", got)
+	for _, r := range []*ReproPrompt{
+		nil,
+		{Server: "", Hosts: []string{"staging.oxo.example"}},
+		{Server: "playwright"},
+	} {
+		if got := reproSection(r); got != "" {
+			t.Errorf("reproSection(%+v) = %q, want \"\"", r, got)
+		}
 	}
 }
 

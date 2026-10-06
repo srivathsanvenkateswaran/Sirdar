@@ -3,7 +3,9 @@ package prompt
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -71,6 +73,10 @@ type frontmatter struct {
 // a gotcha the operator wrote down. A block with no closing line is no
 // block at all, and the whole file is the body.
 func ParsePlaybook(name, path, data string) Playbook {
+	// An editor that saves with a UTF-8 byte-order mark puts it before the
+	// opening ---, and the block would otherwise be read as body text: the
+	// playbook would load always-on with no warning to say why.
+	data = strings.TrimPrefix(data, "\uFEFF")
 	p := Playbook{Name: name, Body: data, Path: path}
 	if block, rest, found, closed := splitFrontmatter(data); found {
 		if !closed {
@@ -134,9 +140,9 @@ func decodeFrontmatter(block string) (frontmatter, error) {
 	var fm frontmatter
 	dec := yaml.NewDecoder(bytes.NewReader([]byte(block)))
 	dec.KnownFields(true)
-	// An empty block decodes to io.EOF, which is a block that says
-	// nothing rather than a broken one.
-	if err := dec.Decode(&fm); err != nil && strings.TrimSpace(block) != "" {
+	// A block with no YAML document in it (empty, or only comments)
+	// decodes to io.EOF: a block that says nothing, not a broken one.
+	if err := dec.Decode(&fm); err != nil && !errors.Is(err, io.EOF) {
 		return frontmatter{}, err
 	}
 	for _, k := range fm.Kinds {

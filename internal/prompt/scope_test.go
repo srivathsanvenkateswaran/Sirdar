@@ -401,3 +401,25 @@ func TestBuiltinPlaybooksCarryFrontmatter(t *testing.T) {
 		}
 	}
 }
+
+// TestParsePlaybookBOMFrontmatter pins a file saved by an editor that
+// writes a UTF-8 byte-order mark: its frontmatter is still frontmatter, not
+// body text that leaves the playbook always-on with nobody told.
+func TestParsePlaybookBOMFrontmatter(t *testing.T) {
+	p := ParsePlaybook("x", "/p", "\uFEFF---\nkinds: [triage]\n---\nBody.\n")
+	if !reflect.DeepEqual(p.Kinds, []string{"triage"}) || p.Body != "Body.\n" || p.FrontmatterErr != "" {
+		t.Errorf("got Kinds %q Body %q FrontmatterErr %q", p.Kinds, p.Body, p.FrontmatterErr)
+	}
+}
+
+// TestParsePlaybookCommentOnlyFrontmatter pins a block holding only a YAML
+// comment as one that says nothing, not one that is broken.
+func TestParsePlaybookCommentOnlyFrontmatter(t *testing.T) {
+	p := ParsePlaybook("x", "/p", "---\n# note\n---\nBody.\n")
+	if p.FrontmatterErr != "" || p.Kinds != nil || p.When != nil || p.Body != "Body.\n" || p.About != "Body." {
+		t.Errorf("got %+v", p)
+	}
+	if w := FrontmatterWarnings([]Playbook{p}); len(w) != 0 {
+		t.Errorf("FrontmatterWarnings = %q, want none", w)
+	}
+}

@@ -969,3 +969,23 @@ func TestTriageTemplateRendersReproduction(t *testing.T) {
 		t.Errorf("the reproduction block is not where it should be:\n%s", got)
 	}
 }
+
+// TestTriageTemplateOmitsEmptyReproductionLists pins a reproduction that
+// was not attempted and recorded no steps or evidence: the block says the
+// outcome and carries no empty list under a label.
+func TestTriageTemplateOmitsEmptyReproductionLists(t *testing.T) {
+	doc := triageWithReproduction(t, `{"attempted": false, "outcome": "not_attempted", "where": null, "steps": [], "evidence": []}`)
+	if err := Validate(Triage, doc); err != nil {
+		t.Fatalf("Validate: %v", err)
+	}
+	got, err := (Renderer{}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	if !strings.Contains(got, "## Reproduction\n\n**Outcome:** not_attempted\n\n## Root Cause Hypothesis") {
+		t.Errorf("the reproduction block is not the outcome line alone:\n%s", got)
+	}
+	if strings.Contains(got, "Evidence:\n\n## ") || strings.Contains(got, "<no value>") {
+		t.Errorf("an empty reproduction list rendered a label or a placeholder:\n%s", got)
+	}
+}
