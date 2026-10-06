@@ -437,6 +437,25 @@ describe('http transport', () => {
     )
   })
 
+  // Gathered rows carry a bundle-relative path under context/, served by
+  // the same bundle/{name...} route attachments use (internal/httpapi
+  // contextFile); the URL builder has to accept that prefix too, or the
+  // web build's "open" button on a gathered file throws instead of
+  // resolving.
+  it('builds a URL for a gathered context file, and still refuses anything else', async () => {
+    const t = createTransport()
+
+    await expect(t.attachmentURL('ws1', 'r1', 'context/pr-oxo-1.md')).resolves.toBe(
+      '/api/workspaces/ws1/runs/r1/bundle/context/pr-oxo-1.md',
+    )
+    await expect(t.attachmentURL('ws1', 'r1', 'attachments/voice-note.m4a')).resolves.toBe(
+      '/api/workspaces/ws1/runs/r1/bundle/attachments/voice-note.m4a',
+    )
+    await expect(t.attachmentURL('ws1', 'r1', '../ticket.json')).rejects.toThrow(
+      'not a bundle attachment',
+    )
+  })
+
   it('reads one playbook as markdown, with its name escaped', async () => {
     const spy = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>

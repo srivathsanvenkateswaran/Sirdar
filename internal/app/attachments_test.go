@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -33,7 +34,7 @@ func bundleWithAttachment(t *testing.T) (string, string) {
 
 func TestResolveUnderServesAnAttachment(t *testing.T) {
 	bundle, _ := bundleWithAttachment(t)
-	full, err := resolveUnder(bundle, "attachments/screenshot.png")
+	full, err := resolveUnder(bundle, "", "attachments/screenshot.png")
 	if err != nil {
 		t.Fatalf("resolveUnder: %v", err)
 	}
@@ -60,7 +61,7 @@ func TestResolveUnderRefusesEverythingOutsideTheBundle(t *testing.T) {
 	}
 	for name, path := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := resolveUnder(bundle, path); err == nil {
+			if _, err := resolveUnder(bundle, "", path); err == nil {
 				t.Fatalf("resolveUnder(%q) was allowed", path)
 			}
 		})
@@ -76,7 +77,7 @@ func TestResolveUnderRefusesASymlinkOutOfTheBundle(t *testing.T) {
 	if err := os.Symlink(secret, link); err != nil {
 		t.Skipf("symlink: %v", err)
 	}
-	if _, err := resolveUnder(bundle, "attachments/leak.txt"); err == nil {
+	if _, err := resolveUnder(bundle, "", "attachments/leak.txt"); err == nil {
 		t.Fatal("a symlink pointing out of the bundle was served")
 	}
 
@@ -89,8 +90,39 @@ func TestResolveUnderRefusesASymlinkOutOfTheBundle(t *testing.T) {
 	if err := os.Symlink(elsewhere, filepath.Join(bundle, "attachments", "out")); err != nil {
 		t.Skipf("symlink: %v", err)
 	}
-	if _, err := resolveUnder(bundle, "attachments/out/note.txt"); err == nil {
+	if _, err := resolveUnder(bundle, "", "attachments/out/note.txt"); err == nil {
 		t.Fatal("a file under a symlinked directory was served")
+	}
+}
+
+// TestResolveUnderConfinesEachKindToItsOwnDirectory pins the fix for a join
+// that could cross directories: the attachments route builds its name with
+// path.Join("attachments", userInput), and an encoded userInput of
+// "..%2Fcontext%2Findex.json" decodes to "../context/index.json", which
+// path.Join collapses straight into "context/index.json" — a path
+// resolveUnder would otherwise accept, since context/ is a legitimate
+// bundle directory for a different route. Passing the route's own kind
+// catches that the result landed in the other directory and refuses it;
+// passing no kind (the desktop bridge's case, whose name already carries
+// its own trusted prefix) still allows either.
+func TestResolveUnderConfinesEachKindToItsOwnDirectory(t *testing.T) {
+	bundle, _ := bundleWithAttachment(t)
+	if err := os.MkdirAll(filepath.Join(bundle, "context"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "context", "index.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// What the attachments route's path.Join("attachments", name) produces
+	// for name = "..%2Fcontext%2Findex.json": the escape already collapsed
+	// before resolveUnder ever sees it.
+	crossed := path.Join("attachments", "../context/index.json")
+
+	if _, err := resolveUnder(bundle, "attachments", crossed); err == nil {
+		t.Fatal("a name that collapsed from attachments/ into context/ was served under the attachments route's kind")
+	}
+	if _, err := resolveUnder(bundle, "context", crossed); err != nil {
+		t.Fatalf("the same path, resolved under its own kind, should be served: %v", err)
 	}
 }
 
@@ -105,7 +137,7 @@ func TestResolveUnderAllowsASymlinkedBundleRoot(t *testing.T) {
 	if err := os.Symlink(bundle, alias); err != nil {
 		t.Skipf("symlink: %v", err)
 	}
-	if _, err := resolveUnder(alias, "attachments/screenshot.png"); err != nil {
+	if _, err := resolveUnder(alias, "", "attachments/screenshot.png"); err != nil {
 		t.Fatalf("a symlinked bundle root was refused: %v", err)
 	}
 }

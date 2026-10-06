@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"strings"
 	"sync"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
@@ -397,9 +398,17 @@ func (f *fake) Attachments(wsID, runID string) ([]Attachment, error) {
 	return f.attachments, nil
 }
 
-func (f *fake) AttachmentFile(wsID, runID, name string) (string, string, error) {
+func (f *fake) AttachmentFile(wsID, runID, kind, name string) (string, string, error) {
 	if err := f.checkRun(wsID, runID); err != nil {
 		return "", "", err
+	}
+	// The fake stands in for the real resolver's prefix confinement: a
+	// name outside the route's own kind is refused the same way a name
+	// outside the bundle entirely is, which is what lets
+	// TestContextRouteCannotReachAttachments assert on the route rather
+	// than on the real Service's path-cleaning.
+	if kind != "" && !strings.HasPrefix(name, kind+"/") {
+		return "", "", fmt.Errorf("no such attachment %q", name)
 	}
 	full, ok := f.attachmentFiles[name]
 	if !ok {

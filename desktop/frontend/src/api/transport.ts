@@ -158,13 +158,19 @@ async function getJSON<T>(path: string): Promise<T> {
 
 /**
  * One attachment's bundle-relative path as a URL path: each segment
- * escaped, the `attachments/` prefix kept, and nothing that is not under it
- * accepted — the route refuses the rest anyway, and a bad path should not
- * reach it as a request.
+ * escaped, the `attachments/` or `context/` prefix kept, and nothing that
+ * is not under either accepted — the route refuses the rest anyway, and a
+ * bad path should not reach it as a request. `context/` is a gathered
+ * file's prefix (internal/httpapi's contextFile route serves
+ * bundle/context/<name> the same way attachmentFile serves
+ * bundle/attachments/<name>), so a gathered row's path opens here too.
  */
 function attachmentPath(path: string): string {
   const parts = path.split('/').filter(Boolean)
-  if (parts[0] !== 'attachments' || parts.length < 2) throw new Error(`not a bundle attachment: ${path}`)
+  const prefix = parts[0]
+  if ((prefix !== 'attachments' && prefix !== 'context') || parts.length < 2) {
+    throw new Error(`not a bundle attachment: ${path}`)
+  }
   return parts.map(encodeURIComponent).join('/')
 }
 

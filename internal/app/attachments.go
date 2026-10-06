@@ -67,7 +67,9 @@ func (s *Service) Attachments(wsID, runID string) ([]Attachment, error) {
 		}
 		// A ticket.json naming a file outside the bundle is a bundle the
 		// inspector will not offer: the same rule the file route applies.
-		full, err := resolveUnder(bundleDir, rel)
+		// This listing is attachments only, so a ticket.json entry is held
+		// to that directory even if its own path tries to wander.
+		full, err := resolveUnder(bundleDir, "attachments", rel)
 		if err != nil {
 			continue
 		}
@@ -95,17 +97,28 @@ func (s *Service) Attachments(wsID, runID string) ([]Attachment, error) {
 // AttachmentFile resolves one bundle-relative attachment path to the file
 // on disk and the content type to serve it as.
 //
-// The path is the whole guard. It must stay under the run's own bundle
-// directory after the symlinks on both sides are resolved, so "..", an
-// absolute path, a Windows-style path, a NUL and a symlink pointing out of
-// the bundle are all refused with ErrNoSuchRun — which the HTTP layer
+// kind is which of the bundle's two servable directories the caller
+// expects name to resolve under, "attachments" or "context". A route that
+// only ever serves one of them passes its own kind, so a name whose own
+// ".." collapses the join into the other directory — the attachments
+// route's path.Join("attachments", "..%2Fcontext%2Findex.json") decodes to
+// "context/index.json", a path resolveUnder would otherwise accept as the
+// other, equally legitimate bundle directory — is refused instead of
+// quietly serving across the boundary. The desktop bridge passes "" because
+// its name already carries its own prefix from a listing it trusts, so
+// either directory is fine.
+//
+// The path is otherwise the whole guard. It must stay under the run's own
+// bundle directory after the symlinks on both sides are resolved, so "..",
+// an absolute path, a Windows-style path, a NUL and a symlink pointing out
+// of the bundle are all refused with ErrNoSuchRun — which the HTTP layer
 // answers 404, telling a prober nothing about what is on the disk.
-func (s *Service) AttachmentFile(wsID, runID, name string) (string, string, error) {
+func (s *Service) AttachmentFile(wsID, runID, kind, name string) (string, string, error) {
 	rn, _, err := s.openRun(wsID, runID)
 	if err != nil {
 		return "", "", err
 	}
-	full, err := resolveUnder(filepath.Join(rn.Dir, "bundle"), name)
+	full, err := resolveUnder(filepath.Join(rn.Dir, "bundle"), kind, name)
 	if err != nil {
 		return "", "", err
 	}
@@ -120,7 +133,12 @@ func (s *Service) AttachmentFile(wsID, runID, name string) (string, string, erro
 
 // resolveUnder turns a bundle-relative attachment path into an absolute one
 // and proves it is inside dir, symlinks and all.
-func resolveUnder(dir, name string) (string, error) {
+//
+// kind, when not empty, additionally confines the result to that one
+// top-level directory ("attachments" or "context") rather than to either —
+// see AttachmentFile for why a caller that only serves one of them needs
+// that confinement checked after the path is cleaned, not before.
+func resolveUnder(dir, kind, name string) (string, error) {
 	refused := fmt.Errorf("%w: attachment %q", ErrNoSuchRun, name)
 	if name == "" || len(name) > maxAttachmentName {
 		return "", refused
@@ -135,10 +153,19 @@ func resolveUnder(dir, name string) (string, error) {
 	if clean == "/" {
 		return "", refused
 	}
-	// Only files under the bundle's attachments or context directory are
-	// served: not ticket.json, not the thread, not the prompt beside them,
-	// and not either directory itself — neither route has a listing.
-	if !strings.HasPrefix(clean, "/attachments/") && !strings.HasPrefix(clean, "/context/") {
+	if kind != "" {
+		// Confined to the one directory the caller expects, not either —
+		// a name whose own ".." moved it from one bundle directory into
+		// the other is still refused even though the other directory is,
+		// for a different caller, perfectly legitimate.
+		if clean != "/"+kind && !strings.HasPrefix(clean, "/"+kind+"/") {
+			return "", refused
+		}
+	} else if !strings.HasPrefix(clean, "/attachments/") && !strings.HasPrefix(clean, "/context/") {
+		// Only files under the bundle's attachments or context directory
+		// are served: not ticket.json, not the thread, not the prompt
+		// beside them, and not either directory itself — neither route
+		// has a listing.
 		return "", refused
 	}
 	full := filepath.Join(dir, filepath.FromSlash(strings.TrimPrefix(clean, "/")))
