@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -58,6 +59,13 @@ const correctionsPlaybook = "90-corrections.md"
 // rememberSchema holds the judge to the three fields remember reads and
 // nothing else, so an answer that rambles fails to parse and falls back.
 var rememberSchema = []byte(`{"type":"object","additionalProperties":false,"required":["playbook","addition","reason"],"properties":{"playbook":{"type":"string"},"addition":{"type":"string"},"reason":{"type":"string"}}}`)
+
+// suggestionsMu holds the queue still from a pending check to the line
+// that settles it. Without it two accepts of one suggestion, a double click
+// or a second window, both find it pending and both append the rule to the
+// playbook. It lives here rather than on Service because the queue is the
+// only thing it guards; a process runs one Service, so it is the same lock.
+var suggestionsMu sync.Mutex
 
 // suggestionOf is the line as the queue's readers see it.
 func suggestionOf(l store.SuggestionLine) Suggestion {
@@ -169,6 +177,8 @@ func (s *Service) remember(ctx context.Context, wsID, runID string, index int) (
 	}
 	line.ID = store.SuggestionID(line.Playbook, line.Addition)
 
+	suggestionsMu.Lock()
+	defer suggestionsMu.Unlock()
 	appended, err := store.AppendSuggestion(ws.Root, line)
 	if err != nil {
 		return Suggestion{}, err
@@ -360,6 +370,8 @@ func (s *Service) acceptSuggestion(wsID, id, playbook, addition string) (Suggest
 	if err != nil {
 		return Suggestion{}, err
 	}
+	suggestionsMu.Lock()
+	defer suggestionsMu.Unlock()
 	prop, err := pendingSuggestion(root, id)
 	if err != nil {
 		return Suggestion{}, err
@@ -421,6 +433,8 @@ func (s *Service) dismissSuggestion(wsID, id string) error {
 	if err != nil {
 		return err
 	}
+	suggestionsMu.Lock()
+	defer suggestionsMu.Unlock()
 	if _, err := pendingSuggestion(root, id); err != nil {
 		return err
 	}

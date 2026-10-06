@@ -2798,6 +2798,10 @@ func (r *Runner) queuePlaybookSuggestions(p *prepared, f rcaFields) {
 	if p.state.Measurement() {
 		return
 	}
+	// One addition that cannot be queued, a line over the size limit say,
+	// says nothing about the others, so each is tried and the failures are
+	// reported together.
+	var failed []string
 	for _, s := range f.RCA.PlaybookSuggestions {
 		_, err := store.AppendSuggestion(r.Config.Root, store.SuggestionLine{
 			Ev:       "proposed",
@@ -2809,9 +2813,11 @@ func (r *Runner) queuePlaybookSuggestions(p *prepared, f rcaFields) {
 			Reason:   s.Reason,
 		})
 		if err != nil {
-			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("playbook suggestions: %v", err))
-			return
+			failed = append(failed, fmt.Sprintf("%s: %v", s.Playbook, err))
 		}
+	}
+	if len(failed) > 0 {
+		p.state.Warnings = append(p.state.Warnings, "playbook suggestions: "+strings.Join(failed, "; "))
 	}
 }
 

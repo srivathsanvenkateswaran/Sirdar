@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -334,5 +336,51 @@ func TestDismiss(t *testing.T) {
 	}
 	if err := svc.dismissSuggestion(ws, a.ID); !errors.Is(err, ErrNoSuchSuggestion) {
 		t.Errorf("dismissing twice: %v, want ErrNoSuchSuggestion", err)
+	}
+}
+
+// TestConcurrentAcceptAppendsOnce: two accepts of the same suggestion at
+// once, a double click or two open windows, file the rule once; the
+// second finds it no longer pending.
+func TestConcurrentAcceptAppendsOnce(t *testing.T) {
+	svc, ws, root := suggestionService(t, map[string]string{"20-orders.md": ordersPlaybook})
+	for i := 0; i < 20; i++ {
+		addition := fmt.Sprintf("- Rule %d.", i)
+		p := proposeOne(t, root, "20-orders.md", addition)
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		for g := range errs {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, errs[g] = svc.acceptSuggestion(ws, p.ID, "", "")
+			}()
+		}
+		wg.Wait()
+		ok := 0
+		for _, err := range errs {
+			if err == nil {
+				ok++
+			} else if !errors.Is(err, ErrNoSuchSuggestion) {
+				t.Fatalf("round %d: %v", i, err)
+			}
+		}
+		if ok != 1 {
+			t.Fatalf("round %d: %d accepts succeeded, want 1", i, ok)
+		}
+		body, _ := svc.Playbook(ws, "20-orders.md")
+		if n := strings.Count(body, addition+"\n"); n != 1 {
+			t.Fatalf("round %d: the rule is in the playbook %d times:\n%s", i, n, body)
+		}
+		accepted := 0
+		lines, _ := store.ReadSuggestions(root)
+		for _, l := range lines {
+			if l.Ev == "accepted" && l.ID == p.ID {
+				accepted++
+			}
+		}
+		if accepted != 1 {
+			t.Fatalf("round %d: %d accepted lines, want 1", i, accepted)
+		}
 	}
 }

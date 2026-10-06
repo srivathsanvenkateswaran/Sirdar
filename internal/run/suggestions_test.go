@@ -20,8 +20,14 @@ var rcaDocTwoSuggestions = strings.Replace(rcaDoc,
 // rcaAfterTriage runs a triage and then an rca of OMNI-1 with opts.
 func rcaAfterTriage(t *testing.T, opts Options) (Outcome, string) {
 	t.Helper()
-	if !strings.Contains(rcaDocTwoSuggestions, "30-logs.md") {
-		t.Fatal("the rca document was not rewritten with two suggestions")
+	return rcaDocAfterTriage(t, rcaDocTwoSuggestions, opts)
+}
+
+// rcaDocAfterTriage runs a triage and then an rca of OMNI-1 answering doc.
+func rcaDocAfterTriage(t *testing.T, doc string, opts Options) (Outcome, string) {
+	t.Helper()
+	if doc == rcaDoc {
+		t.Fatal("the rca document was not rewritten")
 	}
 	cfg := newWorkspace(t)
 	p := &stubProvider{script: replay(finalEvent(triageDoc))}
@@ -31,7 +37,7 @@ func rcaAfterTriage(t *testing.T, opts Options) (Outcome, string) {
 	} else if outs[0].State.Status != store.StatusCompleted {
 		t.Fatalf("triage status %q", outs[0].State.Status)
 	}
-	p.script = replay(finalEvent(rcaDocTwoSuggestions))
+	p.script = replay(finalEvent(doc))
 	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Options: opts, Resolution: "Streamed the export."})
 	if err != nil {
 		t.Fatal(err)
@@ -79,5 +85,42 @@ func TestEvalRCAAppendsNoSuggestions(t *testing.T) {
 	_, root := rcaAfterTriage(t, Options{Eval: true})
 	if _, err := os.Stat(store.SuggestionsPath(root)); !os.IsNotExist(err) {
 		t.Fatalf("suggestions file: %v, want none", err)
+	}
+}
+
+// TestShadowRCAAppendsNoSuggestions: a shadow run worked a ticket nobody
+// acted on, so its additions are not the operator's to file either.
+func TestShadowRCAAppendsNoSuggestions(t *testing.T) {
+	_, root := rcaAfterTriage(t, Options{Shadow: true})
+	if _, err := os.Stat(store.SuggestionsPath(root)); !os.IsNotExist(err) {
+		t.Fatalf("suggestions file: %v, want none", err)
+	}
+}
+
+// TestRCAOversizeSuggestionKeepsTheRest: one addition too large for a
+// queue line costs that addition, not the ones after it, and the warning
+// says which.
+func TestRCAOversizeSuggestionKeepsTheRest(t *testing.T) {
+	huge := strings.Repeat("x", 70<<10)
+	doc := strings.Replace(rcaDoc,
+		`"playbookSuggestions": [{"playbook":"exports","addition":"Check the row count first.","reason":"It is the fastest signal."}]`,
+		`"playbookSuggestions": [{"playbook":"20-a.md","addition":"- A.","reason":"r"},{"playbook":"20-b.md","addition":"`+huge+`","reason":"r"},{"playbook":"20-c.md","addition":"- C.","reason":"r"}]`,
+		1)
+	out, root := rcaDocAfterTriage(t, doc, Options{})
+	lines, err := store.ReadSuggestions(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) != 2 || lines[0].Playbook != "20-a.md" || lines[1].Playbook != "20-c.md" {
+		t.Fatalf("lines %+v, want A and C", lines)
+	}
+	var warns []string
+	for _, w := range out.State.Warnings {
+		if strings.HasPrefix(w, "playbook suggestions: ") {
+			warns = append(warns, w)
+		}
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "20-b.md") {
+		t.Fatalf("warnings %q, want one naming 20-b.md", warns)
 	}
 }
