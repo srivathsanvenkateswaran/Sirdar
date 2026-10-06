@@ -337,6 +337,27 @@ func TestDigestTextIsMetadataOnly(t *testing.T) {
 	}
 }
 
+// TestDigestTextIgnoresTheNextDay: the digest goes out the morning after,
+// and a regrade written that morning must not move a key out of the day
+// it reports, nor add that morning's runs and spend to it.
+func TestDigestTextIgnoresTheNextDay(t *testing.T) {
+	day := time.Date(2026, 10, 5, 12, 0, 0, 0, time.Local)
+	morning := time.Date(2026, 10, 6, 8, 0, 0, 0, time.Local)
+	entries := []shadow.Entry{
+		{At: day, Ev: "started", Key: "OMNI-1", RunID: "r1", Attempt: 1},
+		{At: day, Ev: "finished", Key: "OMNI-1", RunID: "r1", Status: "completed", CostUSD: 1},
+		{At: day.Add(time.Hour), Ev: "graded", Key: "OMNI-1", ShadowRunID: "r1", Grade: "partial", Basis: "operator-triage"},
+		{At: morning, Ev: "graded", Key: "OMNI-1", ShadowRunID: "r1", Grade: "confirmed", Final: true, Basis: "pr", CostUSD: 0.1},
+		{At: morning, Ev: "started", Key: "OMNI-2", RunID: "r2", Attempt: 1},
+		{At: morning, Ev: "finished", Key: "OMNI-2", RunID: "r2", Status: "completed", CostUSD: 2},
+	}
+	text := digestText(entries, day)
+	want := "Sirdar shadow, 2026-10-05: started 1, graded 0, confirmed 0%, cost $1.00\nOMNI-1 partial (provisional)"
+	if text != want {
+		t.Errorf("digest:\n%s\nwant:\n%s", text, want)
+	}
+}
+
 // hookServer counts the posts it receives and keeps the last body.
 type hookServer struct {
 	mu    sync.Mutex

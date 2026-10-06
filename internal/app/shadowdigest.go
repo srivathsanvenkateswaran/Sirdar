@@ -26,6 +26,17 @@ const digestHostError = "shadow.digest.webhookUrl: host must be hooks.slack.com"
 // notifications keep, because it leaves the machine.
 func digestText(entries []shadow.Entry, day time.Time) string {
 	y, m, d := day.Date()
+	// The digest goes out the morning after. Lines written since midnight,
+	// such as a regrade, belong to the next day's digest; folding them in
+	// here would move a key's grade out of the day being reported.
+	end := time.Date(y, m, d+1, 0, 0, 0, 0, day.Location())
+	var upTo []shadow.Entry
+	for _, e := range entries {
+		if e.At.Before(end) {
+			upTo = append(upTo, e)
+		}
+	}
+	entries = upTo
 	sameDay := func(t time.Time) bool {
 		ty, tm, td := t.In(day.Location()).Date()
 		return ty == y && tm == m && td == d
