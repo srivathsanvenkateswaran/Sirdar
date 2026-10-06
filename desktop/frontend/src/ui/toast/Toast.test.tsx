@@ -67,6 +67,42 @@ describe('Toasts', () => {
     expect(onDismiss).toHaveBeenCalledWith(4)
   })
 
+  it('holds still while the reader is on it, and restarts its time on release', () => {
+    const onDismiss = vi.fn()
+    render(
+      <Toasts
+        toasts={[{ id: 6, tone: 'info', text: 'Suggested an addition.', link: { label: 'Open Playbooks' } }]}
+        onDismiss={onDismiss}
+        onLink={() => {}}
+      />,
+    )
+    const link = screen.getByRole('button', { name: 'Open Playbooks' })
+    act(() => link.focus())
+    act(() => vi.advanceTimersByTime(8000))
+    expect(onDismiss).not.toHaveBeenCalled()
+    expect(screen.getByText('Suggested an addition.')).toBeInTheDocument()
+
+    act(() => link.blur())
+    act(() => vi.advanceTimersByTime(6999))
+    expect(onDismiss).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(1))
+    expect(onDismiss).toHaveBeenCalledWith(6)
+  })
+
+  it('holds still under the pointer too', () => {
+    const onDismiss = vi.fn()
+    const { container } = render(
+      <Toasts toasts={[{ id: 7, tone: 'info', text: 'Done.' }]} onDismiss={onDismiss} dismissAfterMs={500} />,
+    )
+    const row = container.querySelector('.sd-toast') as HTMLElement
+    fireEvent.mouseEnter(row)
+    act(() => vi.advanceTimersByTime(2000))
+    expect(onDismiss).not.toHaveBeenCalled()
+    fireEvent.mouseLeave(row)
+    act(() => vi.advanceTimersByTime(500))
+    expect(onDismiss).toHaveBeenCalledWith(7)
+  })
+
   it('lets an Arabic message lay itself out', () => {
     render(
       <Toasts
