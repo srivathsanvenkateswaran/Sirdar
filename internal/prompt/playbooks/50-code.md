@@ -1,3 +1,7 @@
+---
+kinds: [session, triage, rca, fix]
+about: "Cite file:line, follow the call path, check sibling paths and tests."
+---
 The workspace codebase is checked out read-only so you can confirm a hypothesis against what
 the code actually does, not just what the ticket or the logs suggest it does.
 

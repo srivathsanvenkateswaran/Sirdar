@@ -68,6 +68,7 @@ const triageDoc = `{
   "title": "Export fails for large orders",
   "complaint": "The export fails for large orders. It has happened every day this week.",
   "complaintOriginal": null,
+  "reproduction": null,
   "customerReplyDraft": null,
   "timeline": [{"at":"2026-09-10T08:30:00+03:00","role":"customer","summary":"Reported the export failing."}],
   "reproSteps": ["Request a CSV export for a 600-line order."],

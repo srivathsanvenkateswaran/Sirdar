@@ -11,6 +11,7 @@
     "customerReplyDraft",
     "timeline",
     "reproSteps",
+    "reproduction",
     "rootCause",
     "blastRadius",
     "classification",
@@ -90,6 +91,26 @@
     "reproSteps": {
       "type": "array",
       "items": { "type": "string" }
+    },
+    "reproduction": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["attempted", "outcome", "where", "steps", "evidence"],
+          "properties": {
+            "attempted": { "type": "boolean" },
+            "outcome": {
+              "type": "string",
+              "enum": ["reproduced", "not_reproduced", "not_attempted"]
+            },
+            "where": { "type": ["string", "null"] },
+            "steps": { "type": "array", "items": { "type": "string" } },
+            "evidence": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        { "type": "null" }
+      ]
     },
     "rootCause": {
       "type": "object",

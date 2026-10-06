@@ -1,3 +1,8 @@
+---
+kinds: [triage, rca, session]
+when: [log, logs, error, errors, exception, crash, stack, 500, 502, 503, 504]
+about: "Query syntax, control queries, and timezones for application logs."
+---
 Application and infrastructure logs are the source for what actually ran, in what order, and
 with what errors.
 

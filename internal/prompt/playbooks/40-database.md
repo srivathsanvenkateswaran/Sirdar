@@ -1,3 +1,8 @@
+---
+kinds: [triage, rca, session]
+when: [data, database, db, sql, query, record, records, missing, duplicate, report, total, balance]
+about: "Read-only database checks: resolve the record first, cite query and row count."
+---
 Direct database access lets you confirm what state the system was actually in, rather than
 what the application logic implies it should have been.
 

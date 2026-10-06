@@ -36,8 +36,10 @@ var playbookName = regexp.MustCompile(`^[0-9]{2}-[a-z0-9-]+\.md$`)
 func ValidPlaybookName(name string) bool { return playbookName.MatchString(name) }
 
 // ledeMax is how much of a playbook's first paragraph reaches the list. A
-// row is one line of prose beside a title, not a preview pane.
-const ledeMax = 160
+// row is one line of prose beside a title, not a preview pane. It is the
+// prompt's own limit, because the prompt's listing line and this row are
+// cut by the same rule.
+const ledeMax = prompt.LedeMax
 
 // trashDir holds a deleted playbook. A delete moves the file here rather
 // than unlinking it: these are files an operator wrote by hand over
@@ -65,6 +67,15 @@ type PlaybookSummary struct {
 	Order      string    `json:"order"`
 	Bytes      int64     `json:"bytes"`
 	ModifiedAt time.Time `json:"modifiedAt"`
+	// Kinds and When are the file's frontmatter: the run kinds it is for
+	// and the words that load it, both empty for a file without one or
+	// whose frontmatter was ignored, and then FrontmatterError says why.
+	// About is what the prompt's listing line says about it: frontmatter
+	// `about`, else the lede.
+	Kinds            []string `json:"kinds,omitempty"`
+	When             []string `json:"when,omitempty"`
+	About            string   `json:"about,omitempty"`
+	FrontmatterError string   `json:"frontmatterError,omitempty"`
 }
 
 // playbooksDir resolves the workspace's playbooks directory and reports
@@ -131,18 +142,26 @@ func summarise(dir, root, name string) (PlaybookSummary, error) {
 	if err != nil {
 		rel = path
 	}
-	title, lede := titleAndLede(string(body))
+	// The file is parsed the way a run parses it, so the title and lede
+	// come from the body the prompt carries rather than from a
+	// frontmatter line.
+	pb := prompt.ParsePlaybook(strings.TrimSuffix(name, ".md"), path, string(body))
+	title, lede := prompt.TitleAndLede(pb.Body)
 	if title == "" {
 		title = strings.TrimSuffix(name, ".md")
 	}
 	return PlaybookSummary{
-		Name:       name,
-		File:       filepath.ToSlash(rel),
-		Title:      title,
-		Lede:       lede,
-		Order:      orderOf(name),
-		Bytes:      info.Size(),
-		ModifiedAt: info.ModTime().UTC(),
+		Name:             name,
+		File:             filepath.ToSlash(rel),
+		Title:            title,
+		Lede:             lede,
+		Order:            orderOf(name),
+		Bytes:            info.Size(),
+		ModifiedAt:       info.ModTime().UTC(),
+		Kinds:            pb.Kinds,
+		When:             pb.When,
+		About:            pb.About,
+		FrontmatterError: pb.FrontmatterErr,
 	}, nil
 }
 
@@ -153,60 +172,6 @@ func orderOf(name string) string {
 		return name[:2]
 	}
 	return ""
-}
-
-// titleAndLede reads a playbook's first H1 and its first paragraph.
-//
-// The lede skips headings, list bullets, quotes and fences: what is wanted
-// is the sentence that says what the playbook is for, and a playbook that
-// opens on a bullet list has none.
-func titleAndLede(body string) (title, lede string) {
-	var para []string
-	for _, raw := range strings.Split(body, "\n") {
-		line := strings.TrimSpace(raw)
-		if strings.HasPrefix(line, "#") {
-			if title == "" && strings.HasPrefix(line, "# ") {
-				title = strings.TrimSpace(strings.TrimPrefix(line, "# "))
-			}
-			if len(para) > 0 {
-				break
-			}
-			continue
-		}
-		if line == "" {
-			if len(para) > 0 {
-				break
-			}
-			continue
-		}
-		if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "---") {
-			if len(para) > 0 {
-				break
-			}
-			continue
-		}
-		if len(para) == 0 && (strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") ||
-			strings.HasPrefix(line, "> ") || strings.HasPrefix(line, "|")) {
-			continue
-		}
-		para = append(para, line)
-	}
-	return title, clip(strings.Join(para, " "), ledeMax)
-}
-
-// clip cuts s to at most n characters, on a word boundary where there is
-// one, and marks the cut with an ellipsis.
-func clip(s string, n int) string {
-	s = strings.TrimSpace(s)
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	cut := string(runes[:n])
-	if i := strings.LastIndex(cut, " "); i > n/2 {
-		cut = cut[:i]
-	}
-	return strings.TrimRight(cut, " ,;:") + "…"
 }
 
 // listPlaybookNames returns the *.md files directly inside dir, in the

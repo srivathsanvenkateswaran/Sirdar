@@ -905,3 +905,67 @@ func TestHasRTL(t *testing.T) {
 		}
 	}
 }
+
+// reproductionObject is the reproduction a session that reached staging
+// records; triage_repro.json carries the same object.
+const reproductionObject = `{"attempted": true, "outcome": "reproduced", "where": "https://staging.oxo.example (tenant dama)", "steps": ["Open invoices"], "evidence": ["screenshot shots/1.png"]}`
+
+// triageWithReproduction is the triage fixture with its reproduction key
+// replaced by raw, or deleted when raw is "".
+func triageWithReproduction(t *testing.T, raw string) []byte {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal(readTestdata(t, "triage.json"), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if raw == "" {
+		delete(decoded, "reproduction")
+	} else {
+		var v any
+		if err := json.Unmarshal([]byte(raw), &v); err != nil {
+			t.Fatalf("unmarshal reproduction: %v", err)
+		}
+		decoded["reproduction"] = v
+	}
+	doc, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return doc
+}
+
+// TestTriageReproductionNullAndObjectValidate pins the reproduction key as
+// required and nullable, the same shape as customerReplyDraft: strict
+// structured output needs every key listed, and a run with no browser
+// answers null.
+func TestTriageReproductionNullAndObjectValidate(t *testing.T) {
+	if err := Validate(Triage, triageWithReproduction(t, "null")); err != nil {
+		t.Errorf("reproduction null: %v", err)
+	}
+	if err := Validate(Triage, triageWithReproduction(t, reproductionObject)); err != nil {
+		t.Errorf("reproduction object: %v", err)
+	}
+	if err := Validate(Triage, triageWithReproduction(t, "")); err == nil {
+		t.Error("a note without the reproduction key validated")
+	}
+	bad := strings.Replace(reproductionObject, `"reproduced"`, `"maybe"`, 1)
+	if err := Validate(Triage, triageWithReproduction(t, bad)); err == nil {
+		t.Error(`a reproduction with outcome "maybe" validated`)
+	}
+}
+
+func TestTriageTemplateRendersReproduction(t *testing.T) {
+	doc := readTestdata(t, "triage_repro.json")
+	if err := Validate(Triage, doc); err != nil {
+		t.Fatalf("Validate(triage_repro.json): %v", err)
+	}
+	got, err := (Renderer{}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	assertGolden(t, "triage_repro.golden.md", got)
+	mustHave := "## Reproduction\n\n**Outcome:** reproduced · https://staging.oxo.example (tenant dama)\n\n1. Open invoices\n\nEvidence:\n\n- screenshot shots/1.png"
+	if !strings.Contains(got, mustHave) {
+		t.Errorf("the reproduction block is not where it should be:\n%s", got)
+	}
+}
