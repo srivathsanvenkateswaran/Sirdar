@@ -1236,10 +1236,13 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		ex.malformed = 0
 	}
 	// The reply session that reached its cap was cancelled to make way for
-	// the wrap-up, and drains while it starts. Its last line is whatever it
-	// was saying when it was cut off, not the answer, and its usage is
-	// folded into base already, so neither is judged as the run's.
-	if ex.capped != nil && sess == ex.capped && (ev.Kind == provider.EvFinal || ev.Kind == provider.EvUsage) {
+	// the wrap-up, and drains while it starts. What it says on the way out
+	// is recorded but not judged, as the reply session's drain is in the
+	// note phase: its last line is not the answer, its usage is folded into
+	// base already, and a question or a refused call it was making when it
+	// was cut off is not one the run is waiting on. A breach still counts,
+	// because it outranks everything whichever session it came from.
+	if ex.capped != nil && sess == ex.capped && ev.Kind != provider.EvBreach {
 		return
 	}
 	if p.state.Phase == store.PhaseNote {
@@ -1884,7 +1887,10 @@ func (r *Runner) handleReply(ctx context.Context, p *prepared, sess provider.Ses
 		r.endSession(p, sess)
 		return
 	}
-	if r.deliverSteers(ctx, p, sess, log, ex) {
+	// The wrap-up runs under the note policy with two turns: a steer sent
+	// into it would be answered without tools and on turns the cap has
+	// already spent, so a queued steer waits for the settled run instead.
+	if sess != ex.wrapUp && r.deliverSteers(ctx, p, sess, log, ex) {
 		return
 	}
 	if p.noteAfter {
@@ -2051,6 +2057,13 @@ func (r *Runner) announceNoteModel(p *prepared, log *eventLog, model string) {
 func (r *Runner) retryNoteOnRunModel(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, limited string) {
 	p.noteModelDropped = true
 	r.recordSystem(p, log, fmt.Sprintf("%s hit a model limit; filing the note on %s", limited, modelName(p.state.RequestedModel())))
+	// The segment announceNoteModel wrote names the note model; the note
+	// is now the run model's to write, and the state says so.
+	p.state.ModelSegments = append(p.state.ModelSegments, store.ModelSegment{At: r.now(), Model: p.state.RequestedModel(), Why: "note model hit a limit"})
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
 	ex.stall.hold()
 	sess.Cancel()
 	// What the refused session spent is the run's, and the next session's

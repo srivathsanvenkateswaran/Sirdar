@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
@@ -376,5 +377,110 @@ func TestFixRunIgnoresPhases(t *testing.T) {
 	}
 	if got := p.spec(0).Budget.MaxTurns; got != cfg.Budget.MaxTurns {
 		t.Errorf("fix MaxTurns %d, want %d", got, cfg.Budget.MaxTurns)
+	}
+}
+
+// TestNoteModelLimitRecordsTheRunModelSegment: the note filed again on the
+// run's model is the run model's work, and the last segment says so.
+func TestNoteModelLimitRecordsTheRunModelSegment(t *testing.T) {
+	cfg := newWorkspaceWith(t, phasesYAML(noteModelYAML))
+	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
+		switch {
+		case len(spec.OutputSchema) == 0:
+			replay(provider.Event{Kind: provider.EvFinal, Text: "Answer."})(spec, s)
+		case spec.Model == "claude-sonnet-5":
+			untilCancelled(s, modelLimitEvent(), emptyFinal())
+		default:
+			replay(finalEvent(triageDoc))(spec, s)
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	segs := out.State.ModelSegments
+	if len(segs) == 0 {
+		t.Fatal("no model segments")
+	}
+	if last := segs[len(segs)-1]; last.Model != "claude-opus-5-5" || last.Why != "note model hit a limit" {
+		t.Errorf("last segment %+v, want the run model after the note model's limit", last)
+	}
+	if got := out.State.RequestedModel(); got != "claude-opus-5-5" {
+		t.Errorf("RequestedModel %q", got)
+	}
+}
+
+// TestSteerQueuedDuringTheWrapUpWaits: the wrap-up runs under the note
+// policy with two turns, so a steer queued while it works is not sent into
+// it; it waits for the run to settle.
+func TestSteerQueuedDuringTheWrapUpWaits(t *testing.T) {
+	cfg := newWorkspaceWith(t, configYAML+"phases:\n  reply:\n    maxTurns: 3\n")
+	p := &stubProvider{}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.SteerPoll = 5 * time.Millisecond
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		switch {
+		case len(spec.OutputSchema) > 0:
+			replay(finalEvent(triageDoc))(spec, s)
+		case strings.Contains(spec.Prompt, wrapUpMarker):
+			if _, err := (store.Run{Dir: spec.RunDir}).QueueSteer("Check the refunds table too", "", time.Now()); err != nil {
+				t.Error(err)
+			}
+			replay(usage(1), provider.Event{Kind: provider.EvFinal, Text: "Partial answer."})(spec, s)
+		default:
+			untilCancelled(s, usage(3))
+		}
+	}
+
+	out := triageOne(t, r, Options{})
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if sent := wrapUpSessionSends(p); len(sent) != 0 {
+		t.Errorf("a steer was sent into the wrap-up: %q", sent)
+	}
+	for _, q := range out.State.QueuedSteers {
+		if q.Status == store.SteerDelivered {
+			t.Errorf("steer delivered during the wrap-up: %+v", q)
+		}
+	}
+}
+
+// TestCappedSessionDrainIsIgnored: what the capped reply session says while
+// it drains after the cancel is not the run's to act on. A permission
+// question from it would otherwise block the run and throw away the
+// wrap-up's answer.
+func TestCappedSessionDrainIsIgnored(t *testing.T) {
+	cfg := newWorkspaceWith(t, configYAML+"phases:\n  reply:\n    maxTurns: 3\n")
+	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
+		switch {
+		case len(spec.OutputSchema) > 0:
+			replay(finalEvent(triageDoc))(spec, s)
+		case strings.Contains(spec.Prompt, wrapUpMarker):
+			replay(usage(1), provider.Event{Kind: provider.EvFinal, Text: "Partial answer."})(spec, s)
+		default:
+			defer s.finish()
+			if !s.emit(usage(3)) {
+				return
+			}
+			<-s.cancelled
+			// Lines already in flight when the cancel landed.
+			s.events <- provider.Event{Kind: provider.EvPermission, Decision: "ask", Tool: "Bash",
+				Ask: &provider.PermissionAsk{Kind: "bash", Tool: "Bash", Summary: "psql -c 'select 1'"}}
+			s.events <- provider.Event{Kind: provider.EvQuestion, Text: "Shall I keep going?"}
+			s.events <- modelLimitEvent()
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	dir := runDir(t, cfg, out)
+	if got := strings.TrimSpace(readFile(t, filepath.Join(dir, "answer.md"))); got != "Partial answer." {
+		t.Errorf("answer.md = %q", got)
+	}
+	if out.State.Ask != nil {
+		t.Errorf("ask %+v from the capped session", out.State.Ask)
 	}
 }
