@@ -27,11 +27,6 @@ var ErrMCPDenied = errors.New("app: mcp tool denied")
 // all; the result says when it bit.
 const MCPResultLimit = 64 << 10
 
-// mcpConnectTimeout bounds one server's handshake and tools/list when a
-// caller asked for them. A server that has not answered by then is
-// reported as an error rather than left holding the request open.
-const mcpConnectTimeout = 30 * time.Second
-
 // MCPServer is one configured server as an operator reads it. The
 // configuration half is mcpclient's, which carries the rule that key names
 // cross and values never do; the rest is what connecting to it found out.
@@ -235,17 +230,7 @@ func MCPCallFor(ctx context.Context, cfg *config.Config, server, tool string, ar
 	}
 
 	started := time.Now()
-	cctx, cancel := context.WithTimeout(ctx, mcpConnectTimeout)
-	conn, err := mcpclient.Connect(cctx, entry, nil)
-	cancel()
-	if err != nil {
-		res.TookMs = time.Since(started).Milliseconds()
-		res.Error = err.Error()
-		return res, nil
-	}
-	defer conn.Close()
-
-	out, isErr, err := conn.CallTool(ctx, tool, args)
+	out, isErr, err := mcpclient.CallOnce(ctx, entry, tool, args)
 	res.TookMs = time.Since(started).Milliseconds()
 	if err != nil {
 		res.Error = err.Error()
@@ -313,11 +298,12 @@ func findMCPServer(cfg *config.Config, server string) (mcpclient.Entry, error) {
 	return mcpclient.Entry{}, fmt.Errorf("%w: %s", ErrNoSuchMCPServer, server)
 }
 
-// connectAndList starts one server and lists its tools under one timeout.
+// connectAndList starts one server and lists its tools under one timeout,
+// mcpclient.ConnectTimeout, which covers the listing too.
 // The connection is returned even when listing failed, so the caller can
 // close it.
 func connectAndList(ctx context.Context, e mcpclient.Entry) (mcpclient.Conn, []mcpclient.ToolInfo, error) {
-	ctx, cancel := context.WithTimeout(ctx, mcpConnectTimeout)
+	ctx, cancel := context.WithTimeout(ctx, mcpclient.ConnectTimeout)
 	defer cancel()
 
 	// A server's own stderr is discarded rather than forwarded: it is the
