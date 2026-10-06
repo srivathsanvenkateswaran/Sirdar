@@ -373,24 +373,33 @@ func TestGradeUnreadPRLeavesTheBasis(t *testing.T) {
 	triage := Entry{Ev: "outcome", Source: "operator-triage", RunID: "r1", Verdict: &Verdict{Classification: "code", Hypothesis: "h"}}
 	rca := Entry{Ev: "outcome", Source: "operator-rca", RunID: "r2", Summary: "the cause", Classification: "code"}
 	res := Entry{Ev: "outcome", Source: "manual", Resolution: "fixed the mapper"}
+	// A manual entry made with only --pr, and an RCA whose result.json could
+	// not be read, carry nothing but a PR URL: once the PR is unread they
+	// have shown the judge nothing, so they cannot make the grade final.
+	manualPROnly := Entry{Ev: "outcome", Source: "manual", PRURLs: []string{"https://github.com/o/r/pull/1"}}
+	rcaPROnly := Entry{Ev: "outcome", Source: "operator-rca", RunID: "r3", PRURLs: []string{"https://github.com/o/r/pull/1"}}
+	failed := errors.New("gh not on PATH")
 	cases := []struct {
-		name  string
-		set   eval.PullRequestSet
-		err   error
-		other Entry
-		basis string
-		final bool
+		name   string
+		set    eval.PullRequestSet
+		err    error
+		others []Entry
+		basis  string
+		final  bool
 	}{
-		{"triage, read fails", eval.PullRequestSet{}, errors.New("gh not on PATH"), triage, "operator-triage", false},
-		{"rca, read fails", eval.PullRequestSet{}, errors.New("gh not on PATH"), rca, "operator-rca", true},
-		{"resolution, read fails", eval.PullRequestSet{}, errors.New("gh not on PATH"), res, "resolution", true},
-		{"triage, read returns nothing", eval.PullRequestSet{PRs: []eval.PRText{{URL: "https://github.com/o/r/pull/1"}}}, nil, triage, "operator-triage", false},
+		{"triage, read fails", eval.PullRequestSet{}, failed, []Entry{triage}, "operator-triage", false},
+		{"rca, read fails", eval.PullRequestSet{}, failed, []Entry{rca}, "operator-rca", true},
+		{"resolution, read fails", eval.PullRequestSet{}, failed, []Entry{res}, "resolution", true},
+		{"triage, read returns nothing", eval.PullRequestSet{PRs: []eval.PRText{{URL: "https://github.com/o/r/pull/1"}}}, nil, []Entry{triage}, "operator-triage", false},
+		{"manual with only a PR, read fails", eval.PullRequestSet{}, failed, []Entry{manualPROnly, triage}, "operator-triage", false},
+		{"rca with only a PR, read fails", eval.PullRequestSet{}, failed, []Entry{rcaPROnly, triage}, "operator-triage", false},
+		{"rca with only a classification, read fails", eval.PullRequestSet{}, failed, []Entry{{Ev: "outcome", Source: "operator-rca", RunID: "r4", Classification: "config"}, triage}, "operator-rca", true},
 	}
 	for _, c := range cases {
 		stubPRs(t, c.set, c.err)
 		dir := shadowRunDir(t, map[string]string{"answer.md": "a reply"})
 		j := &stubJudge{reply: `{"verdict":"confirmed","sameRootCause":true,"reason":"x"}`}
-		line, err := Grade(context.Background(), j.judge, gradeInput(dir, pr, c.other))
+		line, err := Grade(context.Background(), j.judge, gradeInput(dir, append([]Entry{pr}, c.others...)...))
 		if err != nil {
 			t.Errorf("%s: %v", c.name, err)
 			continue

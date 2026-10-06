@@ -102,11 +102,14 @@ func basisOf(outcomes []Entry, countPRs bool) (basis string, final bool, ok bool
 		if strings.TrimSpace(o.Resolution) != "" {
 			hasRes = true
 		}
+		// With pull requests left out, a manual or RCA line counts only for
+		// the text it carries: one that names nothing but a PR nobody could
+		// read showed the judge nothing, and must not make the grade final.
 		switch o.Source {
 		case "operator-rca":
-			hasRCA = true
+			hasRCA = hasRCA || countPRs || strings.TrimSpace(o.Summary+o.Classification+o.Resolution) != ""
 		case "manual":
-			hasManual = true
+			hasManual = hasManual || countPRs || strings.TrimSpace(o.Resolution) != ""
 		case "operator-triage":
 			hasTriage = true
 		}
