@@ -711,6 +711,11 @@ type Config struct {
 	// happens only in the workspace repository. See RepoConfig.
 	Repos []RepoConfig `yaml:"repos,omitempty"`
 
+	// Shadow configures the background watcher that triages the
+	// operator's tickets unattended and grades its answers against what
+	// actually happened. It is off unless enabled. See ShadowConfig.
+	Shadow ShadowConfig `yaml:"shadow"`
+
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
 	// git caches the one `git config` read Self falls back to, so a
 	// board that lists runs every couple of seconds does not spawn a
@@ -876,6 +881,7 @@ func applyDefaults(c *Config) {
 		h.TrackerField = DefaultZohoTrackerField
 	}
 	applyInvestigationDefaults(c)
+	applyShadowDefaults(c)
 }
 
 // FindRoot walks up from dir to the first directory containing .sirdar/config.yaml.
@@ -982,6 +988,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := validateNotify(c.Notify); err != nil {
+		return err
+	}
+	if err := validateShadow(c); err != nil {
 		return err
 	}
 	// Last, so LoadDoctor can keep a configuration whose only fault is a
