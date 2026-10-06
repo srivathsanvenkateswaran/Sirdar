@@ -220,6 +220,19 @@ func RefuseSteer(maxTurns, maxMinutes int, maxUSD float64, state store.State) er
 	return nil
 }
 
+// RefuseResume says why an operator may not resume a run, or nil. A shadow
+// run is a measurement: the watcher answers and retries it itself through
+// Runner.Resume, and an operator's resume would spend around the shadow
+// caps, leave the ledger's finished line stale, and could race the
+// watcher's own retry of the same run. Only the operator's entry points
+// (the CLI and the service) ask it.
+func RefuseResume(state store.State) error {
+	if state.Shadow {
+		return fmt.Errorf("run: %s is a shadow run; it is a measurement and is not resumed", state.RunID)
+	}
+	return nil
+}
+
 // answerNoun names the document a steered session has to end with.
 func answerNoun(kind store.Kind) string {
 	switch kind {

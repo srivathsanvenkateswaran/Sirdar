@@ -164,3 +164,21 @@ func TestShadowQuotaPauseWithoutStart(t *testing.T) {
 		})
 	}
 }
+
+// TestResumeRefusesShadow: the watcher resumes its own runs through the
+// runner; an operator's resume through the service would spend around the
+// shadow caps, leave the ledger's finished line stale, and could race the
+// watcher's retry of the same run.
+func TestResumeRefusesShadow(t *testing.T) {
+	root := newWorkspace(t)
+	const runID = "20261006T090000Z-ab12"
+	writeTriageState(t, root, "OMNI-1", runID, store.StatusBlocked, time.Now(), true)
+	svc := newService(t, root, stubBuilder(&stubProvider{script: replay()}, stubTracker{}, stubHelpdesk{}))
+	_, err := svc.Resume(context.Background(), WorkspaceID(root), runID, "go on", "", nil)
+	if !errors.Is(err, ErrSteerRefused) {
+		t.Fatalf("err = %v, want ErrSteerRefused", err)
+	}
+	if want := "is a shadow run; it is a measurement and is not resumed"; !strings.Contains(err.Error(), want) {
+		t.Errorf("err = %q, want %q", err, want)
+	}
+}

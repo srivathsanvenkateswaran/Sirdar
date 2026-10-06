@@ -866,6 +866,15 @@ func (s *Service) Resume(ctx context.Context, wsID, runID, answer, model string,
 	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
 		return "", err
 	}
+	// A shadow run is refused like a steer of one, so the HTTP layer
+	// answers it the same way.
+	if ws, _, err := s.load(wsID); err == nil {
+		if _, st, err := store.Open(ws.Root, runID); err == nil {
+			if err := runner.RefuseResume(st); err != nil {
+				return "", fmt.Errorf("%w: %w", ErrSteerRefused, err)
+			}
+		}
+	}
 	var d *runner.Decision
 	if decision != nil {
 		if !provider.ValidVerdict(decision.Verdict) {

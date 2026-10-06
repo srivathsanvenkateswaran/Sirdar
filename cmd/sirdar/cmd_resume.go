@@ -8,6 +8,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 )
 
 func init() { commands["resume"] = cmdResume }
@@ -35,6 +36,12 @@ func cmdResume(args []string, stdout, stderr io.Writer) int {
 	cfg, ok := loadWorkspace(stderr)
 	if !ok {
 		return exitUsage
+	}
+	if _, st, err := store.Open(cfg.Root, runID); err == nil {
+		if err := runner.RefuseResume(st); err != nil {
+			fmt.Fprintf(stderr, "sirdar: %v\n", err)
+			return 1
+		}
 	}
 	deps, cleanup, err := buildDeps(cfg, "", "", stdout, stderr)
 	defer cleanup()
