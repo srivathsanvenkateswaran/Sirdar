@@ -353,10 +353,27 @@ export function modelOf(events: IndexedEvent[]): string {
   return ''
 }
 
+/**
+ * Phrases that open a gather-phase or note-phase system line worth a row
+ * without Show everything: what was looked up, what came of it, which
+ * playbooks loaded, and the note and reproduction turns' own outcomes.
+ */
+const NOTEWORTHY_PREFIXES = [
+  'Gathering context:',
+  'Gathered ',
+  'Playbooks:',
+  'Note turn on ',
+  'Reply turn reached its ',
+  'Reproduction on staging:',
+]
+
 /** True for a system line worth a row without Show everything: the provider's rate-limit warnings and errors. */
 function noteworthy(event: RunEvent): boolean {
   const raw = asRecord(event.payload?.raw)
-  return raw?.type === 'rate_limit_event' || event.kind === 'error'
+  if (raw?.type === 'rate_limit_event' || event.kind === 'error') return true
+  if (raw) return false
+  const text = str(event.payload?.text)
+  return NOTEWORTHY_PREFIXES.some((p) => text.startsWith(p))
 }
 
 export interface BuildOptions {
@@ -505,6 +522,17 @@ export function buildSessionModel(
             turnSteps.push(step)
             steps.push(step)
           }
+          break
+        }
+        case 'gather': {
+          const decision = str(event.payload?.decision)
+          items.push({
+            kind: 'system',
+            index: row.index,
+            at,
+            text: `${str(event.payload?.tool)}: ${str(event.payload?.text)}`,
+            ...(decision === 'failed' || decision === 'denied' ? { tone: 'failed' as const } : {}),
+          })
           break
         }
         case 'question':

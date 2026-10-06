@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { RunSummary } from '../../api/types'
+import type { ReproductionInfo, RunSummary } from '../../api/types'
 import FiledNoteRow, { SaveNoteRow } from './FiledNoteRow'
 
 const RUN: RunSummary = {
@@ -18,7 +18,7 @@ const RUN: RunSummary = {
   notes: ['/run/note.md', '/notes/OMNI-1 refund-stuck.md'],
 }
 
-function row(over: Partial<RunSummary> = {}, props: { updating?: boolean; error?: string } = {}) {
+function row(over: Partial<RunSummary> & { reproduction?: ReproductionInfo } = {}, props: { updating?: boolean; error?: string } = {}) {
   const onOpenNote = vi.fn()
   const onUpdateNote = vi.fn(async () => {})
   render(<FiledNoteRow run={{ ...RUN, ...over }} onOpenNote={onOpenNote} onUpdateNote={onUpdateNote} updating={props.updating ?? false} error={props.error ?? ''} />)
@@ -52,6 +52,26 @@ describe('FiledNoteRow', () => {
   it('draws nothing with no note and no warning', () => {
     row({ notes: [] })
     expect(screen.queryByTestId('filed-note')).toBeNull()
+  })
+
+  it('says reproduced on staging', () => {
+    row({ reproduction: { outcome: 'reproduced' } })
+    expect(screen.getByText('Reproduced on staging')).toBeInTheDocument()
+  })
+
+  it('says not reproduced', () => {
+    row({ reproduction: { outcome: 'not_reproduced' } })
+    expect(screen.getByText('Not reproduced')).toBeInTheDocument()
+  })
+
+  it('says reproduction not attempted', () => {
+    row({ reproduction: { outcome: 'not_attempted' } })
+    expect(screen.getByText('Reproduction not attempted')).toBeInTheDocument()
+  })
+
+  it('says no word at all when the run carries no reproduction', () => {
+    row()
+    expect(screen.queryByText(/Reprodu/)).toBeNull()
   })
 })
 

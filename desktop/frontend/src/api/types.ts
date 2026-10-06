@@ -39,8 +39,8 @@ export interface RunSummary { runId: string; key: string; helpdeskKey?: string; 
   queuedSteers?: QueuedSteer[]
   /** What a blocked run is waiting on, when it is a question; absent on every other run. A run.updated carries it, so a run that blocks while its page is open shows its decision bar at once. */
   question?: QuestionInfo
-  /** `"note"` while a triage or RCA run that has already replied is filing its note; status stays `running` during it. */
-  phase?: '' | 'note'
+  /** `"note"` while a triage or RCA run that has already replied is filing its note; `"gather"` while a preparing run gathers context. Status stays `running` during `note`, `preparing` during `gather`. */
+  phase?: '' | 'note' | 'gather'
   /** Session runs only: `'read-only'` (default) or `'worktree'`. */
   access?: SessionAccess
   /** `"note not filed: <reason>"` when the note turn failed; absent otherwise. */
@@ -64,7 +64,27 @@ export interface QueuedSteer {
 }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo;
   /** What the operator asked for when they started the run, in their own words; absent when they asked for nothing in particular. */
-  instruction?: string; modelSegments?: ModelSegmentInfo[] }
+  instruction?: string; modelSegments?: ModelSegmentInfo[]
+  /** What the run gathered before it started working, in the order it ran each lookup. Absent on a run that gathered nothing. */
+  gathered?: GatheredInfo[]
+  /** Whether a run that was asked to reproduce the ticket on staging managed to. Absent on a run that was never asked. */
+  reproduction?: ReproductionInfo }
+/**
+ * One lookup a run made while gathering context, before it started working:
+ * a PR diff, a past run's history, a configured command, an MCP call. `file`
+ * is the bundle-relative path its output was written to, when it wrote one —
+ * a row with no `file` has nothing to open, only `summary` or `reason` to
+ * read. `status` is `denied` for a lookup the workspace's permissions
+ * refused; such a row is never shown, because a human reading gathered
+ * context has no use for a door that stayed shut.
+ */
+export interface GatheredInfo {
+  name: string; file?: string; kind: 'pr' | 'history' | 'command' | 'mcp';
+  status: 'ok' | 'truncated' | 'failed' | 'denied' | 'skipped'; reason?: string;
+  bytes: number; tookMs: number; call: string; summary?: string; diff?: string; diffBytes?: number
+}
+/** Whether a run asked to reproduce the ticket on staging managed to, and where it tried. */
+export interface ReproductionInfo { outcome: 'reproduced' | 'not_reproduced' | 'not_attempted'; where?: string }
 /**
  * A blocked run's question. `text` is always there; `decision` is there only
  * when the question is a permission one — a call the policy refused that the
@@ -121,8 +141,8 @@ export interface FixInfo { branch?: string; base?: string; commit?: string; prUr
  * once sets neither.
  */
 export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string; delta?: boolean; replace?: boolean; ask?: DecisionAsk;
-  /** Set on every line written while the run's phase is `'note'`; absent on every other line. */
-  phase?: 'note' } }
+  /** Set on every line written while the run's phase is `'note'` or `'gather'`; absent on every other line. */
+  phase?: 'note' | 'gather' } }
 /** One file in a fix run's change. A renamed file is named by the path it now has. */
 export interface DiffFile { path: string; status: 'added'|'modified'|'deleted'|'renamed'; additions: number; deletions: number }
 /**
@@ -393,6 +413,14 @@ export interface PlaybookSummary {
   bytes: number
   /** RFC 3339, UTC. */
   modifiedAt: string
+  /** The frontmatter's `kinds:` list, when it has one — the run kinds the playbook loads for. Absent when the file sets no frontmatter. */
+  kinds?: string[]
+  /** The frontmatter's `when:` keywords, matched against the ticket to decide whether to list the playbook rather than load it. Absent when the file sets no frontmatter. */
+  when?: string[]
+  /** The frontmatter's `about:` line, shown beside a listed (not loaded) playbook so a reader can tell whether to open it. */
+  about?: string
+  /** Set when the file has frontmatter the parser could not read; the prompt loads the playbook as if it had none. */
+  frontmatterError?: string
 }
 export interface MCPSummary { workspaceOnly: boolean }
 export interface NotifySummary { enabled: boolean; on: string[]; includeTitle: boolean; destinations: NotifyDestination[] }
@@ -559,6 +587,8 @@ export interface Transport {
   note(ws: string, runId: string, kind: NoteKind): Promise<string>; prompt(ws: string, runId: string): Promise<string>;
   /** The run bundle's attachments with their sizes and types; empty when it downloaded none. */
   attachments(ws: string, runId: string): Promise<Attachment[]>;
+  /** What the run gathered before it started working; empty when it gathered nothing. */
+  gathered(ws: string, runId: string): Promise<GatheredInfo[]>;
   /**
    * A URL the webview can put in an `<img>`, an `<object>` or a media
    * element for one attachment, named by its bundle-relative `path`. The
@@ -677,7 +707,7 @@ export const TRANSPORT_METHODS = [
   'workspaces', 'addWorkspace', 'removeWorkspace',
   'queue', 'resolve', 'resolveHelpdesk', 'composeIntent',
   'runs', 'run', 'deleteRun', 'search', 'events', 'note', 'prompt',
-  'attachments', 'attachmentURL',
+  'attachments', 'attachmentURL', 'gathered',
   'startSession',
   'startTriage', 'startRCA', 'startFix', 'startEval',
   'evalReports', 'latestRetro', 'golden', 'addGolden',

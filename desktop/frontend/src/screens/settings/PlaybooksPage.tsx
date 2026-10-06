@@ -373,6 +373,25 @@ function PlaybookRow({
             {playbook.lede}
           </span>
         )}
+        {(playbook.kinds?.length || playbook.when?.length) ? (
+          <span className="playbook-row__chips">
+            {(playbook.kinds ?? []).map((kind) => (
+              <span key={`kind-${kind}`} className="playbook-row__chip">
+                {kind}
+              </span>
+            ))}
+            {(playbook.when ?? []).map((keyword) => (
+              <span key={`when-${keyword}`} className="playbook-row__chip" dir="auto">
+                <bdi>{keyword}</bdi>
+              </span>
+            ))}
+          </span>
+        ) : null}
+        {playbook.frontmatterError ? (
+          <span className="playbook-row__error" dir="auto">
+            Frontmatter ignored: {playbook.frontmatterError}
+          </span>
+        ) : null}
       </span>
       <span className="playbook-row__actions">
         <Button size="sm" variant="ghost" onClick={onOpen} aria-label={`Open ${playbook.title} in editor`}>

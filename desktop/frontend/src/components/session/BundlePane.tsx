@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ChatMarkdown from '../markdown/ChatMarkdown'
-import type { Attachment, Transport } from '../../api/types'
+import type { Attachment, GatheredInfo, Transport } from '../../api/types'
 import { reasonOf } from '../../lib/format'
 import { usePathAction } from '../../lib/pathAction'
 import ContextMenu from '../../ui/context-menu'
@@ -308,17 +308,106 @@ function AttachmentsBlock({
   )
 }
 
-function PlaybooksBlock({ bundle }: { bundle: Bundle }): JSX.Element | null {
+/**
+ * What a run gathered before it started working: a PR diff, a past run's
+ * history, a configured command, an MCP call. A denied row is never shown —
+ * a human reading gathered context has no use for a door that stayed shut —
+ * and only the first four visible rows draw until "+N more" is clicked,
+ * which does not fold again.
+ */
+function GatheredBlock({
+  rows,
+  onOpen,
+}: {
+  rows: GatheredInfo[]
+  onOpen: (a: Attachment) => void
+}): JSX.Element | null {
+  const [expanded, setExpanded] = useState(false)
+  const visible = rows.filter((r) => r.status !== 'denied')
+  if (visible.length === 0) return null
+  const shown = expanded ? visible : visible.slice(0, 4)
+  const hidden = visible.length - shown.length
+
+  return (
+    <section className="si-block" aria-label="Gathered" data-sec="gathered" data-testid="bundle-gathered">
+      <h3 className="si-block__h">Gathered</h3>
+      <ul className="si-gathered">
+        {shown.map((row, i) => (
+          <li key={`${row.name}-${i}`}>
+            <button
+              type="button"
+              className="si-gathered__row"
+              onClick={() => {
+                if (!row.file) return
+                onOpen({
+                  name: row.name,
+                  path: row.file,
+                  mime: row.file.endsWith('.diff') ? 'text/x-diff' : 'text/markdown',
+                  size: row.bytes,
+                })
+              }}
+            >
+              <bdi>{row.name}</bdi>
+              <span className="si-gathered__summary" dir="auto">
+                {row.summary ?? row.reason}
+              </span>
+              {row.status !== 'ok' ? (
+                <span className="si-gathered__status" data-status={row.status}>
+                  {row.status}
+                </span>
+              ) : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 ? (
+        <button type="button" className="si-more" onClick={() => setExpanded(true)}>
+          +{hidden} more
+        </button>
+      ) : null}
+    </section>
+  )
+}
+
+function PlaybooksBlock({
+  bundle,
+  transport,
+  workspaceId,
+}: {
+  bundle: Bundle
+  transport: Transport
+  workspaceId: string
+}): JSX.Element | null {
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState('')
-  if (bundle.playbooks.length === 0) return null
+  const [otherBody, setOtherBody] = useState<Record<string, string>>({})
+  const n = bundle.playbooks.length
+  const m = bundle.otherPlaybooks.length
+  if (n === 0 && m === 0) return null
+
+  function toggleOther(name: string): void {
+    setShown((v) => (v === name ? '' : name))
+    if (name in otherBody) return
+    transport
+      .playbook(workspaceId, `${name}.md`)
+      .then((body) => setOtherBody((v) => ({ ...v, [name]: body })))
+      .catch(() => {})
+  }
 
   return (
     <section className="si-block" aria-label="Playbooks" data-sec="playbooks" data-testid="bundle-playbooks">
       <button type="button" className="si-fold" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <ChevronIcon />
         <span>
-          <bdi>{bundle.playbooks.length}</bdi> {bundle.playbooks.length === 1 ? 'playbook' : 'playbooks'} in the prompt
+          {m > 0 ? (
+            <>
+              <bdi>{n}</bdi> loaded · <bdi>{m}</bdi> on file
+            </>
+          ) : (
+            <>
+              <bdi>{n}</bdi> {n === 1 ? 'playbook' : 'playbooks'} in the prompt
+            </>
+          )}
         </span>
       </button>
       {open ? (
@@ -336,6 +425,32 @@ function PlaybooksBlock({ bundle }: { bundle: Bundle }): JSX.Element | null {
               </button>
               {shown === p.name ? (
                 <ChatMarkdown className="si-pb__body sd-bidi">{p.body || '_Nothing but headings._'}</ChatMarkdown>
+              ) : null}
+            </li>
+          ))}
+          {bundle.otherPlaybooks.map((p) => (
+            <li key={p.name}>
+              <button
+                type="button"
+                className="si-pb si-pb--other"
+                aria-expanded={shown === p.name}
+                onClick={() => toggleOther(p.name)}
+              >
+                <ChevronIcon />
+                <bdi>{p.name}</bdi>
+                {p.about ? (
+                  <span className="si-pb__about sd-bidi" dir="auto">
+                    {p.about}
+                  </span>
+                ) : null}
+                {p.matched ? (
+                  <span className="si-pb__chip" dir="auto">
+                    matched &quot;<bdi>{p.matched}</bdi>&quot;
+                  </span>
+                ) : null}
+              </button>
+              {shown === p.name ? (
+                <ChatMarkdown className="si-pb__body sd-bidi">{otherBody[p.name] ?? ''}</ChatMarkdown>
               ) : null}
             </li>
           ))}
@@ -363,6 +478,7 @@ export default function BundlePane({
   const [prompt, setPrompt] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [gathered, setGathered] = useState<GatheredInfo[]>([])
   const [preview, setPreview] = useState<Attachment | null>(null)
   const [menu, setMenu] = useState(false)
   const folder = usePathAction({
@@ -401,6 +517,22 @@ export default function BundlePane({
       .attachments(workspaceId, runId)
       .then((list) => {
         if (!cancelled) setAttachments(list)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [transport, workspaceId, runId])
+
+  useEffect(() => {
+    let cancelled = false
+    setGathered([])
+    // A run that gathered nothing, or whose transport predates the route,
+    // is not an error here: the section simply draws nothing.
+    transport
+      .gathered(workspaceId, runId)
+      .then((list) => {
+        if (!cancelled) setGathered(list)
       })
       .catch(() => {})
     return () => {
@@ -447,10 +579,11 @@ export default function BundlePane({
         </p>
       ) : null}
       <TicketBlock bundle={bundle} assignee={assignee} helpdeskKey={helpdeskKey} />
+      <GatheredBlock rows={gathered} onOpen={setPreview} />
       <ConversationBlock bundle={bundle} />
       <SlackBlock bundle={bundle} />
       <AttachmentsBlock files={bundle.files} attachments={attachments} onOpen={setPreview} />
-      <PlaybooksBlock bundle={bundle} />
+      <PlaybooksBlock bundle={bundle} transport={transport} workspaceId={workspaceId} />
       {preview ? (
         <AttachmentPreview
           attachment={preview}

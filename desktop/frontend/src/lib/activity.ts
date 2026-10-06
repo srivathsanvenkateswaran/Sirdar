@@ -146,6 +146,9 @@ export function currentActivity(events: IndexedEvent[], now: number): Activity |
 /** What the activity line says while a reply-first run files its note. */
 export const NOTE_LABEL = 'Filing the note…'
 
+/** What the activity line says while a preparing run gathers context before it starts working. */
+export const GATHER_LABEL = 'Gathering context…'
+
 /**
  * The tail's reading, said as the note being filed. The chat already holds
  * the reply, so "Writing the answer" over the note's JSON would read as a
