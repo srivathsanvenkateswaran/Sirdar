@@ -59,11 +59,15 @@ export const RAIL_AT = BELOW_COMPACT
  */
 export const SIDEBAR_COLLAPSED_KEY = 'sirdar.sidebarCollapsed'
 
-/** The nav row a screen belongs to. A run is reached from Sessions, a review from its run. */
+/**
+ * The nav row a screen belongs to. A run is reached from Sessions, unless the
+ * Shadow screen opened it; a review from its run.
+ */
 function rowOf(screen: Screen): NavName {
   switch (screen.name) {
-    case 'new':
     case 'run':
+      return screen.from === 'shadow' ? 'shadow' : 'sessions'
+    case 'new':
     case 'review':
       return 'sessions'
     default:

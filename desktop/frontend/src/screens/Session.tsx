@@ -65,6 +65,8 @@ export interface SessionProps {
   notesDir?: string
   /** The workspace's tracker and helpdesk, for the mark beside the number. */
   sources?: SourcesSummary
+  /** Where the run was opened from; `shadow` means a shadow run, before its record says so. */
+  from?: 'shadow'
   onBack: () => void
   /** Opens the change review for this run. */
   onOpenReview: () => void
@@ -118,7 +120,10 @@ export default function Session(props: SessionProps): JSX.Element {
   )
   // A shadow run opens in the conversation layout whatever the preference:
   // that is the layout that draws it read-only, the way the service treats it.
-  const shown: SessionLayout = detail?.shadow ? 'conversation' : layout
+  // Opened from the Shadow screen, it is known to be one before its record
+  // loads, so the preferred layout never flashes up first.
+  const shadowRun = detail ? Boolean(detail.shadow) : props.from === 'shadow'
+  const shown: SessionLayout = shadowRun ? 'conversation' : layout
   // The header's switcher says so, rather than showing a preference this
   // run is not drawn in. Held in a memo: the header is memoised on its props.
   const shadowSwitcher = useMemo(

@@ -1048,6 +1048,19 @@ describe('SessionConversation', () => {
       expect(screen.getByText('Shadow run. Nothing was filed, sent or registered')).toBeInTheDocument()
     })
 
+    it('opened from the Shadow screen, it waits for the run in Conversation rather than the preferred layout', async () => {
+      setSessionLayout('document')
+      const f = fake({ detail: SHADOW })
+      let release: (d: RunDetail) => void = () => {}
+      f.transport.run = vi.fn(() => new Promise<RunDetail>((resolve) => (release = resolve)))
+      renderScene(f, { from: 'shadow' })
+      expect(document.querySelector('.sc-loading')).toHaveTextContent('Loading run…')
+      expect(document.querySelector('.sn-loading')).toBeNull()
+      await act(async () => release(SHADOW))
+      await screen.findByTestId('conversation')
+      expect(screen.queryByTestId('session-document')).toBeNull()
+    })
+
     it('shows Conversation in the header switcher, disabled, and says why', async () => {
       setSessionLayout('document')
       const f = fake({ detail: SHADOW })
