@@ -367,6 +367,16 @@ describe('Register', () => {
     await waitFor(() => expect(transport.calls.runs.length).toBe(reads + 1))
   })
 
+  it('does not re-read for a job the shadow watcher finished, which files nothing', async () => {
+    const { transport } = mount()
+    await table()
+    const reads = transport.calls.runs.length
+    act(() => {
+      transport.emit({ kind: 'job.finished', jobId: 'shadow-1', workspaceId: 'ws1', outcomes: [], shadowJob: true })
+    })
+    expect(transport.calls.runs.length).toBe(reads)
+  })
+
   it('ignores another workspace’s events', async () => {
     const { transport } = mount()
     const t = await table()

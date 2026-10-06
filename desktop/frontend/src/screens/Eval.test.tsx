@@ -443,6 +443,17 @@ describe('Eval run suite', () => {
     expect(screen.getAllByRole('button', { name: 'Cancel suite' })).toHaveLength(1)
   })
 
+  it('keeps waiting when the shadow watcher finishes a job, even with no suite id to compare', async () => {
+    const { transport, emit } = mount()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    fireEvent.click(runSuite())
+    await waitFor(() => expect(runSuite()).toBeDisabled())
+
+    emit({ kind: 'job.finished', jobId: 'shadow-1', workspaceId: 'ws1', outcomes: [], shadowJob: true })
+    expect(runSuite()).toBeDisabled()
+    expect(transport.evalReports).toHaveBeenCalledTimes(1)
+  })
+
   it('ignores another workspace finishing a job', async () => {
     const { transport, emit } = mount()
     await screen.findByRole('checkbox', { name: 'OMNI-2510' })

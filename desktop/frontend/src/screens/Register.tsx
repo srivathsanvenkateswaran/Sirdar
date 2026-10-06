@@ -199,7 +199,7 @@ export default function Register(props: {
         if (e.kind === 'run.updated' && e.workspaceId === workspaceId) {
           if (e.run.shadow) return
           setRuns((prev) => upsert(prev, e.run))
-        } else if (e.kind === 'job.finished' && e.workspaceId === workspaceId) {
+        } else if (e.kind === 'job.finished' && e.workspaceId === workspaceId && !e.shadowJob) {
           void load()
         }
       }),

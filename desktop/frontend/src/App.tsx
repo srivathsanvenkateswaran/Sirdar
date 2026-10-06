@@ -387,7 +387,8 @@ function Shell(): JSX.Element {
           title={title}
           notesDir={currentWorkspace?.notesDir}
           sources={sources}
-          onBack={() => navigate({ name: 'board' })}
+          from={shown.from}
+          onBack={() => navigate(shown.from === 'shadow' ? { name: 'shadow' } : { name: 'board' })}
           onOpenReview={() => navigate({ name: 'review', runId })}
           onStartFix={startFix}
         />
@@ -424,7 +425,7 @@ function Shell(): JSX.Element {
           transport={transport}
           workspaceId={workspaceId}
           status={shadowStatus}
-          onOpenRun={(runId) => navigate({ name: 'run', runId })}
+          onOpenRun={(runId) => navigate({ name: 'run', runId, from: 'shadow' })}
         />
       )
       break

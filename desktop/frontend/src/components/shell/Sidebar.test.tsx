@@ -242,6 +242,13 @@ describe('the sidebar nav', () => {
     expect(screen.getByRole('button', { name: 'Shadow' })).toHaveAttribute('aria-current', 'page')
   })
 
+  it('files a run opened from the Shadow screen under Shadow, not Sessions', () => {
+    setShowLibrary(false)
+    mount({ shadow: shadowStatus({ enabled: true }), screen: { name: 'run', runId: 'r1', from: 'shadow' } })
+    expect(screen.getByRole('button', { name: 'Shadow' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Sessions' })).not.toHaveAttribute('aria-current')
+  })
+
   it('keeps the Shadow row for a ledger after shadow is switched off', () => {
     setShowLibrary(false)
     const { onNavigate } = mount({ shadow: shadowStatus({ enabled: false, hasLedger: true, state: 'disabled' }) })

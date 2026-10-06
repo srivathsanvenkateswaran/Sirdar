@@ -202,45 +202,6 @@
   overflow-wrap: anywhere;
 }
 
-/*
- * Remember this: out of the way until the bubble is pointed at or a key
- * reaches it, and held up while the call is out, so the reader sees the
- * click land. Opacity, not display, keeps it in the tab order.
- */
-.sc-you__remember {
-  display: block;
-  margin-block-start: var(--sd-space-2);
-  margin-inline-start: auto;
-  padding-block: 2px;
-  padding-inline: var(--sd-space-2);
-  border: 1px solid var(--sd-rule-strong);
-  border-radius: var(--sd-radius-pill);
-  background: var(--sd-surface);
-  color: var(--sd-ink-2);
-  font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-meta);
-  line-height: 1.4;
-  white-space: nowrap;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity var(--sd-dur-1) var(--sd-ease);
-}
-
-.sc-you:hover .sc-you__remember,
-.sc-you:focus-within .sc-you__remember,
-.sc-you[data-busy] .sc-you__remember {
-  opacity: 1;
-}
-
-.sc-you__remember:hover:not(:disabled) {
-  background: var(--sd-nav-hover);
-  color: var(--sd-ink);
-}
-
-.sc-you__remember:disabled {
-  cursor: default;
-}
-
 /* A shadow run says what it is before the transcript does. */
 .sc-shadow {
   padding-block: var(--sd-space-3) 0;

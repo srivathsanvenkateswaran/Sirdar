@@ -5,7 +5,7 @@ import type { AppStore } from '../../store/appStore'
 import { StoreProvider } from '../../store/useAppStore'
 import { PrimaryActionProvider, usePrimaryAction } from '../../components/shell/primaryAction'
 import { resetRunJobs, setRunJob } from '../../lib/jobs'
-import { resetSessionLayout, setSessionLayout } from '../../lib/sessionLayout'
+import { resetSessionLayout, sessionLayout, setSessionLayout } from '../../lib/sessionLayout'
 import { createFakeTransport, diff, suggestion, type FakeTransport } from '../../store/fakeTransport'
 import {
   FIX_DETAIL,
@@ -394,10 +394,15 @@ describe('SessionConversation', () => {
     it('keeps the box for an answer in words, which goes without a decision', async () => {
       const f = fake({ detail: ASKING, events: fixEvents('blocked'), diff: FIX_DIFF })
       renderScene(f, { runId: FIX_DETAIL.runId })
-      const box = await screen.findByRole('textbox', { name: 'Answer' })
+      // A test id is cheap to find; polling the whole document by role, with
+      // the patch pane and transcript mounted, can outlast the timeout under
+      // a loaded worker. Once the bar is up, the role queries stay in the form.
+      await screen.findByTestId('decision-bar')
+      const form = screen.getByRole('form')
+      const box = within(form).getByRole('textbox', { name: 'Answer' })
       expect(box).toHaveAttribute('placeholder', 'A note for the agent goes with Allow or Deny. Sent alone, it allows nothing')
       fireEvent.change(box, { target: { value: 'Run only the ledger package.' } })
-      fireEvent.click(send(/^Answer/))
+      fireEvent.click(within(form).getByRole('button', { name: /^Answer/ }))
       await waitFor(() => expect(f.transport.resume).toHaveBeenCalledWith('ws1', FIX_DETAIL.runId, 'Run only the ledger package.', ''))
     })
   })
@@ -1048,7 +1053,20 @@ describe('SessionConversation', () => {
       expect(screen.getByText('Shadow run. Nothing was filed, sent or registered')).toBeInTheDocument()
     })
 
-    it('shows Conversation in the header switcher, disabled, and says why', async () => {
+    it('opened from the Shadow screen, it waits for the run in Conversation rather than the preferred layout', async () => {
+      setSessionLayout('document')
+      const f = fake({ detail: SHADOW })
+      let release: (d: RunDetail) => void = () => {}
+      f.transport.run = vi.fn(() => new Promise<RunDetail>((resolve) => (release = resolve)))
+      renderScene(f, { from: 'shadow' })
+      expect(document.querySelector('.sc-loading')).toHaveTextContent('Loading run…')
+      expect(document.querySelector('.sn-loading')).toBeNull()
+      await act(async () => release(SHADOW))
+      await screen.findByTestId('conversation')
+      expect(screen.queryByTestId('session-document')).toBeNull()
+    })
+
+    it('shows Conversation in the header switcher, held there, and says why to a keyboard as well as a pointer', async () => {
       setSessionLayout('document')
       const f = fake({ detail: SHADOW })
       renderScene(f)
@@ -1056,17 +1074,23 @@ describe('SessionConversation', () => {
       const group = screen.getByRole('radiogroup', { name: 'Session layout' })
       expect(within(group).getByRole('radio', { name: 'Conversation' })).toHaveAttribute('aria-checked', 'true')
       for (const radio of within(group).getAllByRole('radio')) {
-        expect(radio).toBeDisabled()
+        // Still in the tab order, so a keyboard reaches the reason.
+        expect(radio).not.toBeDisabled()
+        expect(radio).toHaveAttribute('aria-disabled', 'true')
         expect(radio).toHaveAttribute('title', 'Shadow runs open in Conversation, the read-only layout')
+        expect(radio).toHaveAccessibleDescription('Shadow runs open in Conversation, the read-only layout')
       }
+      fireEvent.click(within(group).getByRole('radio', { name: 'Workbench' }))
+      expect(sessionLayout()).toBe('document')
+      expect(screen.getByTestId('conversation')).toBeInTheDocument()
     })
 
-    it('shows its instruction with no Remember this', async () => {
+    it('draws no instruction bubble, since the watcher started it and not the operator', async () => {
       const f = fake({ detail: { ...SHADOW, instruction: 'Check the tax rounding first' } })
       renderScene(f)
-      const asked = await screen.findByTestId('instruction-bubble')
-      expect(asked).toHaveTextContent('Check the tax rounding first')
-      expect(within(asked).queryByRole('button', { name: 'Remember this' })).toBeNull()
+      await screen.findByTestId('you-bubble')
+      expect(screen.queryByTestId('instruction-bubble')).toBeNull()
+      expect(screen.queryByText('started the run')).toBeNull()
     })
 
     it('offers no Remember this on its messages', async () => {
@@ -1121,7 +1145,7 @@ describe('SessionConversation', () => {
       expect(busy).toBeDisabled()
 
       await act(async () => release())
-      expect(toast).toHaveBeenCalledWith('Suggested an addition to 20-orders.md. Review it in Settings › Playbooks.', 'info', {
+      expect(toast).toHaveBeenCalledWith('Suggested an addition to 20-orders.md.', 'info', {
         label: 'Open Playbooks',
         to: { name: 'settings', page: 'playbooks' },
       })

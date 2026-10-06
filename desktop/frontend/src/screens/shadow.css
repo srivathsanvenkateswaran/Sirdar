@@ -144,6 +144,14 @@
   gap: var(--sd-space-5);
 }
 
+.shadow-drawer__title {
+  margin: 0;
+  color: var(--sd-ink);
+  font-size: var(--sd-text-body-l);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
 .shadow-drawer__section {
   display: grid;
   gap: var(--sd-space-2);

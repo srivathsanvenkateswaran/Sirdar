@@ -54,7 +54,8 @@ Built. `desktop/frontend/src/ui/toast/`. It replaces `.toasts` and `.toast` in
 - **Don't** apologise or hedge. An error toast says what failed and what to do:
   "Add a workspace before starting a run."
 - **Do** let a toast dismiss itself after its time is up, and let it be
-  dismissed by hand before then.
+  dismissed by hand before then. Its time stops while the pointer is over it
+  or focus is inside it, and starts again in full when either leaves.
 - **Don't** put a control other than Dismiss in a toast, besides one link to
   a place the reader can also reach without it. A toast that can disappear
   cannot hold the only route to an action.

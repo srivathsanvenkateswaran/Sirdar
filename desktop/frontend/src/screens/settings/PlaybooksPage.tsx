@@ -786,6 +786,12 @@ export default function PlaybooksPage({
 
   return (
     <>
+      {/* A silent failure here would hide the Remember clicks the operator was told to review. */}
+      {playbooks.suggestions.status === 'error' ? (
+        <p className="form-error" role="alert" dir="auto">
+          Could not read pending suggestions. {playbooks.suggestions.message}
+        </p>
+      ) : null}
       {pending.length > 0 && (
         <SettingCard heading="Pending suggestions">
           <div className="suggestion-rows">

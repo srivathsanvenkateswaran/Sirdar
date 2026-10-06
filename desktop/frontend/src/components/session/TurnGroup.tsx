@@ -1,6 +1,7 @@
 import { memo, type MouseEvent } from 'react'
 import { markersForStep, type Marker } from '../../lib/evidence'
-import type { PathItem, SessionTurn } from './model'
+import type { PathItem, SessionTurn, TurnItem } from './model'
+import { RememberButton } from './Remember'
 import Stamp from './Stamp'
 import ToolStep from './ToolStep'
 
@@ -15,21 +16,56 @@ export interface TurnGroupProps {
   onOpenInTools?: (index: number) => void
   hotRefs?: string[]
   live?: boolean
+  /** Offers an operator message to the playbooks by its log index; absent where the run's messages are not kept. */
+  onRemember?: (index: number) => void
+  /** The messages whose Remember this is in flight, by log index. */
+  remembering?: readonly number[]
 }
 
-/** The operator's own words: a steer, an answer, a review. */
-export function YouCard({ at, text, label }: { at: string; text: string; label: string }): JSX.Element {
+export interface YouCardProps {
+  /** When it was said, as the path's clock; empty for the instruction, which the run was started with. */
+  at: string
+  text: string
+  label: string
+  /** Offers these words to the playbooks; the card draws no Remember this without it. */
+  onRemember?: () => void
+  /** The Remember this call is out. */
+  remembering?: boolean
+  testId?: string
+}
+
+/** The operator's own words: a steer, an answer, a review, the instruction the run started with. */
+export function YouCard({ at, text, label, onRemember, remembering = false, testId = 'you-card' }: YouCardProps): JSX.Element {
   return (
-    <div className="sn-you" data-testid="you-card">
+    <div className="sn-you" data-testid={testId} data-busy={remembering || undefined}>
       <div className="sn-you__who">
         <Stamp tone="you">you</Stamp>
-        <span>{at}</span>
-        <span>· {label}</span>
+        {at ? <span>{at}</span> : null}
+        <span>{at ? `· ${label}` : label}</span>
       </div>
       <div className="sn-you__say" dir="auto">
         {text}
       </div>
+      {onRemember ? <RememberButton busy={remembering} onRemember={onRemember} /> : null}
     </div>
+  )
+}
+
+/** A path's "you" item as its card, with Remember this where the words can be kept. */
+function youCardOf(
+  item: Extract<TurnItem, { kind: 'you' }>,
+  onRemember: ((index: number) => void) | undefined,
+  remembering: readonly number[] | undefined,
+): JSX.Element {
+  return (
+    <YouCard
+      key={`you-${item.index}`}
+      at={item.at}
+      text={item.text}
+      label={item.label}
+      onRemember={onRemember && item.remember ? () => onRemember(item.index) : undefined}
+      remembering={remembering?.includes(item.index)}
+    />
   )
 }
 
@@ -50,7 +86,7 @@ export function SystemLine({ at, text, tone }: { at: string; text: string; tone?
  * turn as a "you" card. Quiet reads arrive already merged ("turns 3–8") by
  * the model, so the group draws what it is given.
  */
-function TurnGroup({ turn, markers, hotMarker, open, onToggle, onMarker, onOpenInTools, hotRefs, live }: TurnGroupProps): JSX.Element {
+function TurnGroup({ turn, markers, hotMarker, open, onToggle, onMarker, onOpenInTools, hotRefs, live, onRemember, remembering }: TurnGroupProps): JSX.Element {
   return (
     <section aria-label={turn.label} className="sn-turn">
       <div className="sn-turn__rule">
@@ -82,7 +118,7 @@ function TurnGroup({ turn, markers, hotMarker, open, onToggle, onMarker, onOpenI
               />
             )
           case 'you':
-            return <YouCard key={`you-${item.index}`} at={item.at} text={item.text} label={item.label} />
+            return youCardOf(item, onRemember, remembering)
           case 'system':
             return <SystemLine key={`sys-${item.index}`} at={item.at} text={item.text} tone={item.tone} />
         }
@@ -106,7 +142,7 @@ export function PathList({
           case 'turn':
             return <MemoTurnGroup key={item.turn.key} turn={item.turn} {...rest} />
           case 'you':
-            return <YouCard key={`you-${item.index}`} at={item.at} text={item.text} label={item.label} />
+            return youCardOf(item, rest.onRemember, rest.remembering)
           case 'system':
             return <SystemLine key={`sys-${item.index}`} at={item.at} text={item.text} tone={item.tone} />
         }

@@ -687,4 +687,33 @@ describe('SessionWorkbench', () => {
       expect(within(commandBar()).getByText(/session · writes in worktree/i)).toBeInTheDocument()
     })
   })
+
+  describe('Remember this', () => {
+    it('offers a steer row to the playbooks, by the index the service counts', async () => {
+      const events = triageEvents()
+      // Service.Events numbers lines from 1, and so does the feed.
+      const expected = events.findIndex((e) => e.kind === 'steer') + 1
+      const f = fake({ events })
+      renderWorkbench(f)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+      const remember = within(console_()).getAllByRole('button', { name: 'Remember this' })
+      expect(remember).toHaveLength(1)
+      fireEvent.click(remember[0])
+      await waitFor(() => expect(f.transport.calls.remember).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN.runId, index: expected }]))
+    })
+
+    it('draws the instruction at the head of the transcript, and offers it as index 0', async () => {
+      const detail = { ...TRIAGE_RUN, instruction: 'Check the tax rounding first' }
+      const f = fake({ detail })
+      renderWorkbench(f, detail)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+      const log = screen.getByTestId('console-log')
+      const asked = within(log).getByTestId('instruction-card')
+      expect(log.firstElementChild).toBe(asked)
+      expect(asked).toHaveTextContent('started the run')
+      expect(within(asked).getByText('Check the tax rounding first')).toHaveAttribute('dir', 'auto')
+      fireEvent.click(within(asked).getByRole('button', { name: 'Remember this' }))
+      await waitFor(() => expect(f.transport.calls.remember).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN.runId, index: 0 }]))
+    })
+  })
 })

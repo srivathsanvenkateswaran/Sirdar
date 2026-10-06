@@ -25,7 +25,13 @@ export type Screen =
   | { name: 'board' }
   /** The New session screen: a key or URL, a mode, and Start. */
   | { name: 'new' }
-  | { name: 'run'; runId: string }
+  /**
+   * `from: 'shadow'` is a run opened from the Shadow screen: the sidebar
+   * keeps Shadow current, Back returns there, and the session opens in
+   * Conversation before the run has loaded. The address does not carry it,
+   * so a reload files the run under Sessions again.
+   */
+  | { name: 'run'; runId: string; from?: 'shadow' }
   /** The run's change, full width, before a branch is made of it. */
   | { name: 'review'; runId: string }
   | { name: 'register' }

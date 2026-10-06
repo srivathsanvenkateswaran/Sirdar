@@ -385,6 +385,9 @@ export default function Eval(props: {
   useEffect(() => {
     return transport.subscribe((e) => {
       if (e.kind !== 'job.finished' || e.workspaceId !== workspaceId) return
+      // The shadow watcher's jobs are never a suite, and with no suite id to
+      // compare against one would otherwise end the wait.
+      if (e.shadowJob) return
       const known = suiteIds.current
       if (known.size > 0 && !known.has(e.jobId)) return
       setStarted(false)

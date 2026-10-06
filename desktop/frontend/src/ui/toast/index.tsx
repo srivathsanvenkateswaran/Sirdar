@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import './Toast.css'
 
 export type ToastTone = 'info' | 'error'
@@ -33,13 +33,31 @@ function ToastRow({
   onLink?: (id: number) => void
   dismissAfterMs: number
 }): JSX.Element {
+  // A toast the reader is pointing at or has tabbed into stays put: its link
+  // is a real control, and a timer that unmounts it mid-use drops focus to the
+  // page (WCAG 2.2.1). Its full time starts again once the reader lets go.
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const held = hovered || focused
+
   useEffect(() => {
+    if (held) return
     const timer = setTimeout(() => onDismiss(toast.id), dismissAfterMs)
     return () => clearTimeout(timer)
-  }, [toast.id, onDismiss, dismissAfterMs])
+  }, [toast.id, onDismiss, dismissAfterMs, held])
 
   return (
-    <li className="sd-toast" data-tone={toast.tone}>
+    <li
+      className="sd-toast"
+      data-tone={toast.tone}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={(e) => {
+        // Moving from the link to Dismiss is still inside the toast.
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false)
+      }}
+    >
       <span className="sd-toast__text" dir="auto">
         {toast.text}
       </span>

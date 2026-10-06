@@ -11,7 +11,7 @@ import type { SessionModel } from '../../components/session/model'
 import NoteDocument, { MetaCell } from '../../components/session/NoteDocument'
 import ToolsPane from '../../components/session/ToolsPane'
 import { rowsOf } from '../../components/session/toolRows'
-import { PathList } from '../../components/session/TurnGroup'
+import { PathList, YouCard } from '../../components/session/TurnGroup'
 import { markersForStep, parseRefs } from '../../lib/evidence'
 import { costOrUnknown } from '../../lib/format'
 import { isReplyRun, latestReply } from '../../lib/replyRun'
@@ -50,7 +50,7 @@ function reveal(el: Element | null | undefined): void {
  * change, with C markers tying each hunk to the edit that wrote it.
  */
 export default function SessionDocument(props: SessionLayoutProps): JSX.Element {
-  const { transport, workspaceId, detail, data, events, title, notesDir, live, actions, pending, actionError, steerRefusal, sent, canCancel } = props
+  const { transport, workspaceId, detail, data, events, title, notesDir, live, actions, pending, actionError, steerRefusal, sent, canCancel, remember } = props
   const { model, note, bundle, changes, drops, everything, setEverything } = data
   // The record's model, else the one the log names, so the strip never says "model unknown" for a run that did say.
   const named = useMemo(() => (detail.model || !model.model ? detail : { ...detail, model: model.model }), [detail, model.model])
@@ -150,6 +150,24 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
       Open desk {detail.helpdeskKey || ''} <OpenIcon />
     </Button>
   ) : undefined
+
+  /*
+   * What the operator asked for when they started the run heads the path:
+   * it is not in the log, and the service reads it back as index 0. A shadow
+   * run has none to draw, since the watcher started it, not the operator.
+   */
+  const instruction = (detail.instruction ?? '').trim()
+  const askedCard =
+    instruction && !detail.shadow ? (
+      <YouCard
+        at=""
+        text={instruction}
+        label="started the run"
+        testId="instruction-card"
+        onRemember={remember ? () => remember.remember(0) : undefined}
+        remembering={remember?.busy.includes(0)}
+      />
+    ) : null
 
   const composerError = model.composer.kind === 'disabled' ? '' : actionError
   const sendBusy = pending === 'answer' || pending === 'steer'
@@ -312,6 +330,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
             </div>
           </div>
           <div className="sn-path__scroll sn-scroll" ref={pathRef} role="log" aria-label="Path" aria-live="polite">
+            {askedCard}
             {model.path.length === 0 ? (
               <p className="sn-path__empty">{live ? 'No calls yet. They appear here as the agent works.' : 'The log holds no calls.'}</p>
             ) : (
@@ -325,6 +344,8 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
                 onOpenInTools={openInTools}
                 hotRefs={hotSteps.length > 0 ? hotRefs : undefined}
                 live={live}
+                onRemember={remember?.remember}
+                remembering={remember?.busy}
               />
             )}
           </div>

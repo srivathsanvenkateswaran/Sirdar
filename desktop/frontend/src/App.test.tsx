@@ -6,6 +6,8 @@ import {
   configSummary,
   createFakeTransport,
   run,
+  shadowReport,
+  shadowStatus,
   ticket,
   workspace,
   type FakeTransport,
@@ -303,6 +305,28 @@ describe('Sidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add workspace…' }))
     expect(s.getState().screen).toEqual({ name: 'settings', page: 'general' })
+  })
+})
+
+describe('Shadow', () => {
+  it('opens a shadow run as Shadow\'s own, so the sidebar keeps Shadow current and Escape goes back to it', async () => {
+    const transport = createFakeTransport({
+      workspaces: [workspace({ id: 'ws1', name: 'omni' })],
+      runs: [run({ runId: 'r1', key: 'OMNI-1', status: 'completed', shadow: true })],
+      shadowStatus: shadowStatus({ enabled: true }),
+      shadowReport: shadowReport(),
+    })
+    const { store: s } = mount(transport)
+    await screen.findByRole('heading', { name: /Queue/ })
+    s.navigate({ name: 'shadow' })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'OMNI-1' }))
+    expect(s.getState().screen).toEqual({ name: 'run', runId: 'r1', from: 'shadow' })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Shadow' })).toHaveAttribute('aria-current', 'page'))
+    expect(screen.getByRole('button', { name: 'Sessions' })).not.toHaveAttribute('aria-current')
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(s.getState().screen).toEqual({ name: 'shadow' }))
   })
 })
 
