@@ -202,6 +202,9 @@ func RefuseSteer(maxTurns, maxMinutes int, maxUSD float64, state store.State) er
 	case store.StatusOverBudget:
 		return fmt.Errorf("run: %s ran over budget (%s); a steer counts against the same caps and cannot continue it", state.RunID, state.Reason)
 	}
+	if state.Shadow {
+		return fmt.Errorf("run: %s is a shadow run; it is a measurement and is not steered", state.RunID)
+	}
 	if state.Eval {
 		return fmt.Errorf("run: %s is an eval replay; its note is a measurement and is not steered", state.RunID)
 	}

@@ -25,6 +25,9 @@ type RegisterRow struct {
 
 	Title   string `json:",omitempty"`
 	Company string `json:",omitempty"`
+	// PRURL is set on RCA rows to the merged PR the RCA read, so the
+	// register can say what fix each RCA explained.
+	PRURL string `json:",omitempty"`
 }
 
 func registerPath(root string) string {

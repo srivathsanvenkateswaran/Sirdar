@@ -88,6 +88,9 @@ type Options struct {
 	// of the "newest triage note" a later rca or fix reads.
 	Eval bool
 
+	// Shadow marks the run as a shadow measurement (see store.State.Shadow). It implies NoNotify.
+	Shadow bool
+
 	// NoNotify silences the run-completion notification for this
 	// invocation, for a batch being re-run that the channel has already
 	// heard about.
@@ -462,6 +465,9 @@ func (r *Runner) Resume(ctx context.Context, runID string, o ResumeOptions) (Out
 	}
 
 	p := &prepared{run: rn, state: state, kind: state.Kind, bundle: bundle, reply: state.ReplyFirst,
+		// A shadow run tells nobody it finished, however many times it
+		// is resumed on the way.
+		noNotify: state.Shadow,
 		// A reply-first triage or rca blocked in its reply turn still owes
 		// its note once the reply lands.
 		noteAfter: state.ReplyFirst && state.Kind != store.KindSession}

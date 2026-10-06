@@ -91,7 +91,12 @@ func (s *Service) releaseKey(wsID, key string) {
 
 // busyReason says why key should be left alone, or returns "".
 func busyReason(states []store.State, cooldown time.Duration, now time.Time) string {
+	// A shadow run is the watcher measuring the agent, not anyone working
+	// the ticket, so it neither holds a key busy nor starts its cooldown.
 	for _, st := range states {
+		if st.Shadow {
+			continue
+		}
 		if st.Status == store.StatusPreparing || st.Status == store.StatusRunning {
 			return fmt.Sprintf("a %s run of %s is already %s", st.Kind, st.Key, st.Status)
 		}
@@ -100,7 +105,7 @@ func busyReason(states []store.State, cooldown time.Duration, now time.Time) str
 		return ""
 	}
 	for _, st := range states {
-		if st.Kind != store.KindTriage {
+		if st.Shadow || st.Kind != store.KindTriage {
 			continue
 		}
 		at := st.UpdatedAt

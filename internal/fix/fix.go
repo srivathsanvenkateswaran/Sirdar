@@ -595,7 +595,7 @@ func reviewedCommit(ctx context.Context, g git, root, key string) (store.State, 
 		return store.State{}, rep, false, nil
 	}
 	for _, s := range states {
-		if s.Kind != store.KindFix || s.Eval {
+		if s.Kind != store.KindFix || s.Measurement() {
 			continue
 		}
 		if s.Status != store.StatusCompleted || s.Fix.Commit == "" || s.Fix.Branch == "" {

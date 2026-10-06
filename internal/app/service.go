@@ -419,7 +419,15 @@ func (s *Service) root(wsID string) (string, error) {
 // --- reading runs -----------------------------------------------------
 
 // Runs lists a workspace's runs, newest first. An empty key lists all.
+// Shadow runs are left out: they are the watcher's measurements, and the
+// Runs list is the record of work someone asked for.
 func (s *Service) Runs(wsID, key string) ([]RunSummary, error) {
+	return s.runs(wsID, key, false)
+}
+
+// runs is Runs with the choice of whether shadow runs are listed, for the
+// screens that show them on purpose.
+func (s *Service) runs(wsID, key string, includeShadow bool) ([]RunSummary, error) {
 	root, err := s.root(wsID)
 	if err != nil {
 		return nil, err
@@ -439,6 +447,9 @@ func (s *Service) Runs(wsID, key string) ([]RunSummary, error) {
 	self := selfIn(root)
 	out := make([]RunSummary, 0, len(states))
 	for _, st := range states {
+		if st.Shadow && !includeShadow {
+			continue
+		}
 		out = append(out, SummaryFor(runDir(root, st.Key, st.RunID), st, self))
 	}
 	return out, nil
@@ -705,9 +716,18 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 			HelpdeskRef: t.HelpdeskRef,
 			UpdatedAt:   wireTime(t.UpdatedAt),
 		}
-		if states, err := store.List(ws.Root, t.Key); err == nil && len(states) > 0 {
-			latest := SummaryFor(runDir(ws.Root, t.Key, states[0].RunID), states[0], self)
-			row.LatestRun = &latest
+		// The newest run someone asked for, not the newest shadow run: the
+		// board's latest run is what the operator last had done to the
+		// ticket, and a shadow run did nothing to it.
+		if states, err := store.List(ws.Root, t.Key); err == nil {
+			for _, st := range states {
+				if st.Shadow {
+					continue
+				}
+				latest := SummaryFor(runDir(ws.Root, t.Key, st.RunID), st, self)
+				row.LatestRun = &latest
+				break
+			}
 		}
 		out = append(out, row)
 	}

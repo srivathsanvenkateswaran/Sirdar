@@ -120,6 +120,27 @@ type ModelSegment struct {
 	Why   string
 }
 
+// DeniedCall is one tool call a shadow run's policy refused.
+type DeniedCall struct {
+	At      time.Time `json:"at"`
+	Tool    string    `json:"tool"`
+	Summary string    `json:"summary"`
+}
+
+// RCAInputs is what an rca run was handed to work from.
+type RCAInputs struct {
+	PRURL      string `json:"prUrl,omitempty"`
+	Resolution string `json:"resolution,omitempty"`
+}
+
+// MaxDenied caps State.Denied, so a shadow run that keeps reaching for a
+// refused tool cannot grow its state file without bound.
+const MaxDenied = 20
+
+// RCAResolutionMax caps the resolution text an rca run keeps in
+// RCAInputs, so a pasted log does not bloat the state file.
+const RCAResolutionMax = 4000
+
 // State is the persisted state of a single run.
 type State struct {
 	RunID, Key           string
@@ -165,6 +186,27 @@ type State struct {
 	// into the notes directory, never reaches the register, and is never
 	// what `sirdar rca` or `sirdar fix` reads as "the newest triage note".
 	Eval bool `json:",omitempty"`
+
+	// Shadow marks a run the shadow watcher started unattended, to see what
+	// the agent would have done with a ticket without anyone acting on it.
+	// Like an eval it is a measurement: nothing it writes leaves the run
+	// directory, and nothing reads it as the ticket's record.
+	Shadow bool `json:",omitempty"`
+
+	// Denied records every tool call a shadow run's policy refused, oldest
+	// first, capped at MaxDenied, so the operator can see what the agent
+	// reached for that an attended run would have asked about.
+	Denied []DeniedCall `json:",omitempty"`
+
+	// Questions records every question a shadow run asked in words, oldest
+	// first. Nobody is there to answer them, so they are kept for the
+	// operator to read instead.
+	Questions []string `json:",omitempty"`
+
+	// RCAInputs is what an rca run was handed: the PR URL and the
+	// engineer's resolution text. It is kept so a later reader can judge
+	// the RCA against what it was given.
+	RCAInputs *RCAInputs `json:",omitempty"`
 
 	// HandleCostUSD is the cost the provider last reported for the
 	// conversation Handle names. Claude reports a resumed session's cost as
@@ -318,6 +360,11 @@ func (s State) RequestedModel() string {
 	}
 	return s.Model
 }
+
+// Measurement reports whether the run is a measurement rather than a record of a ticket:
+// an eval replay or a shadow run. Neither is filed, registered, steered, or read as
+// "the newest triage note".
+func (s State) Measurement() bool { return s.Eval || s.Shadow }
 
 // NewRunID returns a sortable, unique run id of the form
 // "20060102T150405Z-abcd".
@@ -491,17 +538,19 @@ func List(root, key string) ([]State, error) {
 // Kind is kind and whose Status is "completed" and whose note.md exists on
 // disk. It errors if no such run is found.
 //
-// Eval runs are skipped. An eval replays a golden bundle to score the
-// agent, and its note describes a ticket as it stood when the bundle was
-// captured; treating it as the key's newest triage note would put an
-// `sirdar rca` or an `sirdar fix` to work on a measurement.
+// Eval and shadow runs are skipped. An eval replays a golden bundle to
+// score the agent, and its note describes a ticket as it stood when the
+// bundle was captured; a shadow run's note is what the agent would have
+// written had anyone been watching. Treating either as the key's newest
+// triage note would put an `sirdar rca` or an `sirdar fix` to work on a
+// measurement.
 func LatestNote(root, key string, kind Kind) (string, error) {
 	states, err := List(root, key)
 	if err != nil {
 		return "", err
 	}
 	for _, s := range states {
-		if s.Kind != kind || s.Status != StatusCompleted || s.Eval {
+		if s.Kind != kind || s.Status != StatusCompleted || s.Measurement() {
 			continue
 		}
 		notePath := filepath.Join(runsDir(root), s.Key, s.RunID, "note.md")

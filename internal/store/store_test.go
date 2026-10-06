@@ -493,6 +493,63 @@ func TestLatestNoteErrorsWhenNoneCompleted(t *testing.T) {
 	}
 }
 
+// TestMeasurement covers which runs count as measurements: an eval replay,
+// a shadow run, or both. A plain run is a record of its ticket.
+func TestMeasurement(t *testing.T) {
+	cases := []struct {
+		name string
+		s    State
+		want bool
+	}{
+		{"zero", State{}, false},
+		{"eval", State{Eval: true}, true},
+		{"shadow", State{Shadow: true}, true},
+		{"both", State{Eval: true, Shadow: true}, true},
+	}
+	for _, c := range cases {
+		if got := c.s.Measurement(); got != c.want {
+			t.Errorf("%s: Measurement() = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// TestLatestNoteSkipsShadowRuns: a shadow run's note is what the agent would
+// have written, so an rca or a fix must read the newest attended note
+// instead, even when the shadow run is newer.
+func TestLatestNoteSkipsShadowRuns(t *testing.T) {
+	root := t.TempDir()
+	t0 := time.Date(2026, 9, 10, 9, 0, 0, 0, time.UTC)
+	t1 := time.Date(2026, 9, 10, 10, 0, 0, 0, time.UTC)
+
+	writeRun := func(at time.Time, shadow bool) string {
+		run, err := Create(root, "OMNI-1", at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := testState(filepath.Base(run.Dir), "OMNI-1", KindTriage, StatusCompleted, at)
+		s.Shadow = shadow
+		if err := run.WriteState(s); err != nil {
+			t.Fatal(err)
+		}
+		notePath := filepath.Join(run.Dir, "note.md")
+		if err := os.WriteFile(notePath, []byte("# note"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return notePath
+	}
+
+	want := writeRun(t0, false)
+	writeRun(t1, true)
+
+	got, err := LatestNote(root, "OMNI-1", KindTriage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
 // TestStateRoundTripsSessionFields is the session run's record: whether it
 // answers the operator in chat, which turn it is in, what it may do to the
 // workspace's files, and whether its note turn failed. A round trip through

@@ -2597,10 +2597,10 @@ func (r *Runner) writeNote(p *prepared, kind note.Kind, filename, body string) (
 	}
 	p.state.Notes = append(p.state.Notes, runPath)
 
-	// An eval replay's note is a measurement of the agent, not a record of
-	// a ticket: filing it would overwrite the note a human wrote for the
-	// same key and reads in their vault.
-	if p.state.Eval {
+	// An eval replay's note, like a shadow run's, is a measurement of the
+	// agent, not a record of a ticket: filing it would overwrite the note a
+	// human wrote for the same key and reads in their vault.
+	if p.state.Measurement() {
 		return runPath, nil
 	}
 
@@ -2674,7 +2674,7 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 	states, err := store.List(r.Config.Root, p.state.Key)
 	if err == nil {
 		for _, s := range states {
-			if s.Kind != store.KindTriage || s.Status != store.StatusCompleted || s.RunID == p.state.RunID || s.Eval {
+			if s.Kind != store.KindTriage || s.Status != store.StatusCompleted || s.RunID == p.state.RunID || s.Measurement() {
 				continue
 			}
 			for _, path := range s.Notes {
@@ -2744,9 +2744,10 @@ func (r *Runner) writePlaybookSuggestions(p *prepared, f rcaFields) error {
 // the notes are already on disk.
 func (r *Runner) appendRegister(p *prepared, row store.RegisterRow) {
 	// The register is the audit index of tickets that were worked. An
-	// eval replayed a stored bundle to score a prompt change, so it has
-	// nothing to add to it; its own report is .sirdar/eval/<stamp>.json.
-	if p.state.Eval {
+	// eval replayed a stored bundle to score a prompt change, and a shadow
+	// run worked a ticket nobody acted on, so neither has anything to add
+	// to it; an eval's own report is .sirdar/eval/<stamp>.json.
+	if p.state.Measurement() {
 		return
 	}
 	row.Key = p.state.Key

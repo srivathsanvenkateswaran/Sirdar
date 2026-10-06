@@ -182,7 +182,7 @@ func Steer(ctx context.Context, deps runner.Deps, runID, text, model string) (St
 			recordFixState(cfg.Root, runID, stderr, state.Key, func(s *store.State) { s.Fix.DiffPath = res.DiffPath })
 			res.State.Fix.DiffPath = res.DiffPath
 		}
-		if !state.Eval {
+		if !state.Measurement() {
 			appendRegister(cfg.Root, state.Key, res.State, tn)
 		}
 	} else {

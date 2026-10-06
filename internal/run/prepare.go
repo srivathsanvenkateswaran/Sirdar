@@ -211,8 +211,9 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		model = cfg.Model
 	}
 	// A dry run notifies nobody: it writes a bundle and a prompt, and
-	// "completed" on the channel would claim a triage that never ran.
-	p := &prepared{run: rn, kind: kind, noNotify: o.NoNotify || o.DryRun, keepWorktree: o.KeepWorktree}
+	// "completed" on the channel would claim a triage that never ran. A
+	// shadow run notifies nobody either, because nobody asked for it.
+	p := &prepared{run: rn, kind: kind, noNotify: o.NoNotify || o.DryRun || o.Shadow, keepWorktree: o.KeepWorktree}
 	p.state = store.State{
 		RunID:     filepath.Base(rn.Dir),
 		Key:       key,
@@ -223,6 +224,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		StartedAt: now,
 		UpdatedAt: now,
 		Eval:      o.Eval,
+		Shadow:    o.Shadow,
 		// Trimmed here rather than at the door: every caller — the CLI,
 		// the HTTP route, the Wails bridge — hands over whatever was
 		// typed, and a request of nothing but spaces is no request.

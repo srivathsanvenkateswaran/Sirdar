@@ -102,6 +102,10 @@ type RunSummary struct {
 	// ReplyFirst says the run answers the operator in chat: every session
 	// run, and a triage or RCA run started by anything but eval.
 	ReplyFirst bool `json:"replyFirst,omitempty"`
+	// Shadow says the run is a shadow measurement the watcher started
+	// unattended, so a screen that lists it can mark it as one rather
+	// than pass it off as a triage someone asked for.
+	Shadow bool `json:"shadow,omitempty"`
 
 	// Source is where the run's ticket came from when it was not a
 	// tracker or helpdesk: "slack" for a thread triaged with no ticket,
@@ -628,6 +632,7 @@ func SummaryOf(s store.State) RunSummary {
 		Access:       s.Access,
 		NoteWarning:  s.NoteWarning,
 		ReplyFirst:   s.ReplyFirst,
+		Shadow:       s.Shadow,
 		QueuedSteers: queuedSteersOf(s.QueuedSteers),
 		Question:     questionOf(s),
 	}
@@ -864,6 +869,15 @@ func RegisterRowOf(r store.RegisterRow) RegisterRow {
 // sentinel, so the HTTP layer answers 404 — an id that cannot name
 // anything names nothing — without needing to know about this error.
 var ErrInvalidArgument = errors.New("app: invalid identifier")
+
+// ErrBadInput marks a request whose body or parameters this package
+// refuses, as distinct from an identifier that names nothing. The HTTP
+// layer answers it with 400.
+var ErrBadInput = errors.New("app: bad input")
+
+// ErrNoSuchSuggestion marks a suggestion id that names no suggestion. The
+// HTTP layer answers it with 404.
+var ErrNoSuchSuggestion = errors.New("app: no such suggestion")
 
 // idRejects are the characters that make an id something other than one
 // plain path element: separators, and the glob metacharacters

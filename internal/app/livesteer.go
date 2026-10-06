@@ -25,8 +25,8 @@ func live(s store.State) bool {
 
 // QueueLiveSteer queues text on runID when the run is still working, and
 // reports whether it did. A run that has settled is not touched, and the
-// caller steers it the ordinary way. An eval is refused here as it is on a
-// settled run: its note is a measurement.
+// caller steers it the ordinary way. An eval or a shadow run is refused here
+// as it is on a settled run: either is a measurement.
 func QueueLiveSteer(root, runID, text, model string, now time.Time) (store.QueuedSteer, bool, error) {
 	rn, st, err := store.Open(root, runID)
 	if err != nil {
@@ -34,6 +34,9 @@ func QueueLiveSteer(root, runID, text, model string, now time.Time) (store.Queue
 	}
 	if !live(st) {
 		return store.QueuedSteer{}, false, nil
+	}
+	if st.Shadow {
+		return store.QueuedSteer{}, false, fmt.Errorf("%w: run %s is a shadow run; it is a measurement and is not steered", ErrSteerRefused, runID)
 	}
 	if st.Eval {
 		return store.QueuedSteer{}, false, fmt.Errorf("%w: run %s is an eval replay; its note is a measurement and is not steered", ErrSteerRefused, runID)
