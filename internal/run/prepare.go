@@ -111,6 +111,12 @@ type prepared struct {
 	// reply-first triage or rca still files its note. A session run has
 	// no note to file.
 	noteAfter bool
+
+	// noteModelDropped says the note turn runs on the run's own model
+	// rather than phases.note.model: the note model hit a per-model limit
+	// and the note is being filed again without it, or an Update note
+	// named its model explicitly.
+	noteModelDropped bool
 }
 
 // filedNote is what a run said about its note before an Update note began.
@@ -189,7 +195,14 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return nil, err
 	}
 
+	// An explicit model beats phases.reply.model, which beats the
+	// workspace's model. The reply model is the run's model, not a
+	// per-session override: every steer and the register row stay on the
+	// model that investigated. Eval and a note-only run have no reply turn.
 	model := o.Model
+	if model == "" && (kind == store.KindSession || ((kind == store.KindTriage || kind == store.KindRCA) && !o.NoteOnly)) && !o.Eval {
+		model = cfg.ReplyModel()
+	}
 	if model == "" {
 		model = cfg.Model
 	}

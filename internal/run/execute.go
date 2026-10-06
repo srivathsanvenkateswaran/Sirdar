@@ -179,6 +179,15 @@ type execution struct {
 	// the reply rather than to the note.
 	noteSess provider.Session
 
+	// wrapUp is the session asked to answer from what the reply turn had
+	// found once that turn reached phases.reply.maxTurns, replyCapped is
+	// the cap it reached, and capped is the session that reached it. That
+	// session is cancelled to make way for the wrap-up, so its last line is
+	// not the answer and is not read as one.
+	wrapUp      provider.Session
+	capped      provider.Session
+	replyCapped int
+
 	// sessions is every session this execute has read from, in the order
 	// they started, and folded is how many of them had ended their part in
 	// the run when the note turn began, or when a fallback model started a
@@ -438,6 +447,9 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	// note turn's and its events are the ones judged.
 	if p.state.Phase == store.PhaseNote {
 		ex.noteSess = sess
+		if m := r.notePhaseModel(p); m != "" {
+			r.announceNoteModel(p, log, m)
+		}
 	}
 
 	// A steer's instruction goes into the transcript ahead of the session
@@ -659,6 +671,10 @@ func (r *Runner) finishNote(ctx context.Context, p *prepared, ex *execution, res
 		reason = ex.completeErr.Error()
 	case ex.noteErr != "":
 		reason = ex.noteErr
+	case r.noteCap(p) > 0 && ex.seen.Turns >= r.noteCap(p):
+		// A provider told the cap through --max-turns stops itself there,
+		// and says so in its own words; the run names it as Sirdar would.
+		reason = noteCapReason(r.noteCap(p))
 	case ex.overBudget != "":
 		reason = ex.overBudget
 	case timedOut:
@@ -824,6 +840,26 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		spec.Policy = notePolicy(p)
 		spec.MCPConfig, spec.MCPStrict, spec.UserMCPServers = "", true, nil
 		spec.Mode = provider.ModeTriage
+		// The note turn may run on a model of its own and under a cap of
+		// its own: it writes down what was found, which is no reason to
+		// spend the investigating model or start investigating again. The
+		// run budget still covers both turns, so the smaller cap wins.
+		if phasesApply(p) {
+			if m := r.notePhaseModel(p); m != "" {
+				spec.Model = m
+			}
+			if c := r.Config.NoteMaxTurns(); c > 0 && (spec.Budget.MaxTurns == 0 || c < spec.Budget.MaxTurns) {
+				spec.Budget.MaxTurns = c
+			}
+		}
+	}
+
+	// A reply turn's cap is told to the provider as well as enforced here,
+	// so a provider that counts turns stops at it on its own.
+	if phasesApply(p) && p.replyTurn() {
+		if c := r.Config.ReplyMaxTurns(); c > 0 && (spec.Budget.MaxTurns == 0 || c < spec.Budget.MaxTurns) {
+			spec.Budget.MaxTurns = c
+		}
 	}
 
 	// Claude Code reads image files from the bundle directory itself.
@@ -1199,6 +1235,13 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 	if ev.Kind != provider.EvError {
 		ex.malformed = 0
 	}
+	// The reply session that reached its cap was cancelled to make way for
+	// the wrap-up, and drains while it starts. Its last line is whatever it
+	// was saying when it was cut off, not the answer, and its usage is
+	// folded into base already, so neither is judged as the run's.
+	if ex.capped != nil && sess == ex.capped && (ev.Kind == provider.EvFinal || ev.Kind == provider.EvUsage) {
+		return
+	}
 	if p.state.Phase == store.PhaseNote {
 		// The reply session drains after the note turn has begun. What it
 		// says on the way out is recorded but not judged as the note
@@ -1207,7 +1250,7 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		if sess != ex.noteSess && ev.Kind != provider.EvBreach {
 			return
 		}
-		if r.handleNoteEvent(p, sess, ex, ev) {
+		if r.handleNoteEvent(ctx, p, sess, log, ex, ev) {
 			return
 		}
 	}
@@ -1253,6 +1296,28 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", u.Turns, b.MaxTurns)
 			ex.stall.stop()
 			sess.Cancel()
+		}
+		if ex.overBudget != "" {
+			break
+		}
+		// The note turn's cap. More than the cap rather than as many: the
+		// turn that carries the note is itself one of them, so a note filed
+		// on the eighth turn of eight is kept.
+		if c := r.noteCap(p); c > 0 && p.state.Phase == store.PhaseNote && ex.seen.Turns > c && len(ex.final) == 0 {
+			r.endNoteTurn(sess, ex, noteCapReason(c))
+			break
+		}
+		// The reply turn's cap. Rather than end the run with nothing to
+		// show for the turns it spent, the session is stopped and asked
+		// once to answer from what it has.
+		if phasesApply(p) && p.replyTurn() && ex.wrapUp == nil && ex.replyCapped == 0 && ex.retrySession == nil {
+			if n := r.Config.ReplyMaxTurns(); n > 0 && ex.seen.Turns >= n {
+				ex.replyCapped, ex.capped = n, sess
+				r.recordSystem(p, log, fmt.Sprintf("Reply turn reached its %d-turn cap", n))
+				ex.stall.hold()
+				sess.Cancel()
+				r.startWrapUp(ctx, p, sess, log, ex, n)
+			}
 		}
 
 	case provider.EvRateLimited:
@@ -1337,6 +1402,11 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		}
 
 	case provider.EvSystem:
+		// A note turn on phases.note.model reports that model, which is
+		// not the one that investigated and must not take the run's name.
+		if p.state.Phase == store.PhaseNote && r.notePhaseModel(p) != "" {
+			break
+		}
 		r.noteModel(p, ev)
 
 	case provider.EvFinal:
@@ -1350,7 +1420,11 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 // limit — ends only the note turn here, because the reply already stands
 // and nobody is waiting on this turn to answer a question. A blind verdict
 // is ignored: the note turn is meant to read nothing.
-func (r *Runner) handleNoteEvent(p *prepared, sess provider.Session, ex *execution, ev provider.Event) bool {
+//
+// A limit on phases.note.model is the one exception: the reply's model
+// answered the whole investigation, so the note is filed again on it once
+// before the note turn gives up.
+func (r *Runner) handleNoteEvent(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, ev provider.Event) bool {
 	switch ev.Kind {
 	case provider.EvPermission:
 		// The note policy asks nobody, so a question about a call is as
@@ -1362,6 +1436,10 @@ func (r *Runner) handleNoteEvent(p *prepared, sess provider.Session, ex *executi
 	case provider.EvQuestion:
 		r.endNoteTurn(sess, ex, "the note turn asked: "+firstLine(ev.Text))
 	case provider.EvModelLimit:
+		if m := r.notePhaseModel(p); m != "" && !p.noteModelDropped && ex.retrySession == nil {
+			r.retryNoteOnRunModel(ctx, p, sess, log, ex, m)
+			return true
+		}
 		r.endNoteTurn(sess, ex, modelLimitReason(limitedModel(ev)))
 	case provider.EvBlind:
 	default:
@@ -1625,6 +1703,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
+	// A note turn that has used its cap does not get another turn to fix
+	// its answer in: the retry would be the ninth turn of eight.
+	if c := r.noteCap(p); c > 0 && p.state.Phase == store.PhaseNote && ex.seen.Turns >= c {
+		r.endNoteTurn(sess, ex, noteCapReason(c))
+		return
+	}
+
 	if empty {
 		ex.emptyTurns++
 	} else {
@@ -1746,6 +1831,15 @@ func (r *Runner) handleReply(ctx context.Context, p *prepared, sess provider.Ses
 		text = strings.TrimSpace(string(ev.Final))
 	}
 
+	if text == "" && ex.wrapUp != nil && sess == ex.wrapUp {
+		// The wrap-up was the reply turn's last chance; a nudge would be
+		// a third turn past the cap.
+		ex.overBudget = fmt.Sprintf("reply turn reached its %d-turn cap", ex.replyCapped)
+		ex.stall.stop()
+		sess.Cancel()
+		return
+	}
+
 	if text == "" {
 		if ex.emptyTurns >= maxEmptyTurns {
 			ex.failure = errEmptyAnswer.Error()
@@ -1845,7 +1939,14 @@ func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.S
 	// starting a process is not a live session going quiet. consume rearms
 	// it once the note session is live.
 	ex.stall.hold()
+	r.openNoteSession(ctx, p, sess, log, ex)
+}
 
+// openNoteSession starts the session that carries the note turn, continuing
+// sess's conversation. It is the tail of startNoteTurn, and the whole of a
+// note turn filed again on the run's model after phases.note.model hit a
+// limit.
+func (r *Runner) openNoteSession(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution) {
 	// A provider that cannot continue a run at all (cursor, agy) refuses
 	// because a follow-up could lead to tool calls nothing judges before
 	// they run. The note turn leads to none: it runs under the note
@@ -1870,8 +1971,19 @@ func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.S
 			ex.noteErr = "the note turn could not start: " + err.Error()
 			return
 		}
+		// An Update note has no reply in this execute; the run's reply is
+		// on disk, where the Update note read it from too.
+		reply := ex.reply
+		if reply == "" {
+			if data, err := os.ReadFile(filepath.Join(p.run.Dir, answerFile)); err == nil {
+				reply = strings.TrimRight(string(data), "\n")
+			}
+		}
 		spec = r.sessionSpec(p, "")
-		spec.Prompt = primedNotePrompt(string(original), ex.reply, r.notePrompt(p))
+		spec.Prompt = primedNotePrompt(string(original), reply, r.notePrompt(p))
+	}
+	if spec.Model != p.state.RequestedModel() {
+		r.announceNoteModel(p, log, spec.Model)
 	}
 	next, err := r.Provider.Start(ctx, spec)
 	if err != nil {
@@ -1880,6 +1992,133 @@ func (r *Runner) startNoteTurn(ctx context.Context, p *prepared, sess provider.S
 	}
 	fmt.Fprintf(r.stderr(), "[%s] filing the note\n", p.state.Key)
 	ex.retrySession, ex.noteSess = next, next
+}
+
+// phasesApply reports whether phases.reply and phases.note govern this run:
+// a reply-first run that is neither an eval nor a fix. Eval scores the note
+// a single session writes on the workspace's model, and a fix run has no
+// reply or note turn at all.
+func phasesApply(p *prepared) bool {
+	return p.state.ReplyFirst && !p.state.Eval && p.kind != store.KindFix
+}
+
+// notePhaseModel is the model the note turn asks for in place of the run's
+// own, or "" when it asks for the run's: no phases.note.model, phases that
+// do not apply, the same model, or a note model already dropped.
+func (r *Runner) notePhaseModel(p *prepared) string {
+	if !phasesApply(p) || p.noteModelDropped {
+		return ""
+	}
+	m := r.Config.NoteModel()
+	if m == p.state.RequestedModel() {
+		return ""
+	}
+	return m
+}
+
+// noteCap is the note turn's turn cap for this run, 0 for none.
+func (r *Runner) noteCap(p *prepared) int {
+	if !phasesApply(p) {
+		return 0
+	}
+	return r.Config.NoteMaxTurns()
+}
+
+// noteCapReason is why a note turn that ran out of turns filed nothing.
+func noteCapReason(n int) string {
+	return fmt.Sprintf("the note turn used its %d-turn cap", n)
+}
+
+// announceNoteModel records that the note turn runs on a model of its own:
+// a system line and a segment, so the transcript and the state both say who
+// wrote the note. The run's model is left alone, because it names the model
+// that found the facts and is what a later steer asks for again.
+func (r *Runner) announceNoteModel(p *prepared, log *eventLog, model string) {
+	line := "Note turn on " + model
+	r.recordSystem(p, log, line)
+	fmt.Fprintf(r.stderr(), "[%s] %s\n", p.state.Key, line)
+	p.state.ModelSegments = append(p.state.ModelSegments, store.ModelSegment{At: r.now(), Model: model, Why: "phases.note.model"})
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+}
+
+// retryNoteOnRunModel files the note again on the run's own model after
+// phases.note.model hit a per-model limit: the model that answered the
+// whole investigation can certainly write it down. It happens once; a
+// limit on the run's model ends the note turn as any limit does.
+func (r *Runner) retryNoteOnRunModel(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, limited string) {
+	p.noteModelDropped = true
+	r.recordSystem(p, log, fmt.Sprintf("%s hit a model limit; filing the note on %s", limited, modelName(p.state.RequestedModel())))
+	ex.stall.hold()
+	sess.Cancel()
+	// What the refused session spent is the run's, and the next session's
+	// counters start again, so it is folded into base as the reply's is
+	// when the note turn begins.
+	ex.base = usagePlus(ex.base, ex.seen)
+	ex.seen = store.Usage{}
+	ex.folded = len(ex.sessions)
+	p.usageBase = ex.base
+	p.usageBase.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(ex.started).Seconds()
+	ex.retried, ex.emptyTurns, ex.schemaError, ex.finalNarration = false, 0, "", ""
+	r.openNoteSession(ctx, p, sess, log, ex)
+}
+
+// wrapUpPrompt is what a reply turn that reached phases.reply.maxTurns is
+// sent instead of being cut off with nothing to show for its turns.
+func wrapUpPrompt(n int) string {
+	return fmt.Sprintf("You have used this turn's cap of %d tool turns. Stop investigating. "+
+		"Answer the operator now from what you have found, say what is unverified and what you would check next.", n)
+}
+
+// startWrapUp continues a reply turn cancelled at its cap with the wrap-up
+// prompt, on the provider's resume handle when it has one and primed with
+// the reply turn's prompt otherwise. The wrap-up may read its own run
+// directory and nothing else and has two turns: it is there to answer, not
+// to go on investigating. Its text is the reply, through handleReply.
+func (r *Runner) startWrapUp(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, n int) {
+	reason := fmt.Sprintf("reply turn reached its %d-turn cap", n)
+	// What the reply turn spent becomes part of the base, as it does when
+	// the note turn begins: the wrap-up's counters start again, and the
+	// run budget judges its usage on top of the reply's.
+	ex.base = usagePlus(ex.base, ex.seen)
+	ex.seen = store.Usage{}
+	ex.folded = len(ex.sessions)
+	p.usageBase = ex.base
+	p.usageBase.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(ex.started).Seconds()
+
+	cont, _ := provider.PlanSteer(r.Provider)
+	var spec provider.SessionSpec
+	if handle := sess.Handle(); cont == provider.ContinueResume && handle != "" {
+		// The same conversation, whose cost is in base now.
+		if cumulativeResumeCost[r.providerName()] {
+			ex.costOffset = ex.rawCost
+		}
+		spec = r.sessionSpec(p, handle)
+		spec.Prompt = wrapUpPrompt(n)
+	} else {
+		ex.costOffset, ex.rawCost = 0, 0
+		original, err := os.ReadFile(filepath.Join(p.run.Dir, "prompt.md"))
+		if err != nil {
+			ex.overBudget = reason
+			return
+		}
+		spec = r.sessionSpec(p, "")
+		spec.Prompt = strings.TrimSpace(string(original)) + "\n\n---\n\n" + wrapUpPrompt(n)
+	}
+	spec.Policy = notePolicy(p)
+	spec.MCPConfig, spec.MCPStrict, spec.UserMCPServers = "", true, nil
+	spec.OutputSchema = nil
+	if spec.Budget.MaxTurns == 0 || spec.Budget.MaxTurns > 2 {
+		spec.Budget.MaxTurns = 2
+	}
+	next, err := r.Provider.Start(ctx, spec)
+	if err != nil {
+		ex.overBudget = reason
+		return
+	}
+	ex.retrySession, ex.wrapUp = next, next
 }
 
 // notePrompt is the note turn's opening message for this run's kind.

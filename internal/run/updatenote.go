@@ -106,6 +106,9 @@ func (r *Runner) UpdateNote(ctx context.Context, runID string, o UpdateNoteOptio
 	p.state.NoteWarning = ""
 	p.state.Notes = nil
 	applyModel(p, o.Model, "note --model", r.now())
+	// A model the operator named for this Update note beats
+	// phases.note.model, as an explicit run model beats phases.reply.model.
+	p.noteModelDropped = strings.TrimSpace(o.Model) != ""
 
 	log, err := r.openEventLog(rn)
 	if err != nil {
