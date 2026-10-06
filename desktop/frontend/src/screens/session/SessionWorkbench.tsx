@@ -12,6 +12,8 @@ import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport, Verdict } 
 import type { ComposerMode } from '../../components/run/Composer'
 import ChatMarkdown from '../../components/markdown/ChatMarkdown'
 import DecisionBar from '../../components/session/DecisionBar'
+import { canRemember, RememberButton, useRemember } from '../../components/session/Remember'
+import { YouCard } from '../../components/session/TurnGroup'
 import LiveActivity from '../../components/session/LiveActivity'
 import { LIVE, withEcho, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
@@ -128,6 +130,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   const { transport, workspaceId, runId, notesDir, onBack, onOpenReview, onStartFix } = props
   const { detail, setDetail, events, setEvents, loadError, finished } = props.feed
   const jobId = useRunJob(runId)
+  const { busy: remembering, remember } = useRemember(transport, workspaceId, runId)
 
   // ---- state --------------------------------------------------------------
   const [tab, setTab] = useState<Tab | null>(null)
@@ -439,6 +442,37 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     setFilter('all')
   }, [])
 
+  /*
+   * Remember this, on the steers and answers the log holds words for. A
+   * shadow run never reaches this layout, but its messages are not kept in
+   * any layout, so the guard holds here too.
+   */
+  const keepable = useMemo(
+    () => new Set(detail?.shadow ? [] : events.filter(canRemember).map((e) => e.index)),
+    [events, detail?.shadow],
+  )
+  const rowAction = useCallback(
+    (row: ConsoleRow) =>
+      row.kind === 'steer' && keepable.has(row.index) ? (
+        <RememberButton busy={remembering.includes(row.index)} onRemember={() => remember(row.index)} />
+      ) : null,
+    [keepable, remembering, remember],
+  )
+  // The instruction the run started with heads the transcript: it is not in
+  // the log, and the service reads it back as index 0.
+  const instruction = (detail?.instruction ?? '').trim()
+  const askedCard =
+    instruction && !detail?.shadow ? (
+      <YouCard
+        at=""
+        text={instruction}
+        label="started the run"
+        testId="instruction-card"
+        onRemember={() => remember(0)}
+        remembering={remembering.includes(0)}
+      />
+    ) : null
+
   const onDiffLoaded = useCallback((diff: RunDiff | null) => setDiffFiles(diff ? diff.files.length : null), [])
   const onNoteLoaded = useCallback((n: number) => setNoteCount(n), [])
   const onBundleLoaded = useCallback((doc: Bundle | null) => setBundle(doc), [])
@@ -638,6 +672,8 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
             turnOf={turnOf}
             scrollTo={scrollTo}
             onVisibleTurns={setVisibleTurns}
+            head={askedCard}
+            rowAction={rowAction}
           />
 
           <LiveActivity events={events} working={status === 'running'} phase={detail.phase} />

@@ -1,6 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { FixStart, NoteKind, PermissionDecision, SourcesSummary, Transport } from '../api/types'
 import { modelOf } from '../components/session/model'
+import { useRemember } from '../components/session/Remember'
 import RunHeader, { LayoutSwitcher } from '../components/session/RunHeader'
 import { useSessionModel, withoutCode } from '../components/session/useSessionModel'
 import { LIVE, useRunFeed, withEcho, type RunFeed } from '../components/run/useRunFeed'
@@ -166,6 +167,7 @@ function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document'
   const [steerRefusal, setSteerRefusal] = useState('')
   const [sent, setSent] = useState(0)
   const jobId = useRunJob(runId)
+  const remember = useRemember(transport, workspaceId, runId)
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
@@ -332,6 +334,7 @@ function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document'
         layout={layout}
         onLayout={setSessionLayout}
         fixInfo={detail.fix}
+        remember={detail.shadow ? undefined : remember}
       />
     </>
   )

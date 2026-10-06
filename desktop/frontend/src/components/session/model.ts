@@ -89,7 +89,8 @@ export type TurnItem =
   | { kind: 'step'; step: SessionStep }
   /** The model's own words between steps: a call's description, or prose it wrote. */
   | { kind: 'ann'; index: number; text: string }
-  | { kind: 'you'; index: number; at: string; text: string; label: string }
+  /** `remember` marks the operator's words Remember this can keep: a steer or an answer with something in it, already in the log. */
+  | { kind: 'you'; index: number; at: string; text: string; label: string; remember?: boolean }
   | { kind: 'system'; index: number; at: string; text: string; tone?: 'failed' }
 
 export interface SessionTurn {
@@ -103,7 +104,8 @@ export interface SessionTurn {
 
 export type PathItem =
   | { kind: 'turn'; turn: SessionTurn }
-  | { kind: 'you'; index: number; at: string; text: string; label: string }
+  /** `remember` marks the operator's words Remember this can keep: a steer or an answer with something in it, already in the log. */
+  | { kind: 'you'; index: number; at: string; text: string; label: string; remember?: boolean }
   | { kind: 'system'; index: number; at: string; text: string; tone?: 'failed' }
 
 export type ComposerState =
@@ -479,7 +481,10 @@ export function buildSessionModel(
         case 'grant': {
           const text = event.kind === 'grant' ? grantLine(str(event.payload?.text)) : str(event.payload?.text)
           const label = event.kind === 'steer' ? 'resumed the session' : 'answered'
-          items.push({ kind: 'you', index: row.index, at, text, label })
+          // A grant is a click, not words; an echo of a send has no line in
+          // the log yet (its index is fractional); an empty answer says nothing.
+          const remember = event.kind !== 'grant' && Number.isInteger(row.index) && text.trim() !== ''
+          items.push({ kind: 'you', index: row.index, at, text, label, remember })
           if (event.kind === 'steer') lastSteer = { at, text }
           break
         }

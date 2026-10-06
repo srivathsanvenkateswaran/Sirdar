@@ -766,6 +766,44 @@ a.sn-head__other:hover {
   line-height: 1.5;
 }
 
+/*
+ * Remember this, in every layout: out of the way until the message is
+ * pointed at or a key reaches it, and held up while the call is out, so the
+ * reader sees the click land. Opacity, not display, keeps it in the tab
+ * order.
+ */
+.sn-remember {
+  display: block;
+  margin-block-start: var(--sd-space-2);
+  margin-inline-start: auto;
+  padding-block: 2px;
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-surface);
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--sd-dur-1) var(--sd-ease);
+}
+
+:is(.sc-you, .sn-you, .wb-you):is(:hover, :focus-within, [data-busy]) .sn-remember {
+  opacity: 1;
+}
+
+.sn-remember:hover:not(:disabled) {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+.sn-remember:disabled {
+  cursor: default;
+}
+
 /* Small grey system lines: the provider's rate-limit warnings. */
 .sn-sys {
   display: flex;

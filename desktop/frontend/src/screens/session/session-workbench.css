@@ -984,6 +984,25 @@ button.wb-row:hover {
   color: var(--sd-ink-3);
   text-align: end;
 }
+
+/*
+ * Remember this on a steer row sits over the row's trailing end rather than
+ * taking a column of its own: a steer's duration and decision cells are
+ * empty, and the button shows only while the row is pointed at or focused.
+ */
+.wb-you {
+  position: relative;
+}
+.wb-row__act {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 20px;
+  display: flex;
+  align-items: center;
+}
+.wb-row__act .sn-remember {
+  margin-block-start: 0;
+}
 .wb-row[data-k='deny'] .wb-row__tool,
 .wb-row[data-k='deny'] .wb-row__dec,
 .wb-row[data-k='deny'] .wb-row__sum {

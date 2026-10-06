@@ -453,3 +453,34 @@ describe('a reply run', () => {
     expect(screen.getByTestId('document-reply')).toBeInTheDocument()
   })
 })
+
+describe('Remember this', () => {
+  it('offers a steer to the playbooks from its card, by the index the service counts', async () => {
+    const fixture = triageFixture()
+    // Service.Events numbers lines from 1, and so does the feed.
+    const expected = fixture.events.findIndex((e) => e.kind === 'steer') + 1
+    const { transport } = mount([fixture], TRIAGE_RUN_ID)
+    const doc = await opened()
+    const card = within(within(doc).getByRole('log', { name: 'Path' })).getByTestId('you-card')
+    fireEvent.click(within(card).getByRole('button', { name: 'Remember this' }))
+    await waitFor(() => expect(transport.calls.remember).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN_ID, index: expected }]))
+  })
+
+  it('draws the instruction at the head of the path, and offers it as index 0', async () => {
+    const { transport } = mount([triageFixture({ instruction: 'Check the tax rounding first' })], TRIAGE_RUN_ID)
+    const doc = await opened()
+    const path = within(doc).getByRole('log', { name: 'Path' })
+    const asked = within(path).getByTestId('instruction-card')
+    expect(path.firstElementChild).toBe(asked)
+    expect(asked).toHaveTextContent('started the run')
+    expect(within(asked).getByText('Check the tax rounding first')).toHaveAttribute('dir', 'auto')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Remember this' }))
+    await waitFor(() => expect(transport.calls.remember).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN_ID, index: 0 }]))
+  })
+
+  it('draws no instruction card for a run started without one', async () => {
+    mount([triageFixture({ instruction: '  ' })], TRIAGE_RUN_ID)
+    const doc = await opened()
+    expect(within(doc).queryByTestId('instruction-card')).toBeNull()
+  })
+})

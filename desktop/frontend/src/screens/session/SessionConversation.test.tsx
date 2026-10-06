@@ -1061,12 +1061,12 @@ describe('SessionConversation', () => {
       }
     })
 
-    it('shows its instruction with no Remember this', async () => {
+    it('draws no instruction bubble, since the watcher started it and not the operator', async () => {
       const f = fake({ detail: { ...SHADOW, instruction: 'Check the tax rounding first' } })
       renderScene(f)
-      const asked = await screen.findByTestId('instruction-bubble')
-      expect(asked).toHaveTextContent('Check the tax rounding first')
-      expect(within(asked).queryByRole('button', { name: 'Remember this' })).toBeNull()
+      await screen.findByTestId('you-bubble')
+      expect(screen.queryByTestId('instruction-bubble')).toBeNull()
+      expect(screen.queryByText('started the run')).toBeNull()
     })
 
     it('offers no Remember this on its messages', async () => {
@@ -1121,7 +1121,7 @@ describe('SessionConversation', () => {
       expect(busy).toBeDisabled()
 
       await act(async () => release())
-      expect(toast).toHaveBeenCalledWith('Suggested an addition to 20-orders.md. Review it in Settings › Playbooks.', 'info', {
+      expect(toast).toHaveBeenCalledWith('Suggested an addition to 20-orders.md.', 'info', {
         label: 'Open Playbooks',
         to: { name: 'settings', page: 'playbooks' },
       })

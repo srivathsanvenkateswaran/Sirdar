@@ -1,4 +1,5 @@
 import type { FixInfo, PermissionDecision, RunDetail, SourcesSummary, Transport } from '../../api/types'
+import type { Remembering } from '../../components/session/Remember'
 import type { SessionData } from '../../components/session/useSessionModel'
 import type { IndexedEvent } from '../../lib/events'
 import type { SessionLayout } from '../../lib/sessionLayout'
@@ -48,4 +49,6 @@ export interface SessionLayoutProps {
   layout: SessionLayout
   onLayout: (layout: SessionLayout) => void
   fixInfo?: FixInfo
+  /** Remember this on the operator's words; absent on a shadow run, whose messages are not kept. */
+  remember?: Remembering
 }

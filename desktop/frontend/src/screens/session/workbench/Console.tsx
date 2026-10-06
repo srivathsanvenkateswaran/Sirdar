@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type JSX, type PointerEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, type JSX, type PointerEvent, type ReactNode, type RefObject } from 'react'
 import { tokens } from '../../../lib/format'
 import SegmentedControl from '../../../ui/segmented-control'
 import Toggle from '../../../ui/toggle'
@@ -49,6 +49,10 @@ export interface ConsoleProps {
   onVisibleTurns?: (keys: Set<string>) => void
   /** The evidence markers off the answer, for the Tools table's decision cells. */
   markers?: import('../../../lib/evidence').Marker[]
+  /** Drawn ahead of the transcript's rows in the plain view: the instruction the run started with. */
+  head?: ReactNode
+  /** A control for one row, drawn over its trailing end while the row is pointed at or focused: Remember this on a steer. */
+  rowAction?: (row: ConsoleRow) => ReactNode
 }
 
 const TOOL_KINDS = new Set(['tool', 'deny', 'write', 'final'])
@@ -83,6 +87,8 @@ export default function Console(props: ConsoleProps): JSX.Element {
     scrollTo,
     turnOf,
     onVisibleTurns,
+    head,
+    rowAction,
   } = props
   const log = useRef<HTMLDivElement | null>(null)
   const drag = useRef<{ y: number; h: number } | null>(null)
@@ -263,6 +269,8 @@ export default function Console(props: ConsoleProps): JSX.Element {
             />
           ) : (
             <>
+              {/* A search or a filter narrows to rows; the head is not one. */}
+              {filter === 'all' && !query ? head : null}
               {shown.length === 0 ? (
                 <p className="wb-empty wb-empty--inline">
                   {query ? `Nothing in the transcript matches “${query}”.` : filter === 'denied' ? 'No call was denied.' : 'Nothing yet.'}
@@ -272,8 +280,9 @@ export default function Console(props: ConsoleProps): JSX.Element {
                 const open = expanded.has(row.id)
                 const isCall = Boolean(row.call)
                 const Tag = isCall ? 'button' : 'div'
+                const action = isCall ? null : rowAction?.(row)
                 return (
-                  <div key={row.id} data-turn={turnOf(row)} data-row={row.id}>
+                  <div key={row.id} data-turn={turnOf(row)} data-row={row.id} className={action ? 'wb-you' : undefined}>
                     <Tag
                       type={isCall ? 'button' : undefined}
                       className="wb-row"
@@ -303,6 +312,7 @@ export default function Console(props: ConsoleProps): JSX.Element {
                       <span className="wb-row__dec">{row.decision ?? ''}</span>
                       {row.kind === 'deny' && row.reason && !open ? <span className="wb-row__reason">{row.reason}</span> : null}
                     </Tag>
+                    {action ? <span className="wb-row__act">{action}</span> : null}
                     {open && isCall ? (
                       <ToolStep row={row} turnLabel={turnLabelOf(row)} live={live} onOpenInTools={() => onFilter('tools')} />
                     ) : null}

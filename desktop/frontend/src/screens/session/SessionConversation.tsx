@@ -33,8 +33,7 @@ import PanelToggle from '../../ui/panel-toggle'
 import ProviderMark from '../../ui/provider-mark'
 import { stateWord } from '../../ui/status-badge'
 import Banner from '../../ui/banner'
-import { useOptionalStore } from '../../store/useAppStore'
-import type { ToastLink } from '../../store/appStore'
+import { RememberButton, useRemember } from '../../components/session/Remember'
 import AnswerCard, { SupersededAnswer } from './AnswerCard'
 import AskCard from './AskCard'
 import BundleView from './BundleView'
@@ -117,18 +116,6 @@ function withLocalQueued(record: QueuedSteer[] | undefined, local: QueuedSteer[]
 
 /** Why a shadow run's composer is off: the server refuses its steers, and the reader is told where to go instead. */
 const SHADOW_REASON = 'Shadow runs are measurements. Start a session to continue this work.'
-
-/** Where a remembered message waits for review. */
-const PLAYBOOKS_LINK: ToastLink = { label: 'Open Playbooks', to: { name: 'settings', page: 'playbooks' } }
-
-/** The button under an operator message that offers it to the playbooks. */
-function RememberButton({ busy, onRemember }: { busy: boolean; onRemember: () => void }): JSX.Element {
-  return (
-    <button type="button" className="sc-you__remember" disabled={busy} onClick={onRemember}>
-      {busy ? 'Remembering…' : 'Remember this'}
-    </button>
-  )
-}
 
 export interface SessionConversationProps {
   transport: Transport
@@ -216,9 +203,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
   // A shadow run is a measurement the watcher started: the service refuses
   // every steer, note and fix on it, so the screen offers none of them.
   const shadow = Boolean(detail?.shadow)
-  const store = useOptionalStore()
-  /** The bubbles whose Remember this is in flight, by event index. */
-  const [remembering, setRemembering] = useState<number[]>([])
+  const { busy: remembering, remember } = useRemember(transport, workspaceId, runId)
 
   useEffect(() => {
     setActionError('')
@@ -437,26 +422,6 @@ export default function SessionConversation(props: SessionConversationProps): JS
     }
   }, [detail, onStartFix])
 
-  /*
-   * One operator message, offered to the workspace's playbooks. The feed
-   * numbers lines from 1, as Service.Events does, so the bubble's index is
-   * the one the service reads back.
-   */
-  const remember = useCallback(
-    async (index: number) => {
-      setRemembering((prev) => [...prev, index])
-      try {
-        const made = await transport.remember(workspaceId, runId, index)
-        store?.toast(`Suggested an addition to ${made.playbook}. Review it in Settings › Playbooks.`, 'info', PLAYBOOKS_LINK)
-      } catch (err: unknown) {
-        store?.toast(withoutCode(err), 'error')
-      } finally {
-        setRemembering((prev) => prev.filter((i) => i !== index))
-      }
-    },
-    [transport, workspaceId, runId, store],
-  )
-
   const cancel = useCallback(async () => {
     if (!jobId) return
     setPending('cancel')
@@ -612,7 +577,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               ) : null}
             </div>
             <div dir="auto">{item.text}</div>
-            {rememberable ? <RememberButton busy={busy} onRemember={() => void remember(item.index)} /> : null}
+            {rememberable ? <RememberButton busy={busy} onRemember={() => remember(item.index)} /> : null}
           </div>
         )
       }
@@ -719,10 +684,12 @@ export default function SessionConversation(props: SessionConversationProps): JS
 
   /*
    * What the operator asked for when they started the run. It is not in the
-   * log, so it is drawn ahead of it; the service reads it back as index 0.
+   * log, so it is drawn ahead of it; the service reads it back as index 0. A
+   * shadow run has none to draw: the watcher started it, and labelling its
+   * prompt "You" would present a measurement as the operator's request.
    */
   const instruction = (detail?.instruction ?? '').trim()
-  const askedBubble = instruction ? (
+  const askedBubble = instruction && !shadow ? (
     <div className="sc-you" data-testid="instruction-bubble" data-busy={remembering.includes(0) || undefined}>
       <div className="sc-you__meta">
         <span>You</span>
@@ -730,7 +697,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
         <span>started the run</span>
       </div>
       <div dir="auto">{instruction}</div>
-      {shadow ? null : <RememberButton busy={remembering.includes(0)} onRemember={() => void remember(0)} />}
+      <RememberButton busy={remembering.includes(0)} onRemember={() => remember(0)} />
     </div>
   ) : null
 
