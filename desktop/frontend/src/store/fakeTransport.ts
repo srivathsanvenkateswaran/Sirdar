@@ -600,6 +600,15 @@ export function createFakeTransport(seed: {
       byClassification: [],
     })
   let pendingSuggestions: PlaybookSuggestion[] = [...(seed.suggestions ?? [])]
+  // Ids come from a counter rather than the list's length: after a dismiss
+  // the length falls, and the next id would repeat one still pending.
+  let suggestionCounter = pendingSuggestions.length
+  const nextSuggestionId = (): string => {
+    do {
+      suggestionCounter += 1
+    } while (pendingSuggestions.some((x) => x.id === `s${suggestionCounter}`))
+    return `s${suggestionCounter}`
+  }
   const modelLists: Record<string, ModelList> = { ...(seed.models ?? {}) }
   const modelListFor = (provider: string): ModelList =>
     modelLists[provider || 'claude'] ?? {
@@ -1079,7 +1088,7 @@ export function createFakeTransport(seed: {
     },
     remember: async (ws, runId, index) => {
       calls.remember.push({ ws, runId, index })
-      const made = suggestion({ id: `s${pendingSuggestions.length + 1}`, runId })
+      const made = suggestion({ id: nextSuggestionId(), runId })
       pendingSuggestions = [...pendingSuggestions, made]
       return made
     },
