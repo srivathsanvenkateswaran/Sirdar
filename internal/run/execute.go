@@ -2549,6 +2549,7 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 	if err := r.writePlaybookSuggestions(p, f); err != nil {
 		return note.DigestRow{}, err
 	}
+	r.queuePlaybookSuggestions(p, f)
 
 	// The triage note is now resolved and links to both new notes — in
 	// its frontmatter and in its body, which until now kept the names the
@@ -2785,6 +2786,33 @@ func (r *Runner) writePlaybookSuggestions(p *prepared, f rcaFields) error {
 		return fmt.Errorf("run: write playbook suggestions: %w", err)
 	}
 	return nil
+}
+
+// queuePlaybookSuggestions puts each of the agent's playbook additions in
+// the workspace's pending queue, where Settings offers it to the operator
+// to accept or dismiss. A measurement run's additions are not queued: an
+// eval replayed an old ticket and a shadow run worked one nobody acted on,
+// so neither is the operator's lesson to file. A queue that cannot be
+// written costs a warning, because the markdown block is already on disk.
+func (r *Runner) queuePlaybookSuggestions(p *prepared, f rcaFields) {
+	if p.state.Measurement() {
+		return
+	}
+	for _, s := range f.RCA.PlaybookSuggestions {
+		_, err := store.AppendSuggestion(r.Config.Root, store.SuggestionLine{
+			Ev:       "proposed",
+			Source:   "rca",
+			RunID:    p.state.RunID,
+			Key:      p.state.Key,
+			Playbook: s.Playbook,
+			Addition: s.Addition,
+			Reason:   s.Reason,
+		})
+		if err != nil {
+			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("playbook suggestions: %v", err))
+			return
+		}
+	}
 }
 
 // appendRegister fills in the fields every register row shares and appends
