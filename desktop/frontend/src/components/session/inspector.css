@@ -696,10 +696,13 @@ a.si-key:hover {
   font: inherit;
   font-size: var(--sd-text-meta);
   text-align: start;
+}
+
+.si-gathered__row--open {
   cursor: pointer;
 }
 
-.si-gathered__row:hover {
+.si-gathered__row--open:hover {
   background: var(--sd-nav-hover);
 }
 

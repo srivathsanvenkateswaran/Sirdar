@@ -30,6 +30,11 @@ export interface BundleViewProps {
   folderPath?: string
   /** Called with the bundle once the prompt is read, for the tab's count. */
   onLoaded?: (doc: Bundle | null) => void
+  /**
+   * Changes whenever the run moves on (its status and phase), so the pane
+   * re-reads what the run gathered; see BundlePane.
+   */
+  revision?: string
 }
 
 export default function BundleView({
@@ -41,6 +46,7 @@ export default function BundleView({
   onOpenFolder,
   folderPath,
   onLoaded,
+  revision,
 }: BundleViewProps): JSX.Element {
   const [bundle, setBundle] = useState<Bundle | null>(null)
 
@@ -73,6 +79,7 @@ export default function BundleView({
         onOpenFolder={onOpenFolder}
         folderPath={folderPath}
         onLoaded={onRead}
+        revision={revision}
       />
     </Document>
   )
