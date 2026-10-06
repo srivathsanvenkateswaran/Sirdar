@@ -13,7 +13,7 @@ import (
 // Request is one line sent to an adapter on its stdin.
 type Request struct {
 	ID     int             `json:"id"`
-	Method string          `json:"method"` // describe | tracker.get | tracker.list | helpdesk.get | helpdesk.threads | helpdesk.attachments | shutdown
+	Method string          `json:"method"` // describe | tracker.get | tracker.list | tracker.outcome | helpdesk.get | helpdesk.threads | helpdesk.attachments | shutdown
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
@@ -26,10 +26,13 @@ type Response struct {
 }
 
 // Describe is the result of the "describe" method: the adapter's name,
-// the roles it fulfils ("tracker", "helpdesk", or both), and a version
-// string.
+// the roles it fulfils ("tracker", "helpdesk", or both), a version
+// string, and the optional methods it answers. Methods exists so an
+// adapter written before an optional method was specified is never sent
+// one: Sirdar calls only what is listed.
 type Describe struct {
 	Name    string   `json:"name"`
 	Roles   []string `json:"roles"`
 	Version string   `json:"version"`
+	Methods []string `json:"methods,omitempty"`
 }

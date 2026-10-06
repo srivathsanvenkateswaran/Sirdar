@@ -1088,6 +1088,27 @@ its own, killing it if it hasn't. An adapter with cleanup to do (flushing
 a cache, closing a connection) has that window to do it in before exit;
 an adapter that hangs indefinitely is killed, not waited on.
 
+## Optional methods
+
+`describe` may return `"methods": ["tracker.outcome"]`. Sirdar sends `tracker.outcome` only to
+an adapter that lists it, so an older adapter is never sent a method it did not advertise.
+
+| method | params | result |
+|---|---|---|
+| `tracker.outcome` | `{"key"}` | a `ticket.Outcome` |
+
+`ticket.Outcome` fields, Go names verbatim as for every protocol type: `Key` (required),
+`Status` (the tracker's status name now), `Resolution` (the resolution or closing comment as
+text, at most 8,000 characters; the adapter cuts longer text), `ResolvedAt` (RFC 3339, absent
+while open), `PullRequests` (URLs of pull requests linked to the record, merged or not, newest
+first), `Fields` (string map of extras). An adapter answers `not_found` for an unknown key and
+may leave out anything it cannot read. It must not return a pull request it cannot tie to this
+key.
+
+```json
+{"id": 1, "result": {"name": "file", "roles": ["tracker"], "version": "1", "methods": ["tracker.outcome"]}}
+```
+
 ## Error codes
 
 | code           | meaning                                                        |

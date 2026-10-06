@@ -1,0 +1,14 @@
+{
+  "tracker": {
+    "OMNI-1": {"Key":"OMNI-1","Title":"Export fails","Status":"Done"}
+  },
+  "outcomes": {
+    "OMNI-1": {
+      "Key": "OMNI-1",
+      "Status": "Done",
+      "Resolution": "The export query timed out on large tenants; it now pages.",
+      "ResolvedAt": "2026-09-12T10:15:00Z",
+      "PullRequests": ["https://github.com/o/r/pull/12", "https://github.com/o/r/pull/9"]
+    }
+  }
+}

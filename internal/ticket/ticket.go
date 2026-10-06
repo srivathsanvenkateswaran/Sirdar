@@ -42,6 +42,24 @@ type TrackerTicket struct {
 	Fields map[string]string // adapter-specific extras (e.g. epic, company)
 }
 
+// Outcome is how a tracker record ended, as tracker.outcome reports it. Go names verbatim on the wire.
+//
+// Every field but Key may be absent: an adapter leaves out what it cannot
+// read, and a record still open has no ResolvedAt.
+type Outcome struct {
+	Key          string
+	Status       string
+	Resolution   string    // at most 8,000 characters
+	ResolvedAt   time.Time `json:",omitzero"`
+	PullRequests []string
+	Fields       map[string]string
+}
+
+// OutcomeResolutionMax is the ceiling on Outcome.Resolution, in characters.
+// A closing comment longer than this is a pasted log, not a resolution, and
+// the client cuts it rather than trusting every adapter to.
+const OutcomeResolutionMax = 8000
+
 // HelpdeskTicket is the customer-support side of a ticket (e.g. a Zoho Desk ticket).
 type HelpdeskTicket struct {
 	ID         string

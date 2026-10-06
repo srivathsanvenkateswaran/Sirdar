@@ -258,7 +258,7 @@ func AddRetro(ctx context.Context, f *runner.Fetcher, key string, o AddRetroOpti
 	}
 
 	a.DiffPath = filepath.Join(a.Dir, RetroDiffName)
-	diff, err := pullRequestDiff(ctx, o.PRURLs)
+	diff, err := PullRequestDiff(ctx, o.PRURLs)
 	if err != nil {
 		return a, err
 	}
@@ -358,6 +358,7 @@ type prMeta struct {
 	BaseRefOid  string
 	MergeCommit string
 	Files       []string
+	Title, Body string
 }
 
 // readPullRequests reads every named pull request through gh, sorted oldest
@@ -370,7 +371,7 @@ func readPullRequests(ctx context.Context, urls []string) ([]prMeta, error) {
 	}
 	out := make([]prMeta, 0, len(urls))
 	for _, u := range urls {
-		if err := checkPRURL(u); err != nil {
+		if err := CheckPRURL(u); err != nil {
 			return nil, err
 		}
 		pr, err := ghView(ctx, gh, u)
@@ -383,10 +384,10 @@ func readPullRequests(ctx context.Context, urls []string) ([]prMeta, error) {
 	return out, nil
 }
 
-// pullRequestDiff returns the diff of every named pull request, in the
+// PullRequestDiff returns the diff of every named pull request, in the
 // order the operator named them, each introduced by the URL it came from so
 // a multi-pull-request fix reads as the sequence it was.
-func pullRequestDiff(ctx context.Context, urls []string) ([]byte, error) {
+func PullRequestDiff(ctx context.Context, urls []string) ([]byte, error) {
 	gh, err := ghPath(ctx)
 	if err != nil {
 		return nil, err
@@ -404,6 +405,45 @@ func pullRequestDiff(ctx context.Context, urls []string) ([]byte, error) {
 		buf = append(buf, diff...)
 	}
 	return buf, nil
+}
+
+// PRText is the prose half of a pull request: what its author called it and
+// said about it, which is the closest thing to a written root cause a
+// merged fix carries.
+type PRText struct{ URL, Title, Body string }
+
+// PullRequestSet is everything read from a set of pull requests at once.
+type PullRequestSet struct {
+	Files []string // changedFiles order: sorted, deduplicated
+	PRs   []PRText
+	Diff  []byte
+}
+
+// PullRequestFiles reads every named pull request through gh, read-only.
+//
+// It is the retro builder's reader offered to anything else that needs to
+// know what a fix touched and said, so there is one place that hands a URL
+// to gh and one check in front of it. PRs comes back oldest first, as
+// readPullRequests sorts them; Diff is in the order the URLs were named.
+func PullRequestFiles(ctx context.Context, urls []string) (PullRequestSet, error) {
+	for _, u := range urls {
+		if err := CheckPRURL(u); err != nil {
+			return PullRequestSet{}, err
+		}
+	}
+	prs, err := readPullRequests(ctx, urls)
+	if err != nil {
+		return PullRequestSet{}, err
+	}
+	diff, err := PullRequestDiff(ctx, urls)
+	if err != nil {
+		return PullRequestSet{}, err
+	}
+	set := PullRequestSet{Files: changedFiles(prs), Diff: diff}
+	for _, pr := range prs {
+		set.PRs = append(set.PRs, PRText{URL: pr.URL, Title: pr.Title, Body: pr.Body})
+	}
+	return set, nil
 }
 
 // changedFiles is every path any of the pull requests touched, deduplicated
@@ -444,11 +484,11 @@ func ghPath(ctx context.Context) (string, error) {
 	return gh, nil
 }
 
-// checkPRURL refuses anything that is not an http(s) URL. The value goes
+// CheckPRURL refuses anything that is not an http(s) URL. The value goes
 // straight to gh as an argument, and a bare word — or worse, something
 // starting with a dash — would be read as a flag or as a pull request in
 // whatever repository the working directory happens to be.
-func checkPRURL(raw string) error {
+func CheckPRURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return fmt.Errorf("eval: --pr %q is not a pull request URL; pass the full https:// link", raw)
@@ -462,7 +502,7 @@ func checkPRURL(raw string) error {
 func ghView(ctx context.Context, gh, prURL string) (prMeta, error) {
 	pr := prMeta{URL: prURL}
 	out, err := exec.CommandContext(ctx, gh, "pr", "view", prURL,
-		"--json", "createdAt,baseRefOid,mergeCommit,files").Output()
+		"--json", "createdAt,baseRefOid,mergeCommit,files,title,body").Output()
 	if err != nil {
 		return pr, fmt.Errorf("eval: gh pr view %s failed: %w%s", prURL, err, stderrOf(err))
 	}
@@ -475,6 +515,8 @@ func ghView(ctx context.Context, gh, prURL string) (prMeta, error) {
 		Files []struct {
 			Path string `json:"path"`
 		} `json:"files"`
+		Title string `json:"title"`
+		Body  string `json:"body"`
 	}
 	if err := json.Unmarshal(out, &raw); err != nil {
 		return pr, fmt.Errorf("eval: gh pr view %s returned unreadable JSON: %w", prURL, err)
@@ -482,6 +524,8 @@ func ghView(ctx context.Context, gh, prURL string) (prMeta, error) {
 	pr.CreatedAt = raw.CreatedAt
 	pr.BaseRefOid = raw.BaseRefOid
 	pr.MergeCommit = raw.MergeCommit.OID
+	pr.Title = raw.Title
+	pr.Body = raw.Body
 	for _, f := range raw.Files {
 		pr.Files = append(pr.Files, f.Path)
 	}
