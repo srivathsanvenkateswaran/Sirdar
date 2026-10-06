@@ -2,6 +2,7 @@ package shadow
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -307,5 +308,31 @@ func TestManualOutcomeCapsThePRList(t *testing.T) {
 	}
 	if _, err := ManualOutcome("OMNI-1", []string{fits + "a"}, "", t0); err == nil || !strings.Contains(err.Error(), "2000") {
 		t.Errorf("a %d-character URL: err = %v", len(fits)+1, err)
+	}
+}
+
+// TestTrackerOutcomeCapsWhatTheAdapterSent: an adapter's PR list and
+// status reach the ledger unchecked otherwise, and a line over the limit
+// is a line that never lands.
+func TestTrackerOutcomeCapsWhatTheAdapterSent(t *testing.T) {
+	var prs []string
+	for i := range 3 * MaxManualPRs {
+		prs = append(prs, fmt.Sprintf("https://github.com/o/r/pull/%d", i+1))
+	}
+	tooLong := "https://github.com/o/r/pull/1?" + strings.Repeat("q", MaxManualPRURLLen)
+	prs = append([]string{tooLong}, prs...)
+	o := &stubOutcomer{out: ticket.Outcome{Key: "OMNI-1", Status: strings.Repeat("s", 70<<10), PullRequests: prs}}
+	line, ok, err := TrackerOutcome(context.Background(), o, "OMNI-1", nil, t0)
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if len(line.PRURLs) != MaxManualPRs || line.PRURLs[0] != "https://github.com/o/r/pull/1" {
+		t.Errorf("PRs %v, want the first %d that fit", line.PRURLs, MaxManualPRs)
+	}
+	if n := len([]rune(line.Status)); n != MaxFieldRunes {
+		t.Errorf("status is %d runes, want %d", n, MaxFieldRunes)
+	}
+	if err := Append(t.TempDir(), line); err != nil {
+		t.Errorf("the outcome line does not fit the ledger: %v", err)
 	}
 }

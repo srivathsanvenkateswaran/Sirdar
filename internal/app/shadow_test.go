@@ -48,6 +48,7 @@ type shadowTracker struct {
 	list      []ticket.TrackerTicket
 	errs      []error // one is handed out per List call, oldest first
 	noCreated map[string]bool
+	title     string // when set, the title Get answers with
 }
 
 func (s *shadowTracker) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
@@ -55,6 +56,9 @@ func (s *shadowTracker) Get(ctx context.Context, key string) (ticket.TrackerTick
 	defer s.mu.Unlock()
 	tt := *sampleBundle().Tracker
 	tt.Key = key
+	if s.title != "" {
+		tt.Title = s.title
+	}
 	if s.noCreated[key] {
 		tt.CreatedAt = time.Time{}
 	}
@@ -1095,4 +1099,40 @@ func TestShadowJobFinishedIsMarked(t *testing.T) {
 	if !strings.Contains(string(raw), `"shadowJob":true`) {
 		t.Errorf("the wire form does not carry shadowJob: %s", raw)
 	}
+}
+
+// TestShadowTickLongTitle: a tracker title near the ledger's line limit
+// must not fail the seen append, which every later tick would repeat.
+func TestShadowTickLongTitle(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	f.tick(t)
+	f.clock.Add(time.Minute)
+	long := bug("OMNI-1", f.clock.Now())
+	long.Title = strings.Repeat("t", 70<<10)
+	f.tr.set(long)
+	f.tick(t)
+	entries := f.waitLedger(t, "finished", 1)
+	f.waitIdle(t)
+	if n := len(ofEv(entries, "started")); n != 1 {
+		t.Fatalf("%d started lines, want 1:\n%s", n, dumpLedger(entries))
+	}
+	if st := f.status(t); st.LastError != "" {
+		t.Errorf("the tick failed: %s", st.LastError)
+	}
+}
+
+// TestShadowRunLongTitle: `shadow run` writes its own seen line from the
+// tracker's ticket, which is cut the same way.
+func TestShadowRunLongTitle(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	f.tr.title = strings.Repeat("t", 70<<10)
+	started, err := f.svc.shadowRun(context.Background(), f.wsID, []string{"OMNI-1"}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(started) != 1 || started[0].RunID == "" {
+		t.Fatalf("started %+v", started)
+	}
+	f.waitLedger(t, "finished", 1)
+	f.waitIdle(t)
 }

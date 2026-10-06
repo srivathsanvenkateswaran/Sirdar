@@ -218,11 +218,39 @@ func (s *Service) shadowCollectOne(ctx context.Context, root string, cfg *config
 	case err != nil:
 		problems = append(problems, err)
 	default:
-		if err := shadow.Append(root, line); err != nil {
+		if err := appendGraded(shadow.Append, root, line); err != nil {
 			problems = append(problems, err)
 		}
 	}
 	return errors.Join(problems...)
+}
+
+// appendGraded appends a graded line, and when the ledger refuses it, the
+// same line without its warning and overlap fractions. If that is refused
+// too, it appends the failed-judge line carrying the call's cost: the
+// judge was paid either way, and with no line at all the cost would miss
+// the daily cap and the call would run again on every pass, since the
+// per-day failure cap counts only lines that landed. add is shadow.Append,
+// passed in so a test can make it refuse.
+func appendGraded(add func(string, shadow.Entry) error, root string, line shadow.Entry) error {
+	err := add(root, line)
+	if err == nil {
+		return nil
+	}
+	slim := line
+	slim.Warning, slim.PRFilesHit, slim.CodeRefsPathOverlap = "", nil, nil
+	if add(root, slim) == nil {
+		return nil
+	}
+	failed := shadow.Entry{
+		At: line.At, Ev: "graded", Key: line.Key, ShadowRunID: line.ShadowRunID,
+		JudgeModel: line.JudgeModel, CostUSD: line.CostUSD,
+		Warning: cutText(judgeFailedPrefix + "the graded line could not be recorded: " + firstLineOf(err.Error())),
+	}
+	if ferr := add(root, failed); ferr != nil {
+		return errors.Join(err, ferr)
+	}
+	return err
 }
 
 // judgeFailedPrefix starts the warning on a failed judge call's line.

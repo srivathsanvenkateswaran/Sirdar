@@ -26,6 +26,13 @@ const Version = 1
 // is what keeps that reliance reasonable.
 const maxLineBytes = 64 << 10
 
+// MaxFieldRunes bounds a free-text field that reaches a ledger line from
+// outside Sirdar, such as a tracker's title or status or a warning built
+// from an adapter's PR list. One oversized value would push its line past
+// maxLineBytes, and a line that never lands is one the next tick tries to
+// write again.
+const MaxFieldRunes = 500
+
 // LedgerPath is where a workspace's shadow ledger lives.
 func LedgerPath(root string) string {
 	return filepath.Join(root, ".sirdar", "shadow.jsonl")

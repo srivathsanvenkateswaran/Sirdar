@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -407,5 +408,27 @@ func TestGradeUnreadPRLeavesTheBasis(t *testing.T) {
 		if line.Basis != c.basis || line.Final != c.final {
 			t.Errorf("%s: basis %q final %v, want %q %v", c.name, line.Basis, line.Final, c.basis, c.final)
 		}
+	}
+}
+
+// TestGradeCutsTheWarning: the warning lists every invalid PR URL across
+// the outcomes, which an adapter controls, so it is cut like any other
+// free text on a line.
+func TestGradeCutsTheWarning(t *testing.T) {
+	stubPRs(t, eval.PullRequestSet{}, nil)
+	dir := shadowRunDir(t, map[string]string{"answer.md": "a reply"})
+	j := &stubJudge{reply: `{"verdict":"confirmed","sameRootCause":true,"reason":"x"}`}
+	var bad []string
+	for i := range 200 {
+		bad = append(bad, fmt.Sprintf("-notaurl-%d-%s", i, strings.Repeat("z", 400)))
+	}
+	line, err := Grade(context.Background(), j.judge, gradeInput(dir,
+		Entry{Ev: "outcome", Source: "tracker", PRURLs: bad},
+		Entry{Ev: "outcome", Source: "manual", Resolution: "fixed it"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len([]rune(line.Warning)); n == 0 || n > MaxFieldRunes {
+		t.Errorf("warning is %d runes, want 1 to %d", n, MaxFieldRunes)
 	}
 }

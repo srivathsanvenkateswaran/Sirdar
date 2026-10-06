@@ -637,3 +637,58 @@ func TestObserveAppliesWindowAndPause(t *testing.T) {
 		t.Errorf("graded %+v after %d judge calls, want ungradable and none", g, judge.count())
 	}
 }
+
+// TestAppendGradedKeepsTheCost: a judge call that answered is paid for
+// whether or not its line lands. When the full line is refused it goes in
+// without its warning and fractions; when even that is refused, a failed
+// judge line carries the cost, so the daily cap sees the money and the
+// per-day failure cap stops the call repeating on every pass.
+func TestAppendGradedKeepsTheCost(t *testing.T) {
+	half := &shadow.Fraction{Matched: 1, Total: 2, Score: 0.5}
+	line := shadow.Entry{
+		At: time.Date(2026, 10, 6, 10, 0, 0, 0, time.Local), Ev: "graded", Key: "OMNI-1", ShadowRunID: "r1",
+		Grade: "confirmed", Basis: "pr", Final: true, JudgeModel: "judge", CostUSD: 0.07,
+		Warning: "PR URLs dropped as invalid: x", PRFilesHit: half, CodeRefsPathOverlap: half,
+	}
+	refuse := func(n int) (func(string, shadow.Entry) error, *[]shadow.Entry) {
+		var landed []shadow.Entry
+		calls := 0
+		return func(_ string, e shadow.Entry) error {
+			calls++
+			if calls <= n {
+				return errors.New("shadow: ledger line is 70000 bytes, over the 64 KiB limit")
+			}
+			landed = append(landed, e)
+			return nil
+		}, &landed
+	}
+
+	add, landed := refuse(1)
+	if err := appendGraded(add, "root", line); err != nil {
+		t.Fatal(err)
+	}
+	if len(*landed) != 1 {
+		t.Fatalf("landed %+v", *landed)
+	}
+	if got := (*landed)[0]; got.Grade != "confirmed" || got.CostUSD != 0.07 || got.Warning != "" || got.PRFilesHit != nil || got.CodeRefsPathOverlap != nil {
+		t.Errorf("retry landed %+v, want the grade and cost without the warning and fractions", got)
+	}
+
+	add, landed = refuse(2)
+	if err := appendGraded(add, "root", line); err == nil {
+		t.Error("no error reported when the graded line could not land")
+	}
+	if len(*landed) != 1 {
+		t.Fatalf("landed %+v", *landed)
+	}
+	got := (*landed)[0]
+	if got.Grade != "" || got.CostUSD != 0.07 || got.Ev != "graded" || got.ShadowRunID != "r1" || !strings.HasPrefix(got.Warning, judgeFailedPrefix) {
+		t.Errorf("fallback landed %+v, want a failed judge line with the cost", got)
+	}
+	if n := judgeFailsToday(*landed, "OMNI-1", line.At); n != 1 {
+		t.Errorf("judgeFailsToday = %d, want the fallback counted", n)
+	}
+	if usd := shadow.Today(*landed, 0, line.At).USD; usd != 0.07 {
+		t.Errorf("Today USD = %v, want the judge's cost", usd)
+	}
+}

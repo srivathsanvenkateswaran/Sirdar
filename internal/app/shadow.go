@@ -87,7 +87,7 @@ const shadowAskedPrefix = "agent asked: "
 // shadowMaxText bounds one question or denied-call summary on a finished
 // line, so a long one cannot push the line over the ledger's 64 KiB limit
 // and lose the line that the daily caps count.
-const shadowMaxText = 500
+const shadowMaxText = shadow.MaxFieldRunes
 
 // shadowMaxItems and shadowMaxItemRunes bound a verdict's codeRefs and
 // openQuestions, and the questions, on a finished line: the same caps an
@@ -1344,7 +1344,7 @@ func (s *Service) shadowRunOne(ctx context.Context, ws Workspace, cfg *config.Co
 		}
 		seen := shadow.Entry{At: now, Ev: "seen", Key: key}
 		if fetched {
-			seen.Title, seen.Type, seen.Status = tt.Title, tt.Type, tt.Status
+			seen.Title, seen.Type, seen.Status = cutText(tt.Title), cutText(tt.Type), cutText(tt.Status)
 			if !tt.CreatedAt.IsZero() {
 				created := tt.CreatedAt
 				seen.CreatedAt = &created

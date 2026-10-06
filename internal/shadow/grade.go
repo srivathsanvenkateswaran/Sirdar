@@ -343,7 +343,9 @@ func Grade(ctx context.Context, judge Judge, in GradeInput) (Entry, error) {
 			line.CodeRefsPathOverlap = fractionOf(score.CodeRefsPathOverlap)
 		}
 	}
-	line.Warning = strings.Join(warnings, "; ")
+	// The invalid URLs come from an adapter's list, so the warning is cut
+	// like any other outside text: an over-long graded line would not land.
+	line.Warning = cutRunes(strings.Join(warnings, "; "), MaxFieldRunes)
 
 	// A pull request that could not be read, or read back empty, gave the
 	// judge nothing, so it cannot be what the grade stands on: the basis is

@@ -187,9 +187,9 @@ func TrackerOutcome(ctx context.Context, o source.Outcomer, key string, have []E
 		Ev:         "outcome",
 		Key:        key,
 		Source:     "tracker",
-		Status:     out.Status,
+		Status:     cutRunes(out.Status, MaxFieldRunes),
 		Resolution: cutRunes(out.Resolution, ticket.OutcomeResolutionMax),
-		PRURLs:     out.PullRequests,
+		PRURLs:     capTrackerPRs(out.PullRequests),
 	}
 	if !out.ResolvedAt.IsZero() {
 		at := out.ResolvedAt
@@ -199,6 +199,24 @@ func TrackerOutcome(ctx context.Context, o source.Outcomer, key string, have []E
 		return Entry{}, false, nil
 	}
 	return line, true, nil
+}
+
+// capTrackerPRs keeps the first MaxManualPRs of an adapter's PR URLs that
+// are no longer than MaxManualPRURLLen, the bounds a manual entry is held
+// to. A tracker's list is not checked anywhere else, and an outcome line
+// pushed over the ledger's limit would never land. An over-long URL is
+// dropped rather than cut, because a cut URL names some other page.
+func capTrackerPRs(urls []string) []string {
+	var out []string
+	for _, u := range urls {
+		if len(out) == MaxManualPRs {
+			break
+		}
+		if utf8.RuneCountInString(u) <= MaxManualPRURLLen {
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 // outcomeID is what makes two outcome lines the same observation. The PR

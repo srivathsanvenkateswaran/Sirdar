@@ -121,7 +121,8 @@ func Select(entries []Entry, listed []Listed, now time.Time, p Policy, inFlight 
 			continue
 		}
 		added[t.Key] = true
-		e := Entry{At: now, Ev: "seen", Key: t.Key, Title: t.Title, Type: t.Type, Status: t.Status}
+		e := Entry{At: now, Ev: "seen", Key: t.Key,
+			Title: cutRunes(t.Title, MaxFieldRunes), Type: cutRunes(t.Type, MaxFieldRunes), Status: cutRunes(t.Status, MaxFieldRunes)}
 		if !t.CreatedAt.IsZero() {
 			created := t.CreatedAt
 			e.CreatedAt = &created

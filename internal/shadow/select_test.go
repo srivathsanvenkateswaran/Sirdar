@@ -351,3 +351,30 @@ func TestStaleReasonUsesWholeHours(t *testing.T) {
 		t.Errorf("skipped = %+v", plan.Skipped)
 	}
 }
+
+// TestSelectCutsSeenText: a seen line carries the tracker's title, type and
+// status as they came, and one huge title would make the line too long for
+// the ledger, failing every tick at the same append.
+func TestSelectCutsSeenText(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	long := strings.Repeat("x", 70<<10)
+	listed := []Listed{{Key: "A", Title: long, Type: "Bug", Status: "Open " + long, CreatedAt: now.Add(-time.Minute)}}
+	p := Policy{Types: []string{"bug"}, Since: now.Add(-time.Hour), MaxPerDay: 10, MaxUSDPerDay: 10, Concurrency: 1, Interval: 5 * time.Minute}
+	plan := Select(nil, listed, now, p, 0, 0)
+	if len(plan.Seen) != 1 {
+		t.Fatalf("seen %+v", plan.Seen)
+	}
+	e := plan.Seen[0]
+	if n := len([]rune(e.Title)); n != MaxFieldRunes {
+		t.Errorf("title is %d runes, want %d", n, MaxFieldRunes)
+	}
+	if n := len([]rune(e.Status)); n != MaxFieldRunes {
+		t.Errorf("status is %d runes, want %d", n, MaxFieldRunes)
+	}
+	if err := Append(t.TempDir(), e); err != nil {
+		t.Errorf("the seen line does not fit the ledger: %v", err)
+	}
+	if len(plan.Start) != 1 {
+		t.Errorf("start %+v, want the ticket started", plan.Start)
+	}
+}
