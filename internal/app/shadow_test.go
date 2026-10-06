@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -725,5 +726,295 @@ func TestShadowSupervisorLifecycle(t *testing.T) {
 	svc.Stop()
 	if _, ok := readShadowLockFile(t, root); ok {
 		t.Error("Stop left the lock behind")
+	}
+}
+
+// writeShadowRun writes a shadow run's state and, when result is not
+// empty, its result.json.
+func writeShadowRun(t *testing.T, root, key, runID string, st store.State, result string) string {
+	t.Helper()
+	dir := filepath.Join(root, ".sirdar", "runs", key, runID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st.RunID, st.Key, st.Kind, st.Shadow = runID, key, store.KindTriage, true
+	if err := (store.Run{Dir: dir}).WriteState(st); err != nil {
+		t.Fatal(err)
+	}
+	if result != "" {
+		if err := os.WriteFile(filepath.Join(dir, "result.json"), []byte(result), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// startedBy is a started line from a process: pid on this host.
+func startedBy(at time.Time, key, runID string, pid int) shadow.Entry {
+	return shadow.Entry{At: at, Ev: "started", Key: key, RunID: runID, Attempt: 1, PID: pid, Host: hostName()}
+}
+
+func armAt(t *testing.T, f *shadowFixture, at time.Time) {
+	t.Helper()
+	f.append(t, shadow.Entry{At: at, Ev: "armed", Since: &at})
+}
+
+func TestShadowFinishedLineAlwaysLands(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	armAt(t, f, now.Add(-2*time.Hour))
+
+	// A verdict whose codeRefs and openQuestions alone are far over the
+	// ledger's line limit.
+	long := strings.Repeat("x", 400)
+	refs := make([]string, 3000)
+	for i := range refs {
+		refs[i] = fmt.Sprintf("internal/%d/%s.go:1", i, long)
+	}
+	doc := map[string]any{
+		"classification": "code",
+		"rootCause":      map[string]any{"hypothesis": "h", "confidence": "low", "codeRefs": refs},
+		"openQuestions":  refs,
+	}
+	raw, _ := json.Marshal(doc)
+	writeShadowRun(t, f.root, "OMNI-1", "20261006T050000Z-big1",
+		store.State{Status: store.StatusCompleted, Usage: store.Usage{CostUSD: 2.5}}, string(raw))
+	f.append(t, startedBy(now.Add(-time.Hour), "OMNI-1", "20261006T050000Z-big1", 999999))
+
+	// Questions and denied calls that survive their per-item caps and
+	// still make the line too long: the line must land without them.
+	wide := strings.Repeat("𝒜", 600)
+	var qs []string
+	var denied []store.DeniedCall
+	for range 20 {
+		qs = append(qs, wide)
+		denied = append(denied, store.DeniedCall{Tool: "Bash", Summary: wide})
+	}
+	writeShadowRun(t, f.root, "OMNI-2", "20261006T050000Z-big2",
+		store.State{Status: store.StatusBlocked, Reason: "budget", Usage: store.Usage{CostUSD: 1.25}, Questions: qs, Denied: denied}, "")
+	f.append(t, startedBy(now.Add(-time.Hour), "OMNI-2", "20261006T050000Z-big2", 999999))
+
+	f.tick(t)
+	fins := ofEv(f.ledger(t), "finished")
+	if len(fins) != 2 {
+		t.Fatalf("%d finished lines, want 2", len(fins))
+	}
+	byKey := map[string]shadow.Entry{}
+	for _, e := range fins {
+		byKey[e.Key] = e
+	}
+	v := byKey["OMNI-1"].Verdict
+	if v == nil || len(v.CodeRefs) != 20 || len(v.OpenQuestions) != 20 {
+		t.Fatalf("verdict not capped: %+v", v)
+	}
+	if n := len([]rune(v.CodeRefs[0])); n != 300 {
+		t.Errorf("a codeRef of %d runes, want 300", n)
+	}
+	if byKey["OMNI-2"].CostUSD != 1.25 || byKey["OMNI-2"].Status != "blocked" {
+		t.Errorf("stripped line %+v", byKey["OMNI-2"])
+	}
+	if st := f.status(t); st.Today.USD != 3.75 {
+		t.Errorf("today's USD %v, want 3.75", st.Today.USD)
+	}
+}
+
+func TestShadowRecoverPoisonedRun(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a read-only directory does not stop a write on Windows")
+	}
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	armAt(t, f, now.Add(-2*time.Hour))
+	poisoned := writeShadowRun(t, f.root, "OMNI-8", "20261006T050000Z-pois",
+		store.State{Status: store.StatusRunning, StartedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)}, "")
+	f.append(t, startedBy(now.Add(-time.Hour), "OMNI-8", "20261006T050000Z-pois", 999999))
+	writeShadowRun(t, f.root, "OMNI-9", "20261006T050000Z-good",
+		store.State{Status: store.StatusRunning, StartedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)}, "")
+	f.append(t, startedBy(now.Add(-time.Hour), "OMNI-9", "20261006T050000Z-good", 999999))
+	// Its state can no longer be written, so its recovery fails.
+	if err := os.Chmod(poisoned, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(poisoned, 0o755) })
+
+	f.tr.set(bug("OMNI-1", now))
+	f.tick(t)
+	entries := f.waitLedger(t, "finished", 2)
+	f.waitIdle(t)
+	got := map[string]bool{}
+	for _, e := range ofEv(entries, "finished") {
+		got[e.Key] = true
+	}
+	if !got["OMNI-9"] || !got["OMNI-1"] || got["OMNI-8"] {
+		t.Errorf("finished keys %v, want OMNI-9 recovered and OMNI-1 run despite OMNI-8", got)
+	}
+
+	// The poisoned run keeps failing, and the ticks keep going.
+	f.tr.set(bug("OMNI-1", now), bug("OMNI-2", now.Add(time.Minute)))
+	f.clock.Add(16 * time.Minute)
+	f.tick(t)
+	f.waitLedger(t, "finished", 3)
+	f.waitIdle(t)
+	if n := len(ofEv(f.ledger(t), "started")); n != 4 {
+		t.Errorf("%d started lines, want 4 (two recovered, two run)", n)
+	}
+}
+
+func TestShadowRecoverLeavesLiveRun(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	armAt(t, f, now.Add(-2*time.Hour))
+	// Another live process on this host started it long ago.
+	writeShadowRun(t, f.root, "OMNI-1", "20261006T050000Z-live",
+		store.State{Status: store.StatusRunning, StartedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour)}, "")
+	f.append(t, startedBy(now.Add(-time.Hour), "OMNI-1", "20261006T050000Z-live", os.Getppid()))
+	// A dead process started this one a moment ago.
+	writeShadowRun(t, f.root, "OMNI-2", "20261006T055900Z-dead",
+		store.State{Status: store.StatusRunning, StartedAt: now, UpdatedAt: now}, "")
+	f.append(t, startedBy(now, "OMNI-2", "20261006T055900Z-dead", 999999))
+	// A run whose directory is not made yet, from a line with no pid.
+	f.append(t, shadow.Entry{At: now.Add(-time.Minute), Ev: "started", Key: "OMNI-3", RunID: "20261006T055900Z-none", Attempt: 1})
+
+	f.tick(t)
+	if _, st, _ := store.Open(f.root, "20261006T050000Z-live"); st.Status != store.StatusRunning {
+		t.Errorf("a live process's run was touched: %s %q", st.Status, st.Reason)
+	}
+	if _, st, _ := store.Open(f.root, "20261006T055900Z-dead"); st.Status != store.StatusBlocked || st.Reason != "interrupted" {
+		t.Errorf("a dead process's run is %s %q, want blocked interrupted", st.Status, st.Reason)
+	}
+	fins := ofEv(f.ledger(t), "finished")
+	if len(fins) != 1 || fins[0].Key != "OMNI-2" {
+		t.Fatalf("finished lines %s, want OMNI-2 alone", dumpLedger(fins))
+	}
+
+	// Once the missing run is older than three intervals it is orphaned.
+	f.clock.Add(time.Hour)
+	f.tick(t)
+	var none *shadow.Entry
+	for _, e := range ofEv(f.ledger(t), "finished") {
+		if e.Key == "OMNI-3" {
+			e := e
+			none = &e
+		}
+	}
+	if none == nil || none.Reason != "interrupted" {
+		t.Errorf("the long-missing run was not recovered: %+v", none)
+	}
+	if _, st, _ := store.Open(f.root, "20261006T050000Z-live"); st.Status != store.StatusRunning {
+		t.Errorf("a live process's run was touched later: %s", st.Status)
+	}
+}
+
+func TestShadowResumeCostDelta(t *testing.T) {
+	var mu sync.Mutex
+	var budgets []float64
+	n := 0
+	var resets time.Time
+	p := &stubProvider{}
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		mu.Lock()
+		n++
+		first := n == 1
+		budgets = append(budgets, spec.Budget.MaxUSD)
+		mu.Unlock()
+		if first {
+			replay(provider.Event{Kind: provider.EvUsage, Turns: 1, CostUSD: 0.30},
+				provider.Event{Kind: provider.EvRateLimited, ResetsAt: resets})(spec, s)
+			return
+		}
+		// A resumed conversation reports its running total, as the
+		// providers do: $0.30 before the limit and $0.42 since.
+		replyThenNote([]provider.Event{
+			{Kind: provider.EvUsage, Turns: 3, CostUSD: 0.72},
+			{Kind: provider.EvFinal, Text: "The export job times out."},
+		}, finalEvent(triageDoc))(spec, s)
+	}
+	f := newShadowFixture(t, shadowConfig(5, "  maxUSDPerDay: 1\n"), p, Options{})
+	resets = f.clock.Now().Add(time.Hour).Truncate(time.Second)
+	f.tick(t)
+	f.clock.Add(time.Minute)
+	f.tr.set(bug("OMNI-1", f.clock.Now()))
+	f.tick(t)
+	f.waitLedger(t, "finished", 1)
+	f.waitIdle(t)
+	f.clock.Add(time.Hour + time.Minute)
+	f.tick(t)
+	entries := f.waitLedger(t, "finished", 2)
+	f.waitIdle(t)
+
+	fins := ofEv(entries, "finished")
+	if fins[0].CostUSD != 0.30 {
+		t.Errorf("first attempt cost %v, want 0.30", fins[0].CostUSD)
+	}
+	if d := fins[1].CostUSD - 0.42; d > 1e-9 || d < -1e-9 {
+		t.Errorf("resumed attempt cost %v, want 0.42 (what it spent, not the run's total)", fins[1].CostUSD)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	// The run's budget is checked against its total, which already holds
+	// the $0.30 the day counted, so the resume may take it to $1.00: the
+	// $0.70 left today plus what the run had already spent.
+	if d := budgets[1] - 1.0; d > 1e-9 || d < -1e-9 {
+		t.Errorf("resumed run budget $%v, want $1.00", budgets[1])
+	}
+}
+
+func TestShadowBackfillRetryKeepsCutoff(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	created := now.Add(-48 * time.Hour)
+	armAt(t, f, now.Add(-3*time.Hour))
+	f.append(t, shadow.Entry{At: now.Add(-2 * time.Hour), Ev: "seen", Key: "OMNI-1", Type: "bug", CreatedAt: &created})
+	f.append(t, shadow.Entry{At: now.Add(-2 * time.Hour), Ev: "started", Key: "OMNI-1", RunID: "20261006T040000Z-bf01", Attempt: 1, Backfill: true, AsOf: &created})
+	f.append(t, shadow.Entry{At: now.Add(-time.Hour), Ev: "finished", Key: "OMNI-1", RunID: "20261006T040000Z-bf01", Status: "failed", Reason: "provider exited: boom"})
+	f.tr.set(bug("OMNI-1", created))
+
+	f.tick(t)
+	entries := f.waitLedger(t, "finished", 2)
+	f.waitIdle(t)
+	starts := ofEv(entries, "started")
+	if len(starts) != 2 {
+		t.Fatalf("started lines %s", dumpLedger(starts))
+	}
+	retry := starts[1]
+	if !retry.Backfill || retry.AsOf == nil || !retry.AsOf.Equal(created) {
+		t.Errorf("retry %+v, want backfill with the original cutoff", retry)
+	}
+	raw, err := os.ReadFile(filepath.Join(f.root, ".sirdar", "runs", "OMNI-1", retry.RunID, "bundle", "manifest.json"))
+	if err != nil || !strings.Contains(string(raw), `"asOf"`) {
+		t.Errorf("the retry's bundle has no cutoff: %v %s", err, raw)
+	}
+}
+
+func TestShadowTickRunCap(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, "  maxPerDay: 1\n"), nil, Options{})
+	now := f.clock.Now()
+	armAt(t, f, now.Add(-time.Hour))
+	f.append(t, shadow.Entry{At: now.Add(-30 * time.Minute), Ev: "started", Key: "OMNI-9", RunID: "r9", Attempt: 1})
+	f.append(t, shadow.Entry{At: now.Add(-20 * time.Minute), Ev: "finished", Key: "OMNI-9", RunID: "r9", Status: "completed"})
+	f.tr.set(bug("OMNI-1", now))
+	f.tick(t)
+	st := f.status(t)
+	if st.State != "gated" || st.Reason != "daily run cap reached (1 of 1)" {
+		t.Errorf("status %s %q", st.State, st.Reason)
+	}
+	if n := len(ofEv(f.ledger(t), "started")); n != 1 {
+		t.Errorf("%d started lines, want 1", n)
+	}
+}
+
+func TestShadowTickUSDCap(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, "  maxUSDPerDay: 1\n"), nil, Options{})
+	now := f.clock.Now()
+	armAt(t, f, now.Add(-time.Hour))
+	f.append(t, shadow.Entry{At: now.Add(-20 * time.Minute), Ev: "finished", Key: "OMNI-9", RunID: "r9", Status: "completed", CostUSD: 1.5})
+	f.tr.set(bug("OMNI-1", now))
+	f.tick(t)
+	st := f.status(t)
+	if st.State != "gated" || st.Reason != "daily USD cap reached ($1.50 of $1.00)" {
+		t.Errorf("status %s %q", st.State, st.Reason)
+	}
+	if n := len(ofEv(f.ledger(t), "started")); n != 0 {
+		t.Errorf("%d runs started over the USD cap", n)
 	}
 }

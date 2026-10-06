@@ -89,6 +89,14 @@ const shadowAskedPrefix = "agent asked: "
 // and lose the line that the daily caps count.
 const shadowMaxText = 500
 
+// shadowMaxItems and shadowMaxItemRunes bound a verdict's codeRefs and
+// openQuestions, and the questions, on a finished line: the same caps an
+// operator triage's outcome line keeps, for the same reason as above.
+const (
+	shadowMaxItems     = 20
+	shadowMaxItemRunes = 300
+)
+
 // shadowState is this process's watcher state for every workspace, guarded
 // by mu. Each workspace's ticks are serialised by its own tick mutex.
 type shadowState struct {
@@ -108,11 +116,10 @@ func newShadowState() *shadowState {
 type shadowWatch struct {
 	tick sync.Mutex
 
-	root      string
-	locked    bool   // this process holds .sirdar/shadow.lock
-	watching  bool   // the supervisor holds it, rather than a one-off poll
-	by        string // what the lock says holds it
-	recovered bool
+	root     string
+	locked   bool   // this process holds .sirdar/shadow.lock
+	watching bool   // the supervisor holds it, rather than a one-off poll
+	by       string // what the lock says holds it
 
 	state, reason      string
 	lastPoll, nextPoll time.Time
@@ -517,7 +524,7 @@ func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Conf
 	root := ws.Root
 
 	s.shadow.mu.Lock()
-	locked, by, recovered := w.locked, w.by, w.recovered
+	locked, by := w.locked, w.by
 	s.shadow.mu.Unlock()
 	if locked {
 		_ = touchShadowLock(root, now)
@@ -545,14 +552,11 @@ func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Conf
 		return fail(err)
 	}
 
-	// 1. Recover what a crash left started and never finished.
-	if !recovered {
-		if err := s.shadowRecover(w, root, entries, now); err != nil {
-			return fail(err)
-		}
-		s.shadow.mu.Lock()
-		w.recovered = true
-		s.shadow.mu.Unlock()
+	// 1. Recover what a crash left started and never finished. It runs on
+	// every tick, not only the first: a run is orphaned only once its
+	// process is gone or it has gone quiet for long enough, which may be
+	// several ticks after this process started.
+	if s.shadowRecover(w, root, entries, now, interval) {
 		if entries, err = shadow.Read(root); err != nil {
 			return fail(err)
 		}
@@ -668,13 +672,18 @@ func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Conf
 
 	// 6. Start.
 	spent := shadow.Today(entries, usd, now).USD
+	folded := shadow.Fold(entries)
 	started := 0
 	for _, st := range plan.Start {
 		release, ok := s.gate.TryAcquire(ws.ID, ActionShadowTriage, cfg.Shadow.Concurrency)
 		if !ok {
 			break
 		}
-		if _, err := s.shadowLaunch(ctx, ws, cfg, shadowLaunchSpec{Key: st.Key, Attempt: st.Attempt, RetryOf: st.RetryOf}, release, spent); err != nil {
+		sp := shadowLaunchSpec{Key: st.Key, Attempt: st.Attempt, RetryOf: st.RetryOf}
+		if st.RetryOf != "" {
+			sp.Backfill, sp.AsOf = retryCutoff(folded[st.Key], st.RetryOf)
+		}
+		if _, err := s.shadowLaunch(ctx, ws, cfg, sp, release, spent); err != nil {
 			return fail(err)
 		}
 		started++
@@ -685,6 +694,27 @@ func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Conf
 	}
 	settle("watching", "")
 	return nil
+}
+
+// retryCutoff is the backfill flag and cutoff a retry inherits from the
+// attempt it retries: a backfilled ticket run again at HEAD's bundle would
+// be graded as a backfill while seeing what happened after it. A line
+// from before started lines carried the cutoff falls back to the ticket's
+// creation time, which is what a backfill cuts at.
+func retryCutoff(t *shadow.Ticket, runID string) (backfill bool, asOf time.Time) {
+	if t == nil {
+		return false, time.Time{}
+	}
+	for _, a := range t.Attempts {
+		if a.Started.RunID != runID || !a.Started.Backfill {
+			continue
+		}
+		if a.Started.AsOf != nil {
+			return true, *a.Started.AsOf
+		}
+		return true, t.CreatedAt
+	}
+	return false, time.Time{}
 }
 
 // armedLine finds the newest armed line: when it was written, and the time
@@ -798,11 +828,13 @@ func (s *Service) shadowQuotaReason(cfg *config.Config) string {
 }
 
 // shadowRecover writes the finished line of every started run that has
-// none and is not running in this process. A run its state says ended
-// gets its line as it ended; one still preparing or running was orphaned
-// by a crash, and is written blocked "interrupted", which a later tick may
-// retry once.
-func (s *Service) shadowRecover(w *shadowWatch, root string, entries []shadow.Entry, now time.Time) error {
+// none, that this process is not running, and whose process is gone (see
+// shadowOrphaned). A run its state says ended gets its line as it ended;
+// one still preparing or running, or never given a directory, is written
+// blocked "interrupted", which a later tick may retry once. A run whose
+// recovery fails is reported and left for the next tick, so it cannot
+// hold up the others or the tick. It reports whether it wrote anything.
+func (s *Service) shadowRecover(w *shadowWatch, root string, entries []shadow.Entry, now time.Time, interval time.Duration) bool {
 	s.shadow.mu.Lock()
 	ours := map[string]bool{}
 	for id := range w.inFlight {
@@ -816,32 +848,90 @@ func (s *Service) shadowRecover(w *shadowWatch, root string, entries []shadow.En
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
+	wrote := false
 	for _, key := range keys {
 		for _, a := range tickets[key].Attempts {
 			if a.Finished != nil || ours[a.Started.RunID] {
 				continue
 			}
 			rn, st, err := store.Open(root, a.Started.RunID)
+			haveDir := err == nil
+			if !shadowOrphaned(a.Started, rn, st, haveDir, now, interval) {
+				continue
+			}
 			dir := rn.Dir
 			switch {
-			case err != nil:
-				// The started line landed and the process died before the
-				// run directory was made: nothing ran, and a retry is
-				// what the ticket is owed.
+			case !haveDir:
+				// The started line landed and its process died before the
+				// run directory was made: nothing ran, and a retry is what
+				// the ticket is owed.
 				st = store.State{RunID: a.Started.RunID, Key: key, Status: store.StatusBlocked, Reason: "interrupted"}
 				dir = ""
 			case st.Status == store.StatusPreparing || st.Status == store.StatusRunning:
 				st.Status, st.Reason, st.UpdatedAt = store.StatusBlocked, "interrupted", now
 				if err := rn.WriteState(st); err != nil {
-					return err
+					s.logText(fmt.Sprintf("shadow: recover %s %s: %v", key, a.Started.RunID, err))
+					continue
 				}
 			}
-			if err := shadow.Append(root, shadowFinished(key, st, dir, now)); err != nil {
-				return err
+			fin := shadowFinished(key, st, dir, now)
+			fin.CostUSD = max(0, fin.CostUSD-shadowPriorCost(entries, a.Started.RunID))
+			if err := appendFinished(root, fin); err != nil {
+				s.logText(fmt.Sprintf("shadow: recover %s %s: %v", key, a.Started.RunID, err))
+				continue
 			}
+			wrote = true
 		}
 	}
-	return nil
+	return wrote
+}
+
+// shadowOrphaned reports whether a started run with no finished line has
+// lost the process that was driving it. A started line that names a
+// process on this host is answered by whether that process is alive. One
+// from another host, or from before started lines named a process, is
+// orphaned once nothing about it has moved for as long as makes a lock
+// stale: its started line, its state, and its event log.
+func shadowOrphaned(started shadow.Entry, rn store.Run, st store.State, haveDir bool, now time.Time, interval time.Duration) bool {
+	if started.PID > 0 && started.Host == hostName() {
+		return !pidAlive(started.PID)
+	}
+	last := started.At
+	if haveDir {
+		if st.UpdatedAt.After(last) {
+			last = st.UpdatedAt
+		}
+		if fi, err := os.Stat(filepath.Join(rn.Dir, "events.jsonl")); err == nil && fi.ModTime().After(last) {
+			last = fi.ModTime()
+		}
+	}
+	return now.Sub(last) > shadowLockStaleAfter*interval
+}
+
+// shadowPriorCost is what the ledger's finished lines already counted for
+// runID. A retry that resumes a run carries its spending forward, so its
+// finished line records only what it added.
+func shadowPriorCost(entries []shadow.Entry, runID string) float64 {
+	var usd float64
+	for _, e := range entries {
+		if e.Ev == "finished" && e.RunID == runID {
+			usd += e.CostUSD
+		}
+	}
+	return usd
+}
+
+// appendFinished appends a finished line, and when the ledger refuses it,
+// the same line without its verdict, questions and denied calls. The
+// status and the cost must land whatever else does not: the daily cap
+// counts the cost, and recovery would otherwise try the run again on
+// every tick.
+func appendFinished(root string, e shadow.Entry) error {
+	if err := shadow.Append(root, e); err == nil {
+		return nil
+	}
+	e.Verdict, e.Questions, e.Denied = nil, nil, nil
+	return shadow.Append(root, e)
 }
 
 // --- starting a run ---------------------------------------------------
@@ -877,6 +967,20 @@ func (s *Service) shadowLaunch(ctx context.Context, ws Workspace, cfg *config.Co
 	started := shadow.Entry{
 		At: now, Ev: "started", Key: key, RunID: runID, Attempt: sp.Attempt, Model: model,
 		OperatorFirst: operatorStartedFirst(root, key, now), Backfill: sp.Backfill, Resume: resume,
+		PID: os.Getpid(), Host: hostName(),
+	}
+	if !sp.AsOf.IsZero() {
+		asOf := sp.AsOf
+		started.AsOf = &asOf
+	}
+	// A resumed run's budget is checked against everything the run has
+	// spent, and what it spent before is already in today's total, so it
+	// may go that much further than what is left today.
+	var prior float64
+	if resume {
+		if entries, err := shadow.Read(root); err == nil {
+			prior = shadowPriorCost(entries, runID)
+		}
 	}
 	if err := shadow.Append(root, started); err != nil {
 		release()
@@ -895,7 +999,7 @@ func (s *Service) shadowLaunch(ctx context.Context, ws Workspace, cfg *config.Co
 		s.shadowRepublish(ws, cfg)
 	}
 
-	remaining := cfg.Shadow.MaxUSDPerDay - spentToday
+	remaining := cfg.Shadow.MaxUSDPerDay - spentToday + prior
 	work := func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		// The daily cap is enforced as this run's own budget: the session
 		// and the executor read the budget off the config, so a clone
@@ -985,7 +1089,11 @@ func (s *Service) shadowRecordFinished(root, key, runID string, st store.State, 
 		st = store.State{RunID: runID, Key: key, Status: store.StatusFailed, Reason: reason}
 	}
 	now := s.now()
-	if err := shadow.Append(root, shadowFinished(key, st, dir, now)); err != nil {
+	fin := shadowFinished(key, st, dir, now)
+	if entries, err := shadow.Read(root); err == nil {
+		fin.CostUSD = max(0, fin.CostUSD-shadowPriorCost(entries, runID))
+	}
+	if err := appendFinished(root, fin); err != nil {
 		s.log(err)
 	}
 	if p, ok := shadowPauseFor(st, now); ok {
@@ -1015,6 +1123,8 @@ func shadowFinished(key string, st store.State, dir string, now time.Time) shado
 		// result.json left from an earlier turn is not this run's answer.
 		if st.NoteWarning == "" {
 			if v, ok := shadow.VerdictOf(dir); ok {
+				v.CodeRefs = capItems(v.CodeRefs)
+				v.OpenQuestions = capItems(v.OpenQuestions)
 				e.Verdict = v
 			}
 		}
@@ -1028,10 +1138,26 @@ func shadowFinished(key string, st store.State, dir string, now time.Time) shado
 	for _, d := range st.Denied {
 		e.Denied = append(e.Denied, shadow.Denied{Tool: d.Tool, Summary: cutText(d.Summary)})
 	}
-	for _, q := range st.Questions {
+	for _, q := range st.Questions[:min(len(st.Questions), shadowMaxItems)] {
 		e.Questions = append(e.Questions, cutText(q))
 	}
 	return e
+}
+
+// capItems keeps the first shadowMaxItems of list, each cut to
+// shadowMaxItemRunes, and leaves an empty list as it was.
+func capItems(list []string) []string {
+	if len(list) == 0 {
+		return list
+	}
+	out := make([]string, 0, min(len(list), shadowMaxItems))
+	for _, item := range list[:min(len(list), shadowMaxItems)] {
+		if r := []rune(item); len(r) > shadowMaxItemRunes {
+			item = string(r[:shadowMaxItemRunes])
+		}
+		out = append(out, item)
+	}
+	return out
 }
 
 func cutText(s string) string {
