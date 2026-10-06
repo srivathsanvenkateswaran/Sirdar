@@ -966,6 +966,23 @@ anywhere else in this file.
 A shadow run leaves nothing outside `.sirdar/`: no vault note, no register row, no notification,
 and no tracker or helpdesk write. What it did is recorded in the ledger at `.sirdar/shadow.jsonl`.
 
+`sirdar serve` watches every registered workspace with `enabled: true` and says so when it starts
+(`sirdar serve: shadow mode is on; this process polls the tracker every 15m`). One process
+watches a workspace at a time, through `.sirdar/shadow.lock`; a second one reports
+`shadow: watched by pid N (serve)` and does not poll. From the terminal, in the workspace:
+
+| Command | What it does |
+|---|---|
+| `sirdar shadow watch [--once]` | the watcher without the web UI; `--once` runs one tick, waits for the runs it started and prints the status |
+| `sirdar shadow run KEY... [--backfill]` | shadow these keys now, through the same caps and gates; `--backfill` triages each ticket as it stood when it was created. Exits 1 when nothing started |
+| `sirdar shadow status` | state, reason, today's runs and spend against the caps, next poll, runs in flight |
+| `sirdar shadow report [--since 7d\|2026-10-01] [--json]` | the scorecard, 30 days back by default |
+| `sirdar shadow outcome KEY [--pr URL]... [--resolution TEXT\|@file]` | record what actually happened to a ticket and grade it at once |
+| `sirdar shadow grade [KEY...]` | collect outcomes and grade now, every key when none is named |
+| `sirdar shadow pause [--for 4h]`, `sirdar shadow resume` | stop new shadow runs for a while (24 hours by default), or start again early; runs already going carry on |
+| `sirdar suggestions [list]` | the playbook additions waiting for review |
+| `sirdar suggestions accept ID [--playbook NAME]`, `sirdar suggestions dismiss ID` | file one into its playbook, or into another, or drop it |
+
 ## `permissions.bash` glob semantics
 
 Each entry in `permissions.bash` is a glob pattern matched against one segment of the agent's

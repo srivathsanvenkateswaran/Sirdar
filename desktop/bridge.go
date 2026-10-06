@@ -349,3 +349,81 @@ func (b *Bridge) SaveNote(ws, runId string) (string, error) {
 
 // Cancel stops a job this process started.
 func (b *Bridge) Cancel(jobId string) error { return b.svc.Cancel(app.JobID(jobId)) }
+
+// --- shadow mode and suggestions --------------------------------------
+
+// ShadowStatus reports what the shadow watcher is doing for the workspace,
+// whichever process is doing it.
+func (b *Bridge) ShadowStatus(ws string) (app.ShadowStatus, error) { return b.svc.ShadowStatus(ws) }
+
+// ShadowReport is the scorecard since a point in time: empty for 30 days,
+// a duration back ("7d") or a date ("2026-10-01").
+func (b *Bridge) ShadowReport(ws, since string) (app.ShadowReport, error) {
+	return b.svc.ShadowReport(ws, since)
+}
+
+// ShadowPoll runs one watcher tick now. The desktop shell does not watch,
+// so the tick takes the workspace's lock for its length, and a serve or
+// shadow watch already holding it refuses the poll.
+func (b *Bridge) ShadowPoll(ws string) (app.ShadowStatus, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return b.svc.ShadowPoll(ctx, ws)
+}
+
+// ShadowPause stops new shadow starts for forDuration, 24 hours when empty.
+func (b *Bridge) ShadowPause(ws, forDuration string) (app.ShadowStatus, error) {
+	return b.svc.ShadowPause(ws, forDuration)
+}
+
+// ShadowResume lifts a pause early.
+func (b *Bridge) ShadowResume(ws string) (app.ShadowStatus, error) { return b.svc.ShadowResume(ws) }
+
+// ShadowOutcome records an outcome entered by hand and grades the key
+// against it. Grading may ask the judge model, hence the timeout.
+func (b *Bridge) ShadowOutcome(ws string, in app.ShadowOutcomeInput) (app.ShadowRow, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return b.svc.ShadowOutcome(ctx, ws, in)
+}
+
+// ShadowRegrade collects outcomes for one key and grades it now, answering
+// with its row: the screen regrades the row it shows, which is the shape
+// the HTTP route has too.
+func (b *Bridge) ShadowRegrade(ws, key string) (app.ShadowRow, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	rows, err := b.svc.ShadowRegrade(ctx, ws, []string{key})
+	if err != nil {
+		return app.ShadowRow{}, err
+	}
+	if len(rows) == 0 {
+		return app.ShadowRow{}, fmt.Errorf("%w: %s has no shadow row to grade", app.ErrNoSuchRun, key)
+	}
+	return rows[0], nil
+}
+
+// Remember turns one operator message on a run into a pending playbook
+// addition. Drafting it asks the model once, hence the timeout.
+func (b *Bridge) Remember(ws, runId string, index int) (app.Suggestion, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return b.svc.Remember(ctx, ws, runId, index)
+}
+
+// Suggestions lists the pending playbook additions, never null.
+func (b *Bridge) Suggestions(ws string) ([]app.Suggestion, error) {
+	list, err := b.svc.Suggestions(ws)
+	if list == nil {
+		list = []app.Suggestion{}
+	}
+	return list, err
+}
+
+// AcceptSuggestion files a pending suggestion into a playbook.
+func (b *Bridge) AcceptSuggestion(ws, id string, in app.AcceptSuggestionInput) (app.Suggestion, error) {
+	return b.svc.AcceptSuggestion(ws, id, in)
+}
+
+// DismissSuggestion takes a pending suggestion out of the queue.
+func (b *Bridge) DismissSuggestion(ws, id string) error { return b.svc.DismissSuggestion(ws, id) }

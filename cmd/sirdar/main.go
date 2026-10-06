@@ -69,6 +69,8 @@ commands:
   note        file the note again for a triage or RCA run that has a reply
   runs        list runs and states; 'runs diff RUN_ID' reviews a fix run's change
   register    print the register
+  shadow      watch, run, grade and report shadow triages (rung 1)
+  suggestions list, accept or dismiss pending playbook additions
   serve       serve the web UI and API on loopback
   version     print version`
 }

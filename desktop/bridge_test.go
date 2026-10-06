@@ -64,6 +64,17 @@ var bridgeMethods = []string{
 	"DeletePlaybook",
 	"ScaffoldPlaybooks",
 	"OpenPlaybook",
+	"ShadowStatus",
+	"ShadowReport",
+	"ShadowPoll",
+	"ShadowPause",
+	"ShadowResume",
+	"ShadowOutcome",
+	"ShadowRegrade",
+	"Remember",
+	"Suggestions",
+	"AcceptSuggestion",
+	"DismissSuggestion",
 }
 
 // notBridged is every other exported method of *app.Service, with the
@@ -94,6 +105,9 @@ var notBridged = map[string]string{
 	// in the frontend calls them. See internal/app/live.go.
 	"Append": "the run executor publishes its own event lines through this",
 	"Done":   "the run executor closes its event log through this",
+	// Shadow mode spends unattended; a shadow run is started by the
+	// watcher or asked for at the terminal.
+	"ShadowRun": "the CLI's shadow run; the UI never starts a shadow run by hand",
 }
 
 // bridgeOnlyMethods are the desktop's own bindings: methods on *Bridge with
@@ -108,6 +122,26 @@ var bridgeOnlyMethods = map[string]string{
 	"OpenNote":          "opens a note in whatever the machine associates with Markdown",
 	"OpenRunDir":        "reveals the run directory in the machine's file manager",
 	"AttachmentDataURL": "inlines an attachment, which WKWebView will not load over file://",
+}
+
+// boundAheadOfTheFrontend are methods bound on *Bridge before the frontend
+// calls them. The shadow and suggestion bindings land with their routes
+// (H10 of the shadow-mode plan); the Shadow screen that calls them, and
+// their entries in BridgeBindings, come in H11. Until then the reverse
+// direction of TestFrontendBridgeCallsExist would fail for bindings the
+// frontend is about to use. H11 removes this map along with the entries.
+var boundAheadOfTheFrontend = map[string]string{
+	"ShadowStatus":      "the Shadow screen (H11) adds this to BridgeBindings",
+	"ShadowReport":      "the Shadow screen (H11) adds this to BridgeBindings",
+	"ShadowPoll":        "the Shadow screen (H11) adds this to BridgeBindings",
+	"ShadowPause":       "the Shadow screen (H11) adds this to BridgeBindings",
+	"ShadowResume":      "the Shadow screen (H11) adds this to BridgeBindings",
+	"ShadowOutcome":     "the Shadow screen (H11) adds this to BridgeBindings",
+	"ShadowRegrade":     "the Shadow screen (H11) adds this to BridgeBindings",
+	"Remember":          "the Shadow screen's transport work (H11) adds this to BridgeBindings",
+	"Suggestions":       "the Shadow screen's transport work (H11) adds this to BridgeBindings",
+	"AcceptSuggestion":  "the Shadow screen's transport work (H11) adds this to BridgeBindings",
+	"DismissSuggestion": "the Shadow screen's transport work (H11) adds this to BridgeBindings",
 }
 
 // bindingsPath is the frontend's own declaration of what it calls on the
@@ -160,8 +194,8 @@ func frontendBridgeCalls(t *testing.T) []string {
 func TestFrontendBridgeCallsExist(t *testing.T) {
 	bridge := reflect.TypeOf(&Bridge{})
 	calls := frontendBridgeCalls(t)
-	if len(calls) < len(bridgeMethods) {
-		t.Fatalf("read %d bindings off %s, fewer than the %d bound methods; the parse is wrong", len(calls), bindingsPath, len(bridgeMethods))
+	if want := len(bridgeMethods) - len(boundAheadOfTheFrontend); len(calls) < want {
+		t.Fatalf("read %d bindings off %s, fewer than the %d bound methods the frontend calls; the parse is wrong", len(calls), bindingsPath, want)
 	}
 	for _, name := range calls {
 		if _, ok := bridge.MethodByName(name); !ok {
@@ -177,8 +211,19 @@ func TestFrontendBridgeCallsExist(t *testing.T) {
 	}
 	for i := 0; i < bridge.NumMethod(); i++ {
 		name := bridge.Method(i).Name
-		if !called[name] {
+		if !called[name] && boundAheadOfTheFrontend[name] == "" {
 			t.Errorf("Bridge.%s is bound but the frontend's BridgeBindings does not name it", name)
+		}
+	}
+
+	// An exception outlives its reason the moment the frontend makes the
+	// call, and would then go on excusing a binding nobody calls.
+	for name := range boundAheadOfTheFrontend {
+		if _, ok := bridge.MethodByName(name); !ok {
+			t.Errorf("boundAheadOfTheFrontend names %s, which *Bridge does not have", name)
+		}
+		if called[name] {
+			t.Errorf("BridgeBindings now calls %s; remove it from boundAheadOfTheFrontend", name)
 		}
 	}
 }

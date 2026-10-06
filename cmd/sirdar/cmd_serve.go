@@ -87,7 +87,13 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := interruptible()
 	defer stop()
 
-	svc := app.New(reg, app.BuildDeps, app.Options{Stderr: app.Synced(stderr), GoldenDir: *golden})
+	// serve is a shadow watcher as well as a server: a workspace that turns
+	// shadow.enabled on is polled from here, without a separate process.
+	// ShadowBy is left empty, which the lock records as "serve".
+	if cfg, err := config.Load(root); err == nil && cfg.Shadow.Enabled {
+		fmt.Fprintf(stderr, "sirdar serve: shadow mode is on; this process polls the tracker every %s\n", cfg.Shadow.Interval)
+	}
+	svc := app.New(reg, app.BuildDeps, app.Options{Stderr: app.Synced(stderr), GoldenDir: *golden, Shadow: true})
 	svc.Start(ctx)
 	defer svc.Stop()
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
 )
 
@@ -28,6 +29,13 @@ type dropCall struct {
 	Path string
 	Hunk int
 	ETag string
+}
+
+// shadowCall is one call to a shadow or suggestion method: its name and
+// every argument after the context.
+type shadowCall struct {
+	Method string
+	Args   []any
 }
 
 // fake is a Service that answers from canned data and records what it was
@@ -140,6 +148,15 @@ type fake struct {
 	idleErr    error
 	gotIdle    []string
 	gotHooks   []hookCall
+
+	// The shadow and suggestion methods record each call here, in order,
+	// and fail with shadowErr when it is set. suggestionList is what
+	// Suggestions answers with; noRegradeRow makes ShadowRegrade answer
+	// with no rows, as it does for a key that has none.
+	shadowCalls    []shadowCall
+	shadowErr      error
+	suggestionList []app.Suggestion
+	noRegradeRow   bool
 
 	// Subscribe plumbing for the SSE tests.
 	ch          chan Event
@@ -827,4 +844,109 @@ func (f *fake) Subscribe() (<-chan Event, func()) {
 	f.mu.Unlock()
 	var once sync.Once
 	return ch, func() { once.Do(func() { close(done) }) }
+}
+
+// --- shadow and suggestions ---
+
+// recordShadow records one call and answers with the injected failure, after
+// the workspace check every real method makes first.
+func (f *fake) recordShadow(method, wsID string, args ...any) error {
+	f.mu.Lock()
+	f.shadowCalls = append(f.shadowCalls, shadowCall{Method: method, Args: append([]any{wsID}, args...)})
+	f.mu.Unlock()
+	if err := f.checkWS(wsID); err != nil {
+		return err
+	}
+	return f.shadowErr
+}
+
+// lastShadowCall is the most recent recorded call, or a zero one.
+func (f *fake) lastShadowCall() shadowCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.shadowCalls) == 0 {
+		return shadowCall{}
+	}
+	return f.shadowCalls[len(f.shadowCalls)-1]
+}
+
+func (f *fake) ShadowStatus(wsID string) (app.ShadowStatus, error) {
+	if err := f.recordShadow("ShadowStatus", wsID); err != nil {
+		return app.ShadowStatus{}, err
+	}
+	return app.ShadowStatus{Enabled: true, State: "watching", InFlight: []string{}}, nil
+}
+
+func (f *fake) ShadowReport(wsID, since string) (app.ShadowReport, error) {
+	if err := f.recordShadow("ShadowReport", wsID, since); err != nil {
+		return app.ShadowReport{}, err
+	}
+	return app.ShadowReport{Since: "2026-09-06T00:00:00Z", Rows: []app.ShadowRow{{Key: "OMNI-2510", Grade: "confirmed"}}}, nil
+}
+
+func (f *fake) ShadowPoll(_ context.Context, wsID string) (app.ShadowStatus, error) {
+	if err := f.recordShadow("ShadowPoll", wsID); err != nil {
+		return app.ShadowStatus{State: "locked-elsewhere"}, err
+	}
+	return app.ShadowStatus{Enabled: true, State: "watching", InFlight: []string{}}, nil
+}
+
+func (f *fake) ShadowPause(wsID, forDuration string) (app.ShadowStatus, error) {
+	if err := f.recordShadow("ShadowPause", wsID, forDuration); err != nil {
+		return app.ShadowStatus{}, err
+	}
+	return app.ShadowStatus{Enabled: true, State: "paused", InFlight: []string{}}, nil
+}
+
+func (f *fake) ShadowResume(wsID string) (app.ShadowStatus, error) {
+	if err := f.recordShadow("ShadowResume", wsID); err != nil {
+		return app.ShadowStatus{}, err
+	}
+	return app.ShadowStatus{Enabled: true, State: "watching", InFlight: []string{}}, nil
+}
+
+func (f *fake) ShadowOutcome(_ context.Context, wsID string, in app.ShadowOutcomeInput) (app.ShadowRow, error) {
+	if err := f.recordShadow("ShadowOutcome", wsID, in); err != nil {
+		return app.ShadowRow{}, err
+	}
+	return app.ShadowRow{Key: in.Key, Grade: "partial"}, nil
+}
+
+func (f *fake) ShadowRegrade(_ context.Context, wsID string, keys []string) ([]app.ShadowRow, error) {
+	if err := f.recordShadow("ShadowRegrade", wsID, keys); err != nil {
+		return nil, err
+	}
+	if f.noRegradeRow {
+		return []app.ShadowRow{}, nil
+	}
+	rows := make([]app.ShadowRow, 0, len(keys))
+	for _, k := range keys {
+		rows = append(rows, app.ShadowRow{Key: k, Grade: "wrong"})
+	}
+	return rows, nil
+}
+
+func (f *fake) Remember(_ context.Context, wsID, runID string, index int) (app.Suggestion, error) {
+	if err := f.recordShadow("Remember", wsID, runID, index); err != nil {
+		return app.Suggestion{}, err
+	}
+	return app.Suggestion{ID: "s-0123456789ab", RunID: runID, Playbook: "90-corrections.md", Addition: "- a rule"}, nil
+}
+
+func (f *fake) Suggestions(wsID string) ([]app.Suggestion, error) {
+	if err := f.recordShadow("Suggestions", wsID); err != nil {
+		return nil, err
+	}
+	return f.suggestionList, nil
+}
+
+func (f *fake) AcceptSuggestion(wsID, id string, in app.AcceptSuggestionInput) (app.Suggestion, error) {
+	if err := f.recordShadow("AcceptSuggestion", wsID, id, in); err != nil {
+		return app.Suggestion{}, err
+	}
+	return app.Suggestion{ID: id, Playbook: in.Playbook, Addition: in.Addition}, nil
+}
+
+func (f *fake) DismissSuggestion(wsID, id string) error {
+	return f.recordShadow("DismissSuggestion", wsID, id)
 }

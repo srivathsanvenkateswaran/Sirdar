@@ -75,6 +75,20 @@ type Service interface {
 	Steer(ctx context.Context, wsID, runID, text, model string) (JobID, error)
 	Cancel(jobID JobID) error
 	Register(wsID string) ([]RegisterRow, error)
+	// The shadow routes. ShadowRun is not here: a shadow run is started by
+	// the watcher or by `sirdar shadow run`, never from a page.
+	ShadowStatus(wsID string) (app.ShadowStatus, error)
+	ShadowReport(wsID, since string) (app.ShadowReport, error)
+	ShadowPoll(ctx context.Context, wsID string) (app.ShadowStatus, error)
+	ShadowPause(wsID, forDuration string) (app.ShadowStatus, error)
+	ShadowResume(wsID string) (app.ShadowStatus, error)
+	ShadowOutcome(ctx context.Context, wsID string, in app.ShadowOutcomeInput) (app.ShadowRow, error)
+	ShadowRegrade(ctx context.Context, wsID string, keys []string) ([]app.ShadowRow, error)
+	// The suggestions queue: playbook additions waiting for the operator.
+	Remember(ctx context.Context, wsID, runID string, index int) (app.Suggestion, error)
+	Suggestions(wsID string) ([]app.Suggestion, error)
+	AcceptSuggestion(wsID, id string, in app.AcceptSuggestionInput) (app.Suggestion, error)
+	DismissSuggestion(wsID, id string) error
 	Doctor(ctx context.Context, wsID string) ([]Check, error)
 	Quota() []Quota
 	Subscribe() (<-chan Event, func())
@@ -132,6 +146,12 @@ func classify(err error) (int, string) {
 		return 409, "conflict"
 	case errors.Is(err, app.ErrMCPDenied):
 		return 403, "forbidden"
+	case errors.Is(err, app.ErrShadowLocked):
+		// Another process is the workspace's watcher. Nothing is wrong
+		// with the request; the message names the holder.
+		return 403, "forbidden"
+	case errors.Is(err, app.ErrBadInput):
+		return 400, "bad_request"
 	case errors.Is(err, app.ErrBadDecision):
 		return 400, "bad_request"
 	case errors.Is(err, app.ErrNotAsking):
@@ -148,7 +168,8 @@ func classify(err error) (int, string) {
 		errors.Is(err, app.ErrNoSuchRun),
 		errors.Is(err, app.ErrNoSuchJob),
 		errors.Is(err, app.ErrNoSuchMCPServer),
-		errors.Is(err, app.ErrNoSuchPlaybook):
+		errors.Is(err, app.ErrNoSuchPlaybook),
+		errors.Is(err, app.ErrNoSuchSuggestion):
 		return 404, "not_found"
 	default:
 		return 500, "internal"
