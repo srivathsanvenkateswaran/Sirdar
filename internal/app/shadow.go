@@ -186,7 +186,7 @@ func (s *Service) shadowStatusOf(ws Workspace, cfg *config.Config) ShadowStatus 
 	state, reason, locked := w.state, w.reason, w.locked
 	s.shadow.mu.Unlock()
 
-	day := shadow.Today(entries, shadowInFlightUSD(ws.Root, st.InFlight), now)
+	day := shadow.Today(entries, shadowInFlightUSD(ws.Root, st.InFlight, entries), now)
 	st.Today = ShadowToday{Runs: day.Runs, MaxPerDay: cfg.Shadow.MaxPerDay, USD: day.USD, MaxUSDPerDay: cfg.Shadow.MaxUSDPerDay}
 	if _, err := os.Stat(shadow.LedgerPath(ws.Root)); err == nil {
 		st.HasLedger = true
@@ -255,12 +255,15 @@ func inFlightIDs(w *shadowWatch) []string {
 }
 
 // shadowInFlightUSD is what the runs still going have spent so far, read
-// from their state files, so the daily cap counts money already gone.
-func shadowInFlightUSD(root string, runIDs []string) float64 {
+// from their state files, so the daily cap counts money already gone. A
+// resumed run's state carries the whole run's cost, and what its earlier
+// attempts spent is already on their finished lines, so only the rest is
+// counted here.
+func shadowInFlightUSD(root string, runIDs []string, entries []shadow.Entry) float64 {
 	var usd float64
 	for _, id := range runIDs {
 		if _, st, err := store.Open(root, id); err == nil {
-			usd += st.Usage.CostUSD
+			usd += max(0, st.Usage.CostUSD-shadowPriorCost(entries, id))
 		}
 	}
 	return usd
@@ -592,7 +595,7 @@ func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Conf
 		w.authHold = false
 		s.shadow.mu.Unlock()
 	}
-	usd := shadowInFlightUSD(root, ids)
+	usd := shadowInFlightUSD(root, ids, entries)
 	if state, reason := s.shadowGate(root, cfg, entries, now, usd); state != "" {
 		settle(state, reason)
 		return nil
@@ -888,14 +891,38 @@ func (s *Service) shadowRecover(w *shadowWatch, root string, entries []shadow.En
 
 // shadowOrphaned reports whether a started run with no finished line has
 // lost the process that was driving it. A started line that names a
-// process on this host is answered by whether that process is alive. One
-// from another host, or from before started lines named a process, is
-// orphaned once nothing about it has moved for as long as makes a lock
-// stale: its started line, its state, and its event log.
+// process on this host is orphaned when that process is gone. One from
+// another host, or from before started lines named a process, is orphaned
+// once nothing about it has moved for as long as makes a lock stale: its
+// started line, its state, and its event log. A live pid is not trusted
+// forever, since a new process may have reused the number: a run quiet for
+// longer than it could ever run (shadowStuckAfter) is orphaned too.
 func shadowOrphaned(started shadow.Entry, rn store.Run, st store.State, haveDir bool, now time.Time, interval time.Duration) bool {
+	quiet := now.Sub(shadowLastActivity(started, rn, st, haveDir))
 	if started.PID > 0 && started.Host == hostName() {
-		return !pidAlive(started.PID)
+		return !pidAlive(started.PID) || quiet > shadowStuckAfter(st, haveDir, interval)
 	}
+	return quiet > shadowLockStaleAfter*interval
+}
+
+// shadowStuckFallback is how long a run whose budget is unknown may go
+// quiet under a live pid before it is taken as orphaned.
+const shadowStuckFallback = 6 * time.Hour
+
+// shadowStuckAfter is the larger of the lock's staleness and the run's
+// wall-clock budget, or of the staleness and shadowStuckFallback when the
+// budget is unknown: past it, a run cannot still be going.
+func shadowStuckAfter(st store.State, haveDir bool, interval time.Duration) time.Duration {
+	limit := shadowStuckFallback
+	if haveDir && st.Budget.MaxMinutes > 0 {
+		limit = time.Duration(st.Budget.MaxMinutes) * time.Minute
+	}
+	return max(limit, shadowLockStaleAfter*interval)
+}
+
+// shadowLastActivity is the newest of the started line, the state's last
+// write and the event log's last write.
+func shadowLastActivity(started shadow.Entry, rn store.Run, st store.State, haveDir bool) time.Time {
 	last := started.At
 	if haveDir {
 		if st.UpdatedAt.After(last) {
@@ -905,7 +932,7 @@ func shadowOrphaned(started shadow.Entry, rn store.Run, st store.State, haveDir 
 			last = fi.ModTime()
 		}
 	}
-	return now.Sub(last) > shadowLockStaleAfter*interval
+	return last
 }
 
 // shadowPriorCost is what the ledger's finished lines already counted for
@@ -1108,7 +1135,7 @@ func (s *Service) shadowRecordFinished(root, key, runID string, st store.State, 
 func shadowFinished(key string, st store.State, dir string, now time.Time) shadow.Entry {
 	e := shadow.Entry{
 		At: now, Ev: "finished", Key: key, RunID: st.RunID,
-		Status: string(st.Status), Reason: st.Reason,
+		Status: string(st.Status), Reason: cutText(st.Reason),
 		CostUSD: st.Usage.CostUSD, Turns: st.Usage.Turns, ElapsedSec: st.Usage.ElapsedSeconds,
 		Reproduction: "unknown",
 	}
@@ -1259,7 +1286,7 @@ func (s *Service) shadowRunOne(ctx context.Context, ws Workspace, cfg *config.Co
 	s.shadow.mu.Lock()
 	ids := inFlightIDs(w)
 	s.shadow.mu.Unlock()
-	usd := shadowInFlightUSD(ws.Root, ids)
+	usd := shadowInFlightUSD(ws.Root, ids, entries)
 	if _, reason := s.shadowGate(ws.Root, cfg, entries, now, usd); reason != "" {
 		res.Skipped = reason
 		return res, nil

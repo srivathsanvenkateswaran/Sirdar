@@ -1018,3 +1018,55 @@ func TestShadowTickUSDCap(t *testing.T) {
 		t.Errorf("%d runs started over the USD cap", n)
 	}
 }
+
+func TestShadowFinishedReasonCut(t *testing.T) {
+	st := store.State{RunID: "r1", Status: store.StatusFailed, Reason: "provider exited: " + strings.Repeat("e", 100000)}
+	e := shadowFinished("OMNI-1", st, "", time.Now())
+	if n := len([]rune(e.Reason)); n != shadowMaxText {
+		t.Errorf("reason of %d runes, want %d", n, shadowMaxText)
+	}
+}
+
+// TestShadowRecoverStuckPid: a pid that is alive may be a new process that
+// reused a dead one's number, so a run nothing has touched for far longer
+// than it could run is orphaned anyway.
+func TestShadowRecoverStuckPid(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	armAt(t, f, now.Add(-8*time.Hour))
+	st := store.State{Status: store.StatusRunning, StartedAt: now.Add(-7 * time.Hour), UpdatedAt: now.Add(-7 * time.Hour)}
+	st.Budget.MaxMinutes = 25
+	writeShadowRun(t, f.root, "OMNI-1", "20261006T000000Z-old1", st, "")
+	f.append(t, startedBy(now.Add(-7*time.Hour), "OMNI-1", "20261006T000000Z-old1", os.Getppid()))
+	// The same live pid with recent activity is still left alone.
+	recent := store.State{Status: store.StatusRunning, StartedAt: now.Add(-10 * time.Minute), UpdatedAt: now.Add(-10 * time.Minute)}
+	recent.Budget.MaxMinutes = 25
+	writeShadowRun(t, f.root, "OMNI-2", "20261006T065000Z-new1", recent, "")
+	f.append(t, startedBy(now.Add(-10*time.Minute), "OMNI-2", "20261006T065000Z-new1", os.Getppid()))
+
+	f.tick(t)
+	if _, got, _ := store.Open(f.root, "20261006T000000Z-old1"); got.Status != store.StatusBlocked || got.Reason != "interrupted" {
+		t.Errorf("stale run %s %q, want blocked interrupted", got.Status, got.Reason)
+	}
+	if _, got, _ := store.Open(f.root, "20261006T065000Z-new1"); got.Status != store.StatusRunning {
+		t.Errorf("a recently active run was touched: %s", got.Status)
+	}
+}
+
+func TestShadowInFlightUSDOfResumedRun(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	const runID = "20261006T040000Z-res1"
+	f.append(t, shadow.Entry{At: now.Add(-time.Hour), Ev: "started", Key: "OMNI-1", RunID: runID, Attempt: 1})
+	f.append(t, shadow.Entry{At: now.Add(-50 * time.Minute), Ev: "finished", Key: "OMNI-1", RunID: runID, Status: "blocked", Reason: "rate limited", CostUSD: 0.30})
+	f.append(t, shadow.Entry{At: now, Ev: "started", Key: "OMNI-1", RunID: runID, Attempt: 2, Resume: true, PID: os.Getpid(), Host: hostName()})
+	writeShadowRun(t, f.root, "OMNI-1", runID, store.State{Status: store.StatusRunning, Usage: store.Usage{CostUSD: 0.72}}, "")
+	w := f.svc.shadowWatch(f.wsID, f.root)
+	f.svc.shadow.mu.Lock()
+	w.inFlight[runID] = true
+	f.svc.shadow.mu.Unlock()
+
+	if got := f.status(t).Today.USD; got < 0.7199 || got > 0.7201 {
+		t.Errorf("today's USD %v, want 0.72 (0.30 ledgered and 0.42 since)", got)
+	}
+}
