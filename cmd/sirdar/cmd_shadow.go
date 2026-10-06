@@ -62,26 +62,27 @@ func cmdShadow(args []string, stdout, stderr io.Writer) int {
 
 // openWorkspaceService resolves the workspace the way serve does — the one
 // the working directory is in, registered if it is not yet — and builds
-// the service over the registry. The bool is false when the caller should
-// give up; the message is already on stderr.
-func openWorkspaceService(opts app.Options, stderr io.Writer) (*app.Service, string, bool) {
+// the service over the registry. code is non-zero when the caller should
+// give up, with the message already on stderr: exitUsage when there is no
+// workspace to work in, as for serve, and 1 when the registry fails.
+func openWorkspaceService(opts app.Options, stderr io.Writer) (svc *app.Service, wsID string, code int) {
 	root, ok := serveRoot("", stderr)
 	if !ok {
-		return nil, "", false
+		return nil, "", exitUsage
 	}
 	registryPath, err := app.DefaultRegistryPath()
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
-		return nil, "", false
+		return nil, "", 1
 	}
 	reg := &app.Registry{Path: registryPath}
-	wsID, err := ensureRegistered(reg, root)
+	wsID, err = ensureRegistered(reg, root)
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
-		return nil, "", false
+		return nil, "", 1
 	}
 	opts.Stderr = app.Synced(stderr)
-	return app.New(reg, app.BuildDeps, opts), wsID, true
+	return app.New(reg, app.BuildDeps, opts), wsID, 0
 }
 
 func cmdShadowWatch(args []string, stdout, stderr io.Writer) int {
@@ -90,9 +91,9 @@ func cmdShadowWatch(args []string, stdout, stderr io.Writer) int {
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{Shadow: true, ShadowBy: "watch"}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{Shadow: true, ShadowBy: "watch"}, stderr)
+	if code != 0 {
+		return code
 	}
 
 	ctx, stop := interruptible()
@@ -112,7 +113,9 @@ func cmdShadowWatch(args []string, stdout, stderr io.Writer) int {
 			return 1
 		}
 		if !waitForJobs(ctx, svc, events, nil) {
-			fmt.Fprintln(stderr, "sirdar shadow watch: interrupted; the runs still going were stopped and can be resumed")
+			fmt.Fprintln(stderr, "sirdar shadow watch: interrupted; the runs still going were stopped and recorded as interrupted."+
+				" A running shadow watcher retries a first attempt once, while the ticket is still in your queue;"+
+				" sirdar shadow run KEY starts one again now")
 			return 1
 		}
 		// Stop waits for whatever the tick and its runs left going — a
@@ -201,9 +204,9 @@ func cmdShadowRun(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	ctx, stop := interruptible()
 	defer stop()
@@ -244,7 +247,9 @@ func cmdShadowRun(args []string, stdout, stderr io.Writer) int {
 		return code
 	}
 	if interrupted {
-		fmt.Fprintln(stderr, "sirdar shadow run: interrupted; the runs still going were stopped and can be resumed")
+		fmt.Fprintln(stderr, "sirdar shadow run: interrupted; the runs still going were stopped and recorded as interrupted."+
+			" A running shadow watcher retries a first attempt once, while the ticket is still in your queue;"+
+			" sirdar shadow run KEY starts one again now")
 		return 1
 	}
 	if !startedAny || err != nil {
@@ -258,9 +263,9 @@ func cmdShadowStatus(args []string, stdout, stderr io.Writer) int {
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	st, err := svc.ShadowStatus(wsID)
 	if err != nil {
@@ -309,9 +314,9 @@ func cmdShadowReport(args []string, stdout, stderr io.Writer) int {
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	rep, err := svc.ShadowReport(wsID, *since)
 	if err != nil {
@@ -382,9 +387,9 @@ func cmdShadowOutcome(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "sirdar shadow outcome: %v\n", err)
 		return 1
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	ctx, stop := interruptible()
 	defer stop()
@@ -403,9 +408,9 @@ func cmdShadowGrade(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	ctx, stop := interruptible()
 	defer stop()
@@ -429,9 +434,9 @@ func cmdShadowPause(args []string, stdout, stderr io.Writer) int {
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	st, err := svc.ShadowPause(wsID, *forDuration)
 	if err != nil {
@@ -447,9 +452,9 @@ func cmdShadowResume(args []string, stdout, stderr io.Writer) int {
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	st, err := svc.ShadowResume(wsID)
 	if err != nil {

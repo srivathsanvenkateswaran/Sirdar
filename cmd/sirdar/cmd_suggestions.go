@@ -41,9 +41,9 @@ func cmdSuggestionsList(args []string, stdout, stderr io.Writer) int {
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	list, err := svc.Suggestions(wsID)
 	if err != nil {
@@ -78,9 +78,9 @@ func cmdSuggestionsAccept(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	got, err := svc.AcceptSuggestion(wsID, positional[0], app.AcceptSuggestionInput{Playbook: *playbook})
 	if err != nil {
@@ -102,9 +102,9 @@ func cmdSuggestionsDismiss(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return exitUsage
 	}
-	svc, wsID, ok := openWorkspaceService(app.Options{}, stderr)
-	if !ok {
-		return exitUsage
+	svc, wsID, code := openWorkspaceService(app.Options{}, stderr)
+	if code != 0 {
+		return code
 	}
 	if err := svc.DismissSuggestion(wsID, positional[0]); err != nil {
 		fmt.Fprintf(stderr, "sirdar suggestions dismiss: %v\n", err)

@@ -283,3 +283,29 @@ func TestOperatorOutcomesTriageListsCapped(t *testing.T) {
 		t.Errorf("the capped line still does not fit the ledger: %v", err)
 	}
 }
+
+// TestManualOutcomeCapsThePRList: a manual outcome is one ledger line, so
+// its URLs are bounded in number and length rather than left to push the
+// line past the ledger's size limit.
+func TestManualOutcomeCapsThePRList(t *testing.T) {
+	pr := func(i int) string { return "https://github.com/o/r/pull/" + strings.Repeat("1", i%3+1) }
+	ten := make([]string, MaxManualPRs)
+	for i := range ten {
+		ten[i] = pr(i)
+	}
+	if _, err := ManualOutcome("OMNI-1", ten, "", t0); err != nil {
+		t.Fatalf("%d URLs: %v", MaxManualPRs, err)
+	}
+	if _, err := ManualOutcome("OMNI-1", append(ten, pr(0)), "", t0); err == nil || !strings.Contains(err.Error(), "at most 10") {
+		t.Errorf("%d URLs: err = %v", MaxManualPRs+1, err)
+	}
+
+	base := "https://github.com/o/r/pull/1?"
+	fits := base + strings.Repeat("a", MaxManualPRURLLen-len(base))
+	if _, err := ManualOutcome("OMNI-1", []string{fits}, "", t0); err != nil {
+		t.Fatalf("a %d-character URL: %v", len(fits), err)
+	}
+	if _, err := ManualOutcome("OMNI-1", []string{fits + "a"}, "", t0); err == nil || !strings.Contains(err.Error(), "2000") {
+		t.Errorf("a %d-character URL: err = %v", len(fits)+1, err)
+	}
+}

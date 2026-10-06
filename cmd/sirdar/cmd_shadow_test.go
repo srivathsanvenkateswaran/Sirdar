@@ -274,3 +274,25 @@ func TestShadowWatchRefusesALockHeldElsewhere(t *testing.T) {
 		t.Fatalf("the other process's lock was removed: %v", err)
 	}
 }
+
+// TestShadowCommandsExitCodes: no workspace to work in is a usage error, as
+// for serve; a registry that cannot be read is a failure, exit 1.
+func TestShadowCommandsExitCodes(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_DATA_HOME", "")
+	chdir(t, t.TempDir())
+	mustRun(t, exitUsage, "shadow", "status")
+	mustRun(t, exitUsage, "suggestions")
+
+	shadowWorkspace(t)
+	// A file where the user directory should be makes the registry
+	// unreadable.
+	home, _ = os.UserHomeDir()
+	if err := os.WriteFile(filepath.Join(home, ".sirdar"), []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustRun(t, 1, "shadow", "status")
+	mustRun(t, 1, "suggestions")
+}

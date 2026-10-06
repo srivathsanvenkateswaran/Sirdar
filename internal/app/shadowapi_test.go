@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,5 +58,27 @@ func TestShadowArgumentsAreBadInput(t *testing.T) {
 	}
 	if _, err := svc.AcceptSuggestion(ws, "s-000000000000", AcceptSuggestionInput{}); !errors.Is(err, ErrNoSuchSuggestion) {
 		t.Fatalf("AcceptSuggestion unknown: %v", err)
+	}
+}
+
+// TestShadowOutcomeOverTheURLCapsIsBadInput: too many pull requests, or one
+// too long, is the caller's mistake and reaches the HTTP layer as a 400.
+func TestShadowOutcomeOverTheURLCapsIsBadInput(t *testing.T) {
+	root := newWorkspace(t)
+	reg := newRegistry(t, root)
+	svc := New(reg, nil, Options{})
+	list, _ := reg.List()
+	ws := list[0].ID
+
+	eleven := make([]string, 11)
+	for i := range eleven {
+		eleven[i] = "https://github.com/o/r/pull/1"
+	}
+	long := "https://github.com/o/r/pull/1?" + strings.Repeat("a", 2000)
+	for name, urls := range map[string][]string{"eleven URLs": eleven, "a long URL": {long}} {
+		_, err := svc.ShadowOutcome(context.Background(), ws, ShadowOutcomeInput{Key: "OMNI-1", PRURLs: urls})
+		if !errors.Is(err, ErrBadInput) {
+			t.Errorf("%s: %v, want ErrBadInput", name, err)
+		}
 	}
 }

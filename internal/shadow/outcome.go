@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/eval"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
@@ -135,11 +137,26 @@ func capList(items []string) []string {
 	return out
 }
 
+// MaxManualPRs and MaxManualPRURLLen bound the pull requests one manual
+// outcome may name. The outcome is a single ledger line, and a request
+// that could carry any number of URLs of any length could push it past the
+// line limit and lose it.
+const (
+	MaxManualPRs      = 10
+	MaxManualPRURLLen = 2000
+)
+
 // ManualOutcome validates and builds a manual outcome line.
 func ManualOutcome(key string, prURLs []string, resolution string, now time.Time) (Entry, error) {
+	if len(prURLs) > MaxManualPRs {
+		return Entry{}, fmt.Errorf("shadow: an outcome names at most %d pull request URLs; got %d", MaxManualPRs, len(prURLs))
+	}
 	var urls []string
 	for _, u := range prURLs {
 		u = strings.TrimSpace(u)
+		if n := utf8.RuneCountInString(u); n > MaxManualPRURLLen {
+			return Entry{}, fmt.Errorf("shadow: a pull request URL is at most %d characters; got one of %d", MaxManualPRURLLen, n)
+		}
 		if err := eval.CheckPRURL(u); err != nil {
 			return Entry{}, err
 		}

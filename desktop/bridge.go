@@ -366,9 +366,9 @@ func (b *Bridge) ShadowReport(ws, since string) (app.ShadowReport, error) {
 // so the tick takes the workspace's lock for its length, and a serve or
 // shadow watch already holding it refuses the poll.
 func (b *Bridge) ShadowPoll(ws string) (app.ShadowStatus, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
-	defer cancel()
-	return b.svc.ShadowPoll(ctx, ws)
+	// No callTimeout: the tick may grade with a paid judge call, which a
+	// 60 s cap would throw away; the HTTP route has no such cap either.
+	return b.svc.ShadowPoll(context.Background(), ws)
 }
 
 // ShadowPause stops new shadow starts for forDuration, 24 hours when empty.
@@ -380,20 +380,18 @@ func (b *Bridge) ShadowPause(ws, forDuration string) (app.ShadowStatus, error) {
 func (b *Bridge) ShadowResume(ws string) (app.ShadowStatus, error) { return b.svc.ShadowResume(ws) }
 
 // ShadowOutcome records an outcome entered by hand and grades the key
-// against it. Grading may ask the judge model, hence the timeout.
+// against it.
 func (b *Bridge) ShadowOutcome(ws string, in app.ShadowOutcomeInput) (app.ShadowRow, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
-	defer cancel()
-	return b.svc.ShadowOutcome(ctx, ws, in)
+	// No callTimeout: grading is a paid judge call a 60 s cap would waste.
+	return b.svc.ShadowOutcome(context.Background(), ws, in)
 }
 
 // ShadowRegrade collects outcomes for one key and grades it now, answering
 // with its row: the screen regrades the row it shows, which is the shape
 // the HTTP route has too.
 func (b *Bridge) ShadowRegrade(ws, key string) (app.ShadowRow, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
-	defer cancel()
-	rows, err := b.svc.ShadowRegrade(ctx, ws, []string{key})
+	// No callTimeout: grading is a paid judge call a 60 s cap would waste.
+	rows, err := b.svc.ShadowRegrade(context.Background(), ws, []string{key})
 	if err != nil {
 		return app.ShadowRow{}, err
 	}
@@ -404,11 +402,11 @@ func (b *Bridge) ShadowRegrade(ws, key string) (app.ShadowRow, error) {
 }
 
 // Remember turns one operator message on a run into a pending playbook
-// addition. Drafting it asks the model once, hence the timeout.
+// addition. Drafting it asks the model once.
 func (b *Bridge) Remember(ws, runId string, index int) (app.Suggestion, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
-	defer cancel()
-	return b.svc.Remember(ctx, ws, runId, index)
+	// No callTimeout: drafting is bounded by the service's own 90 s
+	// rememberTimeout, and a 60 s cap would discard a paid draft.
+	return b.svc.Remember(context.Background(), ws, runId, index)
 }
 
 // Suggestions lists the pending playbook additions, never null.
