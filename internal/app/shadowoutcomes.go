@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
@@ -36,16 +37,24 @@ var digestHostOK = func(host string) bool { return host == "hooks.slack.com" } /
 const shadowJudgeFailsPerDay = 3
 
 // shadowCollectAndGrade gathers new outcomes for keys, every ledger key
-// when keys is empty, and grades the keys whose truth changed or that have
-// no final grade yet (spec §6, §7). A key whose latest attempt is still
-// running, or may still be retried, is left for later: its grade would be
-// about a run that is not its last.
+// when keys is empty, and grades the keys with no grade yet or whose truth
+// grew since their grade (spec §6, §7). A key whose latest attempt is
+// still running, or may still be retried, is left for later: its grade
+// would be about a run that is not its last.
 //
-// The window that closes a key as ungradable is applied only on a sweep of
-// every key. A key named by the caller is one the operator, or the
-// operator's own run, just said something about, and that is worth a
-// grade however old the shadow run is.
+// The window that closes a key as ungradable is applied on a sweep of
+// every key, and not when the operator names keys by hand: a manual
+// outcome or a regrade is the operator saying the key is worth a grade
+// however old the shadow run is.
 func (s *Service) shadowCollectAndGrade(ctx context.Context, ws Workspace, cfg *config.Config, keys []string) ([]ShadowRow, error) {
+	return s.shadowCollect(ctx, ws, cfg, keys, len(keys) == 0)
+}
+
+// shadowCollect is shadowCollectAndGrade with the window rule chosen by
+// the caller. A key past its window whose latest attempt never got a final
+// grade is closed as ungradable, even one still waiting for a retry that
+// may never come because the ticket left the operator's queue.
+func (s *Service) shadowCollect(ctx context.Context, ws Workspace, cfg *config.Config, keys []string, windowed bool) ([]ShadowRow, error) {
 	w := s.shadowWatch(ws.ID, ws.Root)
 	// One pass at a time per workspace: the tick, a manual entry and an
 	// operator run finishing can all ask at once, and two passes would
@@ -59,8 +68,7 @@ func (s *Service) shadowCollectAndGrade(ctx context.Context, ws Workspace, cfg *
 		return nil, err
 	}
 	tickets := shadow.Fold(entries)
-	sweep := len(keys) == 0
-	if sweep {
+	if len(keys) == 0 {
 		for key := range tickets {
 			keys = append(keys, key)
 		}
@@ -76,15 +84,18 @@ func (s *Service) shadowCollectAndGrade(ctx context.Context, ws Workspace, cfg *
 			continue
 		}
 		latest := t.Latest()
-		if latest == nil || latest.Finished == nil || shadow.RetryPending(t) {
+		if latest == nil || latest.Finished == nil {
 			continue
 		}
-		if sweep && now.Sub(latest.Finished.At) > window {
+		if windowed && now.Sub(latest.Finished.At) > window {
 			if t.Grade == nil || !t.Grade.Final {
 				if err := shadow.Append(root, shadow.Ungradable(key, latest.Started.RunID, now)); err != nil {
 					return nil, err
 				}
 			}
+			continue
+		}
+		if shadow.RetryPending(t) {
 			continue
 		}
 		due = append(due, t)
@@ -111,7 +122,7 @@ func (s *Service) shadowCollectAndGrade(ctx context.Context, ws Workspace, cfg *
 			break
 		}
 		touched[t.Key] = true
-		if err := s.shadowCollectOne(ctx, w, root, cfg, deps, judge, t, now); err != nil {
+		if err := s.shadowCollectOne(ctx, root, cfg, deps, judge, t, entries, now); err != nil {
 			problems = append(problems, fmt.Errorf("shadow: %s: %w", t.Key, err))
 		}
 	}
@@ -136,7 +147,7 @@ func (s *Service) shadowCollectAndGrade(ctx context.Context, ws Workspace, cfg *
 // shadowCollectOne appends what is new about one key's outcome and grades
 // it when there is reason to. A failure to read one source is reported and
 // the others still count.
-func (s *Service) shadowCollectOne(ctx context.Context, w *shadowWatch, root string, cfg *config.Config, deps runner.Deps, judge shadow.Judge, t *shadow.Ticket, now time.Time) error {
+func (s *Service) shadowCollectOne(ctx context.Context, root string, cfg *config.Config, deps runner.Deps, judge shadow.Judge, t *shadow.Ticket, entries []shadow.Entry, now time.Time) error {
 	key := t.Key
 	latest := t.Latest()
 	var problems []error
@@ -164,15 +175,13 @@ func (s *Service) shadowCollectOne(ctx context.Context, w *shadowWatch, root str
 		appended++
 	}
 
-	if t.Grade != nil && t.Grade.Final && appended == 0 {
+	// A grade stands until the truth behind it grows. The truth grew when
+	// this pass appended a line, or when an outcome line already sits
+	// after the grade because the regrade it called for failed.
+	if t.Grade != nil && appended == 0 && !outcomeAfterGrade(entries, key, latest.Started.RunID) {
 		return errors.Join(problems...)
 	}
-	day := now.Format("2006-01-02")
-	failKey := key + "\x00" + day
-	s.shadow.mu.Lock()
-	fails := w.judgeFails[failKey]
-	s.shadow.mu.Unlock()
-	if fails >= shadowJudgeFailsPerDay {
+	if judgeFailsToday(entries, key, now) >= shadowJudgeFailsPerDay {
 		return errors.Join(problems...)
 	}
 
@@ -192,22 +201,19 @@ func (s *Service) shadowCollectOne(ctx context.Context, w *shadowWatch, root str
 	case errors.Is(err, shadow.ErrNotEnoughTruth):
 		// Nothing to grade against yet; the next pass looks again.
 	case errors.As(err, &je):
-		s.shadow.mu.Lock()
-		w.judgeFails[failKey]++
-		s.shadow.mu.Unlock()
 		problems = append(problems, err)
-		// The call was paid for whether or not its answer was usable, so
-		// its cost lands on a graded line with no grade: the daily cap and
-		// the scorecard count it, and Fold does not take it for a grade.
-		if je.CostUSD > 0 {
-			failed := shadow.Entry{
-				At: now, Ev: "graded", Key: key, ShadowRunID: latest.Started.RunID,
-				JudgeModel: cfg.ShadowJudgeModel(), CostUSD: je.CostUSD,
-				Warning: cutText("judge failed: " + firstLineOf(err.Error())),
-			}
-			if err := shadow.Append(root, failed); err != nil {
-				problems = append(problems, err)
-			}
+		// A failed call lands on a graded line with no grade. Its cost,
+		// paid whether or not the answer was usable, reaches the daily cap
+		// and the scorecard; the line itself is what the per-day failure
+		// cap counts, so the cap holds across restarts and processes; and
+		// Fold does not take it for a grade.
+		failed := shadow.Entry{
+			At: now, Ev: "graded", Key: key, ShadowRunID: latest.Started.RunID,
+			JudgeModel: cfg.ShadowJudgeModel(), CostUSD: je.CostUSD,
+			Warning: cutText(judgeFailedPrefix + firstLineOf(err.Error())),
+		}
+		if err := shadow.Append(root, failed); err != nil {
+			problems = append(problems, err)
 		}
 	case err != nil:
 		problems = append(problems, err)
@@ -217,6 +223,42 @@ func (s *Service) shadowCollectOne(ctx context.Context, w *shadowWatch, root str
 		}
 	}
 	return errors.Join(problems...)
+}
+
+// judgeFailedPrefix starts the warning on a failed judge call's line.
+const judgeFailedPrefix = "judge failed: "
+
+// judgeFailsToday counts key's failed judge calls in now's local day.
+func judgeFailsToday(entries []shadow.Entry, key string, now time.Time) int {
+	y, m, d := now.Date()
+	n := 0
+	for _, e := range entries {
+		if e.Ev != "graded" || e.Key != key || e.Grade != "" || !strings.HasPrefix(e.Warning, judgeFailedPrefix) {
+			continue
+		}
+		if ey, em, ed := e.At.In(now.Location()).Date(); ey == y && em == m && ed == d {
+			n++
+		}
+	}
+	return n
+}
+
+// outcomeAfterGrade reports whether an outcome line for key comes after
+// the newest grade of runID in the ledger.
+func outcomeAfterGrade(entries []shadow.Entry, key, runID string) bool {
+	lastOutcome, lastGrade := -1, -1
+	for i, e := range entries {
+		if e.Key != key {
+			continue
+		}
+		switch {
+		case e.Ev == "outcome":
+			lastOutcome = i
+		case e.Ev == "graded" && e.Grade != "" && e.ShadowRunID == runID:
+			lastGrade = i
+		}
+	}
+	return lastOutcome > lastGrade
 }
 
 // shadowOutcome records an outcome the operator entered by hand and grades
@@ -290,26 +332,39 @@ func (s *Service) shadowReport(wsID string, since time.Time) (ShadowReport, erro
 }
 
 // shadowObserveRun starts a collection pass for the key of an operator RCA
-// or fix run that just completed, when the ledger holds a finished shadow
-// run of it: that run's result is the truth the shadow run is graded on,
-// and it is freshest now.
+// or fix run that has just completed, when the ledger holds a finished
+// shadow run of it: that run's result is the truth the shadow run is
+// graded on, and it is freshest now.
+//
+// Only the move into completed counts. The watcher reports every run on
+// disk when it starts, and again whenever a finished run's state file is
+// rewritten; neither is news, and each would cost a pass and perhaps a
+// judge call. A run first seen after that initial sweep is new, so one
+// first seen completed has just finished.
 func (s *Service) shadowObserveRun(e Event) {
-	if !s.opts.Shadow || e.Kind != KindRunUpdated || e.Run == nil || e.Run.Shadow {
+	if !s.opts.Shadow || e.Kind != KindRunUpdated || e.Run == nil {
 		return
 	}
-	if e.Run.Status != string(store.StatusCompleted) || (e.Run.Kind != string(store.KindRCA) && e.Run.Kind != string(store.KindFix)) {
-		return
-	}
+	completed := string(store.StatusCompleted)
+	id := e.WorkspaceID + "\x00" + e.Run.Key + "\x00" + e.Run.RunID
 	s.shadow.mu.Lock()
-	ctx := s.shadow.ctx
+	prev, known := s.shadow.runStatus[id]
+	s.shadow.runStatus[id] = e.Run.Status
+	swept, ctx := s.shadow.swept, s.shadow.ctx
 	s.shadow.mu.Unlock()
+	if !swept || (known && prev == completed) || e.Run.Status != completed || e.Run.Shadow {
+		return
+	}
+	if e.Run.Kind != string(store.KindRCA) && e.Run.Kind != string(store.KindFix) {
+		return
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if ctx.Err() != nil {
 		return
 	}
-	wsID, key := e.WorkspaceID, e.Run.Key
+	wsID, key, runID := e.WorkspaceID, e.Run.Key, e.Run.RunID
 	s.running.Add(1)
 	go func() {
 		defer s.running.Done()
@@ -317,15 +372,25 @@ func (s *Service) shadowObserveRun(e Event) {
 		if err != nil || !cfg.Shadow.Enabled {
 			return
 		}
+		// An eval run is a measurement like a shadow run, and says nothing
+		// about how the ticket ended.
+		if _, st, err := store.Open(ws.Root, runID); err != nil || st.Measurement() {
+			return
+		}
 		entries, err := shadow.Read(ws.Root)
 		if err != nil {
+			return
+		}
+		// A pause or a quota near its limit holds back the judge as it
+		// holds back runs; the next outcome tick after it lifts collects.
+		if _, _, paused := shadow.PausedUntil(entries, s.now()); paused || s.shadowQuotaReason(cfg) != "" {
 			return
 		}
 		t := shadow.Fold(entries)[key]
 		if t == nil || t.Latest() == nil || t.Latest().Finished == nil {
 			return
 		}
-		if _, err := s.shadowCollectAndGrade(ctx, ws, cfg, []string{key}); err != nil {
+		if _, err := s.shadowCollect(ctx, ws, cfg, []string{key}, true); err != nil {
 			s.log(err)
 		}
 		s.shadowRepublish(ws, cfg)

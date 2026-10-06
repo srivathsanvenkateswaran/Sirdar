@@ -318,11 +318,16 @@ func TestDigestTextIsMetadataOnly(t *testing.T) {
 		{At: at, Ev: "finished", Key: "OMNI-2", RunID: "r2", Status: "completed", CostUSD: 0.5},
 		{At: at, Ev: "graded", Key: "OMNI-2", ShadowRunID: "r2", Grade: "wrong", Final: true, CostUSD: 0.1},
 		{At: at, Ev: "started", Key: "OMNI-3", RunID: "r3", Attempt: 1},
-		// Yesterday's grade is not today's news.
+		// Ungradable is listed but, as on the scorecard, is not a grade.
+		{At: at.Add(-40 * 24 * time.Hour), Ev: "started", Key: "OMNI-4", RunID: "r4", Attempt: 1},
+		{At: at.Add(-40 * 24 * time.Hour), Ev: "finished", Key: "OMNI-4", RunID: "r4", Status: "completed"},
+		{At: at, Ev: "graded", Key: "OMNI-4", ShadowRunID: "r4", Grade: "ungradable", Final: true},
+		// The day before's grade is not this day's news.
+		{At: at.Add(-50 * time.Hour), Ev: "started", Key: "OMNI-9", RunID: "r9", Attempt: 1},
 		{At: at.Add(-24 * time.Hour), Ev: "graded", Key: "OMNI-9", ShadowRunID: "r9", Grade: "confirmed", Final: true},
 	}
 	text := digestText(entries, day)
-	want := "Sirdar shadow, 2026-10-06: started 3, graded 2, confirmed 50%, cost $2.20\nOMNI-1 confirmed\nOMNI-2 wrong"
+	want := "Sirdar shadow, 2026-10-06: started 3, graded 2, confirmed 50%, cost $2.20\nOMNI-1 confirmed\nOMNI-2 wrong\nOMNI-4 ungradable"
 	if text != want {
 		t.Errorf("digest:\n%s\nwant:\n%s", text, want)
 	}
@@ -341,7 +346,7 @@ type hookServer struct {
 
 func newHookServer(t *testing.T) *hookServer {
 	h := &hookServer{}
-	h.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h.srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buf := make([]byte, 4096)
 		n, _ := r.Body.Read(buf)
 		h.mu.Lock()
@@ -358,6 +363,12 @@ const digestConfig = "  digest:\n    enabled: true\n    at: \"09:00\"\n    webho
 func TestDigestOncePerDay(t *testing.T) {
 	hook := newHookServer(t)
 	t.Setenv("SHADOW_HOOK", hook.srv.URL+"/services/T/B/x")
+	// The digest goes over https only, so the test server is a TLS one
+	// and the default transport is taught to trust it for this test.
+	dt := http.DefaultTransport.(*http.Transport)
+	prevTLS := dt.TLSClientConfig
+	dt.TLSClientConfig = hook.srv.Client().Transport.(*http.Transport).TLSClientConfig
+	t.Cleanup(func() { dt.TLSClientConfig = prevTLS })
 	prev := digestHostOK
 	digestHostOK = func(string) bool { return true }
 	t.Cleanup(func() { digestHostOK = prev })
@@ -373,7 +384,8 @@ func TestDigestOncePerDay(t *testing.T) {
 	if posts != 1 {
 		t.Fatalf("%d posts in one day, want 1", posts)
 	}
-	if !strings.Contains(body, `"text":"Sirdar shadow, 2026-10-06: started 0`) {
+	// Sent on the 6th, about the 5th.
+	if !strings.Contains(body, `"text":"Sirdar shadow, 2026-10-05: started 0`) {
 		t.Errorf("posted %s", body)
 	}
 	digests := ofEv(f.ledger(t), "digest")
@@ -402,5 +414,226 @@ func TestDigestRefusesOtherHost(t *testing.T) {
 	}
 	if n := len(ofEv(f.ledger(t), "digest")); n != 0 {
 		t.Errorf("%d digest lines for a digest never sent", n)
+	}
+}
+
+func TestDigestRefusesHTTP(t *testing.T) {
+	t.Setenv("SHADOW_HOOK", "http://hooks.slack.com/services/T/B/x")
+	posts := 0
+	prev := digestPost
+	digestPost = func(ctx context.Context, url, text string) error {
+		posts++
+		return nil
+	}
+	t.Cleanup(func() { digestPost = prev })
+
+	f := newShadowFixture(t, shadowConfig(5, digestConfig), nil, Options{})
+	f.tick(t)
+	if posts != 0 {
+		t.Errorf("%d posts over plain http", posts)
+	}
+	if st := f.status(t); st.LastError != "shadow.digest.webhookUrl: must be an https URL" {
+		t.Errorf("lastError %q", st.LastError)
+	}
+}
+
+func TestCollectProvisionalNotRejudgedOnSameTruth(t *testing.T) {
+	judge := &gradeJudge{answer: confirmedAnswer, cost: 0.03}
+	judge.install(t)
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	finishedShadow(t, f, "OMNI-1", now.Add(-2*time.Hour))
+	operatorRun(t, f.root, "OMNI-1", "20261006T090000Z-op01", store.KindTriage, now.Add(-time.Hour), nil, triageDoc)
+
+	f.collect(t)
+	f.clock.Add(6 * time.Hour)
+	f.collect(t)
+	if judge.count() != 1 {
+		t.Errorf("the judge was called %d times on unchanged truth, want 1", judge.count())
+	}
+	if g := gradedLines(f.ledger(t)); len(g) != 1 || g[0].Final {
+		t.Errorf("graded:\n%s", dumpLedger(g))
+	}
+}
+
+func TestJudgeFailureCapReadsLedger(t *testing.T) {
+	judge := &gradeJudge{answer: confirmedAnswer, cost: 0.03}
+	judge.install(t)
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	finishedShadow(t, f, "OMNI-1", now.Add(-2*time.Hour))
+	operatorRun(t, f.root, "OMNI-1", "20261006T090000Z-op01", store.KindRCA, now.Add(-time.Hour),
+		&store.RCAInputs{Resolution: "Null tenant on refund"}, "")
+	// Another process already failed three times today; the cap is in
+	// the ledger, not in the memory of whoever failed.
+	for i := 0; i < 3; i++ {
+		f.append(t, shadow.Entry{At: now.Add(-time.Duration(i+1) * time.Minute), Ev: "graded", Key: "OMNI-1",
+			ShadowRunID: shadowRunID, Warning: "judge failed: boom"})
+	}
+	f.collect(t)
+	if judge.count() != 0 {
+		t.Errorf("the judge was called %d times after three failures today", judge.count())
+	}
+}
+
+func TestJudgeFailureWithoutCostCounts(t *testing.T) {
+	judge := &gradeJudge{err: errors.New("no session")}
+	judge.install(t)
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	now := f.clock.Now()
+	finishedShadow(t, f, "OMNI-1", now.Add(-2*time.Hour))
+	operatorRun(t, f.root, "OMNI-1", "20261006T090000Z-op01", store.KindRCA, now.Add(-time.Hour),
+		&store.RCAInputs{Resolution: "Null tenant on refund"}, "")
+	for i := 0; i < 4; i++ {
+		f.collect(t)
+	}
+	if judge.count() != 3 {
+		t.Errorf("the judge was called %d times, want 3: a failure that cost nothing still counts", judge.count())
+	}
+}
+
+func TestCollectUngradableWhileRetryPending(t *testing.T) {
+	judge := &gradeJudge{answer: confirmedAnswer}
+	judge.install(t)
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	finished := f.clock.Now().Add(-31 * 24 * time.Hour)
+	f.append(t, shadow.Entry{At: finished.Add(-time.Minute), Ev: "started", Key: "OMNI-1", RunID: shadowRunID, Attempt: 1})
+	f.append(t, shadow.Entry{At: finished, Ev: "finished", Key: "OMNI-1", RunID: shadowRunID, Status: "blocked", Reason: "interrupted"})
+
+	f.collect(t)
+	graded := gradedLines(f.ledger(t))
+	if len(graded) != 1 || graded[0].Grade != "ungradable" {
+		t.Fatalf("a retry that never came left the key open:\n%s", dumpLedger(f.ledger(t)))
+	}
+}
+
+// newObservedService starts a service with the shadow watcher over a
+// workspace already set up by prepare, the way serve starts over a
+// workspace with history.
+func newObservedService(t *testing.T, prepare func(root string, now time.Time)) *shadowFixture {
+	t.Helper()
+	root := newWorkspace(t)
+	writeConfig(t, root, shadowConfig(5, ""))
+	clock := &shadowClock{t: time.Date(2026, 10, 6, 10, 0, 0, 0, time.Local)}
+	prepare(root, clock.Now())
+	p := &stubProvider{script: completes()}
+	svc := New(newRegistry(t, root), stubBuilder(p, &shadowTracker{}, stubHelpdesk{}),
+		Options{Interval: 20 * time.Millisecond, Now: clock.Now, Shadow: true})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	svc.Start(ctx)
+	t.Cleanup(svc.Stop)
+	return &shadowFixture{root: root, wsID: WorkspaceID(root), svc: svc, clock: clock, p: p}
+}
+
+// shadowLedgerAt writes a finished shadow run of key straight to root.
+func shadowLedgerAt(t *testing.T, root, key string, finishedAt time.Time) {
+	t.Helper()
+	f := &shadowFixture{root: root}
+	finishedShadow(t, f, key, finishedAt)
+}
+
+func writeRCAState(t *testing.T, root, runID string, status store.Status, startedAt time.Time) {
+	t.Helper()
+	dir := filepath.Join(root, ".sirdar", "runs", "OMNI-1", runID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := store.State{RunID: runID, Key: "OMNI-1", Kind: store.KindRCA, Status: status, Provider: "claude",
+		StartedAt: startedAt, UpdatedAt: time.Now(), RCAInputs: &store.RCAInputs{Resolution: "Null tenant on refund"}}
+	if err := (store.Run{Dir: dir}).WriteState(st); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// waitRunStatus waits until the watcher has reported runID at status.
+func waitRunStatus(t *testing.T, events <-chan Event, runID string, status store.Status) {
+	t.Helper()
+	timeout := time.After(15 * time.Second)
+	for {
+		select {
+		case e := <-events:
+			if e.Kind == KindRunUpdated && e.Run != nil && e.Run.RunID == runID && e.Run.Status == string(status) {
+				return
+			}
+		case <-timeout:
+			t.Fatalf("the watcher never reported %s %s", runID, status)
+		}
+	}
+}
+
+func TestObserveOnlyOnTransition(t *testing.T) {
+	judge := &gradeJudge{answer: confirmedAnswer, cost: 0.03}
+	judge.install(t)
+	f := newObservedService(t, func(root string, now time.Time) {
+		shadowLedgerAt(t, root, "OMNI-1", now.Add(-2*time.Hour))
+		// The operator's RCA finished before serve started.
+		writeRCAState(t, root, "20261006T090000Z-op01", store.StatusCompleted, now.Add(-time.Hour))
+	})
+	events, unsubscribe := f.svc.Subscribe()
+	defer unsubscribe()
+
+	// Rewriting the finished run's state is a change on disk, not news.
+	time.Sleep(100 * time.Millisecond)
+	writeRCAState(t, f.root, "20261006T090000Z-op01", store.StatusCompleted, f.clock.Now().Add(-time.Hour))
+	time.Sleep(300 * time.Millisecond)
+	if judge.count() != 0 || len(ofEv(f.ledger(t), "outcome")) != 0 {
+		t.Fatalf("a run already completed at start set off a pass: %d judge calls\n%s", judge.count(), dumpLedger(f.ledger(t)))
+	}
+
+	// A run that goes from running to completed while serve watches is.
+	writeRCAState(t, f.root, "20261006T095000Z-op02", store.StatusRunning, f.clock.Now().Add(-10*time.Minute))
+	waitRunStatus(t, events, "20261006T095000Z-op02", store.StatusRunning)
+	writeRCAState(t, f.root, "20261006T095000Z-op02", store.StatusCompleted, f.clock.Now().Add(-10*time.Minute))
+	deadline := time.Now().Add(15 * time.Second)
+	for len(gradedLines(f.ledger(t))) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("no pass after a live completion:\n%s", dumpLedger(f.ledger(t)))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if judge.count() != 1 {
+		t.Errorf("the judge was called %d times, want 1", judge.count())
+	}
+}
+
+func TestObserveAppliesWindowAndPause(t *testing.T) {
+	judge := &gradeJudge{answer: confirmedAnswer, cost: 0.03}
+	judge.install(t)
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{Shadow: true})
+	now := f.clock.Now()
+	until := now.Add(time.Hour)
+	f.append(t, shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "paused by the operator"})
+	finishedShadow(t, f, "OMNI-1", now.Add(-31*24*time.Hour))
+	operatorRun(t, f.root, "OMNI-1", "20261006T090000Z-op01", store.KindRCA, now.Add(-time.Hour),
+		&store.RCAInputs{Resolution: "Null tenant on refund"}, "")
+	done := func() {
+		f.svc.observe(Event{Kind: KindRunUpdated, WorkspaceID: f.wsID, Run: &RunSummary{
+			RunID: "20261006T090000Z-op01", Key: "OMNI-1", Kind: "rca", Status: "completed",
+		}})
+	}
+
+	done()
+	time.Sleep(200 * time.Millisecond)
+	if n := len(ofEv(f.ledger(t), "graded")); n != 0 {
+		t.Fatalf("a pass ran while paused:\n%s", dumpLedger(f.ledger(t)))
+	}
+
+	// Once the pause lifts, the window still closes the old key unjudged.
+	f.append(t, shadow.Entry{At: now, Ev: "resumed", By: "operator"})
+	f.svc.shadow.mu.Lock()
+	delete(f.svc.shadow.runStatus, f.wsID+"\x00OMNI-1\x0020261006T090000Z-op01")
+	f.svc.shadow.mu.Unlock()
+	done()
+	deadline := time.Now().Add(15 * time.Second)
+	for len(gradedLines(f.ledger(t))) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("no line after the pause lifted:\n%s", dumpLedger(f.ledger(t)))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if g := gradedLines(f.ledger(t)); g[0].Grade != "ungradable" || judge.count() != 0 {
+		t.Errorf("graded %+v after %d judge calls, want ungradable and none", g, judge.count())
 	}
 }

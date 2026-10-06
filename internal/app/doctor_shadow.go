@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os/exec"
 	"strings"
 
@@ -42,17 +41,20 @@ type shadowPart struct {
 // shadowCheck is the shadow row: whether the watcher, once on, would find
 // the operator's tickets, keep its ledger out of git, and have a way to
 // learn how tickets ended. It reports false when no tracker is configured,
-// since shadow has nothing to watch then. A workspace with shadow switched
-// off gets one quiet "off": a missing me: block is no fault in a feature
-// nobody turned on.
+// since shadow has nothing to watch then.
+//
+// A workspace with shadow switched off still gets every part, so the
+// operator can check it all before switching it on, but the row leads
+// with "off" and goes no worse than a warning: what would stop the
+// watcher is no fault while there is no watcher.
 func shadowCheck(ctx context.Context, cfg *config.Config) (Check, bool) {
 	if cfg.Sources.Tracker == nil {
 		return Check{}, false
 	}
-	if !cfg.Shadow.Enabled {
-		return Check{Name: "shadow", OK: true, Level: string(provider.LevelOK), Detail: "off"}, true
-	}
 	var parts []shadowPart
+	if !cfg.Shadow.Enabled {
+		parts = append(parts, shadowPart{provider.LevelOK, "off"})
+	}
 
 	assignee := queueAssignee(cfg, cfg.Shadow.Assignee)
 	if source.IsSelf(cfg.Shadow.Assignee) && !source.ResolvesSelf(cfg.Sources.Tracker.Adapter) && SelfOf(cfg) == "" {
@@ -91,6 +93,9 @@ func shadowCheck(ctx context.Context, cfg *config.Config) (Check, bool) {
 		if levelRank(p.level) > levelRank(level) {
 			level = p.level
 		}
+	}
+	if !cfg.Shadow.Enabled && level == provider.LevelFail {
+		level = provider.LevelWarn
 	}
 	return Check{Name: "shadow", OK: level != provider.LevelFail, Level: string(level), Detail: strings.Join(texts, "; ")}, true
 }
@@ -171,8 +176,8 @@ func shadowDigestPart(cfg *config.Config) (shadowPart, bool) {
 	if err != nil {
 		return shadowPart{provider.LevelFail, "shadow.digest.webhookUrl: " + firstLineOf(err.Error())}, true
 	}
-	if u, err := url.Parse(hook); err != nil || !digestHostOK(u.Hostname()) {
-		return shadowPart{provider.LevelFail, digestHostError}, true
+	if msg := digestURLProblem(hook); msg != "" {
+		return shadowPart{provider.LevelFail, msg}, true
 	}
 	return shadowPart{}, false
 }

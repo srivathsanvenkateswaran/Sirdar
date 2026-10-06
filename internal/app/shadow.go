@@ -108,10 +108,17 @@ type shadowState struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	done   chan struct{}
+
+	// swept is set once the run watcher's initial sweep is over, and
+	// runStatus is the last status it reported for each run, keyed by
+	// workspace, key and run id. Together they tell an operator run that
+	// just completed from one that was already completed.
+	swept     bool
+	runStatus map[string]string
 }
 
 func newShadowState() *shadowState {
-	return &shadowState{ws: map[string]*shadowWatch{}}
+	return &shadowState{ws: map[string]*shadowWatch{}, runStatus: map[string]string{}}
 }
 
 // shadowWatch is one workspace's watcher state. Every field but tick is
@@ -139,12 +146,9 @@ type shadowWatch struct {
 	published *ShadowStatus
 
 	// collect serialises outcome passes, and nextOutcomes is when the
-	// tick next runs one. judgeFails counts failed judge calls by key and
-	// local day, so a key whose judge keeps failing stops costing money
-	// until the day turns.
+	// tick next runs one.
 	collect      sync.Mutex
 	nextOutcomes time.Time
-	judgeFails   map[string]int
 }
 
 func (s *Service) shadowWatch(wsID, root string) *shadowWatch {
@@ -152,7 +156,7 @@ func (s *Service) shadowWatch(wsID, root string) *shadowWatch {
 	defer s.shadow.mu.Unlock()
 	w := s.shadow.ws[wsID]
 	if w == nil {
-		w = &shadowWatch{inFlight: map[string]bool{}, judgeFails: map[string]int{}}
+		w = &shadowWatch{inFlight: map[string]bool{}}
 		s.shadow.ws[wsID] = w
 	}
 	w.root = root

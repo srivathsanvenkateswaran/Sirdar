@@ -113,11 +113,20 @@ func TestShadowCheckNoTracker(t *testing.T) {
 }
 
 func TestShadowCheckOff(t *testing.T) {
+	tr := &describingTracker{}
+	tr.set(bug("OMNI-1", time.Date(2026, 10, 1, 9, 0, 0, 0, time.Local)))
+	stubDoctorSources(t, tr)
 	root := newWorkspace(t)
 	body := strings.Replace(shadowConfig(5, ""), "  enabled: true\n", "  enabled: false\n", 1)
 	cfg := loadShadowConfig(t, root, body)
 	c, ok := shadowCheck(context.Background(), cfg)
-	if !ok || c.Level != "ok" || c.Detail != "off" {
-		t.Errorf("check %+v, want ok off", c)
+	if !ok {
+		t.Fatal("no shadow row")
+	}
+	// Every part is there to check before switching on, and the missing
+	// me: block that would fail an enabled row only warns.
+	if c.Level != "warn" || !c.OK || !strings.HasPrefix(c.Detail, "off; ") ||
+		!strings.Contains(c.Detail, "assignee me resolves to nothing") || !strings.Contains(c.Detail, "lists 1 open bug tickets") {
+		t.Errorf("check %+v", c)
 	}
 }
