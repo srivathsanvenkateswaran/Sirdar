@@ -54,7 +54,8 @@ type Options struct {
 	Buffer int
 	// Stderr receives runner progress lines and adapter output.
 	Stderr io.Writer
-	// Now is the clock the quota history scan reads; zero means time.Now.
+	// Now is the clock the quota history scan and the shadow watcher read;
+	// zero means time.Now.
 	Now func() time.Time
 	// GoldenDir is the golden set the eval routes read and write; empty
 	// means eval.DefaultDir. It is set once, by whichever shell built the
@@ -71,6 +72,12 @@ type Options struct {
 	// which reads sources.slack.token. Tests set it so no request leaves
 	// the process.
 	Slack func(cfg *config.Config) (SlackReader, error)
+	// Shadow runs the shadow watcher; serve and shadow watch set it, the
+	// desktop shell does not. See shadow.go.
+	Shadow bool
+	// ShadowBy is what the watcher's lock names as its holder, "serve" or
+	// "watch"; empty means "serve".
+	ShadowBy string
 }
 
 // DefaultBuffer is how many events a subscriber may fall behind by before
@@ -113,6 +120,12 @@ type Service struct {
 
 	// probes serialises the model picker's refreshes. See models.go.
 	probes modelProbes
+
+	// gate decides whether an unattended action may start, and shadow is
+	// the shadow watcher's per-workspace state. See autonomy.go and
+	// shadow.go.
+	gate   *AutonomyGate
+	shadow *shadowState
 }
 
 // stopTimeout is how long Stop waits for the jobs it cancelled to end
@@ -133,6 +146,8 @@ func New(reg *Registry, build DepsBuilder, opts Options) *Service {
 		jobs:     map[JobID]context.CancelFunc{},
 		starting: map[string]struct{}{},
 		live:     newLiveRuns(),
+		gate:     newAutonomyGate(),
+		shadow:   newShadowState(),
 	}
 	s.quota.nowFunc = opts.Now
 	s.watcher = NewWatcher(reg, opts.Interval, s.observe)
@@ -145,12 +160,18 @@ func New(reg *Registry, build DepsBuilder, opts Options) *Service {
 func (s *Service) Start(ctx context.Context) {
 	s.scanQuota()
 	s.watcher.Start(ctx)
+	if s.opts.Shadow {
+		s.startShadow(ctx)
+	}
 }
 
 // Stop cancels every job this process started, waits for their agent
 // sessions to end, and then halts the watcher. A shell that exits without
 // calling it leaves the provider subprocesses behind.
 func (s *Service) Stop() {
+	// The shadow supervisor goes first, so no tick starts a run after the
+	// running ones have been cancelled.
+	s.stopShadow()
 	s.mu.Lock()
 	cancels := make([]context.CancelFunc, 0, len(s.jobs))
 	for _, cancel := range s.jobs {
@@ -173,6 +194,9 @@ func (s *Service) Stop() {
 		// the shutdown for; its state.json already says it was blocked.
 	}
 
+	// Only once the shadow runs have ended: a lock let go while one still
+	// ran would let another process start the same ticket.
+	s.releaseShadowLocks()
 	s.watcher.Stop()
 }
 

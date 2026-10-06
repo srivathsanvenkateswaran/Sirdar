@@ -37,6 +37,9 @@ const (
 	// KindHookReceived reports one inbound webhook delivery: which source
 	// sent it, which ticket it named, and what came of it.
 	KindHookReceived = "hook.received"
+	// KindShadowStatus carries the shadow watcher's status for one
+	// workspace, sent when it changes.
+	KindShadowStatus = "shadow.status"
 )
 
 // Usage is a run's provider consumption.
@@ -587,6 +590,8 @@ type Event struct {
 	Source  string `json:"source,omitempty"`
 	Key     string `json:"key,omitempty"`
 	Outcome string `json:"outcome,omitempty"`
+	// Shadow carries a shadow.status event.
+	Shadow *ShadowStatus `json:"shadow,omitempty"`
 }
 
 // runDir is where the core keeps one run: <root>/.sirdar/runs/<key>/<id>.

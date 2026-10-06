@@ -56,6 +56,12 @@ type Entry struct {
 	OperatorFirst bool   `json:"operatorFirst,omitempty"` // started
 	Backfill      bool   `json:"backfill,omitempty"`      // started
 	Resume        bool   `json:"resume,omitempty"`        // started: a retry that resumed the handle
+	// PID and Host name the process that started the run, so recovery
+	// can tell a run whose process died from one another process is
+	// still driving. Lines from before they existed carry neither.
+	PID  int        `json:"pid,omitempty"`  // started
+	Host string     `json:"host,omitempty"` // started
+	AsOf *time.Time `json:"asOf,omitempty"` // started: a backfill's cutoff, which its retry reuses
 
 	Reason       string   `json:"reason,omitempty"` // finished, graded, skipped, paused
 	CostUSD      float64  `json:"costUSD,omitempty"`
