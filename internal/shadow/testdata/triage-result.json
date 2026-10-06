@@ -1,0 +1,9 @@
+{
+  "classification": "code",
+  "rootCause": {
+    "hypothesis": "The refund calculator sums voided lines.",
+    "confidence": "medium",
+    "codeRefs": ["src/refund.cs:40"]
+  },
+  "openQuestions": ["Which stores saw it?"]
+}
