@@ -2,9 +2,14 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
 func TestSafeName(t *testing.T) {
@@ -52,5 +57,49 @@ func TestWriteAttachmentsStaysUnderDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, "escaped.txt")); !os.IsNotExist(err) {
 		t.Fatalf("the attachment escaped the destination directory: %v", err)
+	}
+}
+
+// The fixture's methods are what describe advertises, so a test can stand
+// up an adapter that answers tracker.outcome and one that predates it.
+func TestDescribeCarriesMethods(t *testing.T) {
+	resp := dispatch(fixture{Methods: []string{"tracker.outcome"}}, plugin.Request{ID: 1, Method: "describe"})
+	var d plugin.Describe
+	if err := json.Unmarshal(resp.Result, &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.Methods) != 1 || d.Methods[0] != "tracker.outcome" {
+		t.Errorf("methods %v", d.Methods)
+	}
+
+	resp = dispatch(fixture{}, plugin.Request{ID: 2, Method: "describe"})
+	var old plugin.Describe
+	if err := json.Unmarshal(resp.Result, &old); err != nil {
+		t.Fatal(err)
+	}
+	if len(old.Methods) != 0 {
+		t.Errorf("a fixture with no methods advertises %v", old.Methods)
+	}
+}
+
+func TestTrackerOutcomeAnswers(t *testing.T) {
+	fx := fixture{Outcomes: map[string]ticket.Outcome{
+		"OMNI-1": {Key: "OMNI-1", Status: "Done", PullRequests: []string{"https://github.com/o/r/pull/1"}},
+	}}
+	resp := dispatch(fx, plugin.Request{ID: 1, Method: "tracker.outcome", Params: json.RawMessage(`{"key":"OMNI-1"}`)})
+	if resp.Error != nil {
+		t.Fatal(resp.Error)
+	}
+	var o ticket.Outcome
+	if err := json.Unmarshal(resp.Result, &o); err != nil {
+		t.Fatal(err)
+	}
+	if o.Key != "OMNI-1" || o.Status != "Done" || len(o.PullRequests) != 1 {
+		t.Errorf("%+v", o)
+	}
+
+	resp = dispatch(fx, plugin.Request{ID: 2, Method: "tracker.outcome", Params: json.RawMessage(`{"key":"OMNI-404"}`)})
+	if resp.Error == nil || resp.Error.Code != source.NotFound {
+		t.Errorf("an unknown key answers %+v", resp.Error)
 	}
 }

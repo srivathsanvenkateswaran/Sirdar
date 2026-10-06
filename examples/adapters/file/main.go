@@ -11,13 +11,19 @@
 // or with SIRDAR_FILE_ADAPTER set instead of -file. The fixture shape is:
 //
 //	{
+//	  "methods": ["tracker.outcome"],
 //	  "tracker": {"OMNI-1": {...ticket.TrackerTicket...}},
+//	  "outcomes": {"OMNI-1": {...ticket.Outcome...}},
 //	  "helpdesk": {"555": {
 //	    "ticket": {...ticket.HelpdeskTicket...},
 //	    "thread": [...ticket.Message...],
 //	    "attachments": [{"id":"a1","name":"shot.png","mime":"image/png","content_base64":"..."}]
 //	  }}
 //	}
+//
+// "methods" is what describe advertises, and is optional: a fixture without
+// it stands in for an adapter that predates tracker.outcome, whatever its
+// "outcomes" say.
 package main
 
 import (
@@ -39,7 +45,9 @@ import (
 
 // fixture is the on-disk shape this adapter serves from.
 type fixture struct {
+	Methods  []string                        `json:"methods"`
 	Tracker  map[string]ticket.TrackerTicket `json:"tracker"`
+	Outcomes map[string]ticket.Outcome       `json:"outcomes"`
 	Helpdesk map[string]helpdeskEntry        `json:"helpdesk"`
 }
 
@@ -118,7 +126,7 @@ func serve(fx fixture, r io.Reader, w io.Writer) {
 func dispatch(fx fixture, req plugin.Request) plugin.Response {
 	switch req.Method {
 	case "describe":
-		return result(req.ID, plugin.Describe{Name: "file", Roles: []string{"tracker", "helpdesk"}, Version: "1"})
+		return result(req.ID, plugin.Describe{Name: "file", Roles: []string{"tracker", "helpdesk"}, Version: "1", Methods: fx.Methods})
 
 	case "tracker.get":
 		var p struct {
@@ -142,6 +150,19 @@ func dispatch(fx fixture, req plugin.Request) plugin.Response {
 		}
 		sort.Slice(list, func(i, j int) bool { return list[i].Key < list[j].Key })
 		return result(req.ID, list)
+
+	case "tracker.outcome":
+		var p struct {
+			Key string `json:"key"`
+		}
+		if err := json.Unmarshal(req.Params, &p); err != nil {
+			return errResp(req.ID, source.Internal, err.Error())
+		}
+		o, ok := fx.Outcomes[p.Key]
+		if !ok {
+			return errResp(req.ID, source.NotFound, "tracker outcome not found: "+p.Key)
+		}
+		return result(req.ID, o)
 
 	case "helpdesk.get":
 		var p struct {

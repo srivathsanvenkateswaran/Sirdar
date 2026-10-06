@@ -245,6 +245,23 @@ func (c *Client) hasRole(ctx context.Context, role string) error {
 	return &source.Error{Code: source.Unsupported, Message: "adapter does not support role " + role}
 }
 
+// hasMethod is hasRole for the optional methods: an adapter is sent one
+// only when describe listed it, so an adapter written before the method
+// existed is never asked a question it would answer with an error of its
+// own.
+func (c *Client) hasMethod(ctx context.Context, name string) error {
+	d, err := c.Describe(ctx)
+	if err != nil {
+		return err
+	}
+	for _, m := range d.Methods {
+		if m == name {
+			return nil
+		}
+	}
+	return &source.Error{Code: source.Unsupported, Message: "adapter does not advertise " + name}
+}
+
 // Get fetches a tracker ticket by key.
 func (c *Client) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
 	var tt ticket.TrackerTicket
@@ -299,6 +316,32 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 		tts[i].DeriveTypeAndParent()
 	}
 	return tts, err
+}
+
+// Outcome asks the adapter how a tracker record ended. The resolution is
+// cut to ticket.OutcomeResolutionMax characters here as well as by the
+// adapter, because the protocol asks adapters to cut it and nothing makes
+// them; and an answer about another key is refused, because a pull request
+// on it would be credited to the wrong record.
+func (c *Client) Outcome(ctx context.Context, key string) (ticket.Outcome, error) {
+	var o ticket.Outcome
+	if err := c.hasRole(ctx, "tracker"); err != nil {
+		return o, err
+	}
+	if err := c.hasMethod(ctx, "tracker.outcome"); err != nil {
+		return o, err
+	}
+	if err := c.call(ctx, "tracker.outcome", map[string]string{"key": key}, &o); err != nil {
+		return o, err
+	}
+	if o.Key != key {
+		return ticket.Outcome{}, &source.Error{Code: source.Internal,
+			Message: fmt.Sprintf("tracker.outcome answered for %q, not %q", o.Key, key)}
+	}
+	if r := []rune(o.Resolution); len(r) > ticket.OutcomeResolutionMax {
+		o.Resolution = string(r[:ticket.OutcomeResolutionMax])
+	}
+	return o, nil
 }
 
 // Threads fetches the conversation for a helpdesk ticket.
@@ -359,6 +402,7 @@ func (c *Client) WarningsFor(id string) []string { return nil }
 var (
 	_ source.Tracker  = (*Client)(nil)
 	_ source.IDGetter = (*Client)(nil)
+	_ source.Outcomer = (*Client)(nil)
 	_ source.Helpdesk = helpdeskView{}
 	_ source.Closer   = (*Client)(nil)
 	_ source.Warner   = (*Client)(nil)

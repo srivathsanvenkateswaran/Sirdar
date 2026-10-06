@@ -4,15 +4,20 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
 // TestMain is also every fake adapter these tests drive. testbin.Dispatch
@@ -192,5 +197,111 @@ func TestSplitCommandExpandsTildeEverywhere(t *testing.T) {
 		if argv[i] != want[i] {
 			t.Fatalf("argv[%d] = %q, want %q", i, argv[i], want[i])
 		}
+	}
+}
+
+// startFileAdapter starts the reference adapter over fixture and closes it
+// when the test ends.
+func startFileAdapter(t *testing.T, bin, fixture string) *Client {
+	t.Helper()
+	c, err := Start(context.Background(), quoted(bin)+" -file "+quoted(fixture), &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c
+}
+
+// writeOutcomeFixture writes a fixture advertising tracker.outcome and
+// answering outcomes, for the cases a checked-in file would make unreadable.
+func writeOutcomeFixture(t *testing.T, outcomes map[string]ticket.Outcome) string {
+	t.Helper()
+	b, err := json.Marshal(map[string]any{"methods": []string{"tracker.outcome"}, "outcomes": outcomes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "outcomes.json")
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestOutcomeAdvertised(t *testing.T) {
+	c := startFileAdapter(t, buildFileAdapter(t), "testdata/outcomes.json")
+	var _ source.Outcomer = c
+
+	o, err := c.Outcome(context.Background(), "OMNI-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 9, 12, 10, 15, 0, 0, time.UTC)
+	if o.Key != "OMNI-1" || o.Status != "Done" || !o.ResolvedAt.Equal(want) {
+		t.Fatalf("%+v", o)
+	}
+	if o.Resolution != "The export query timed out on large tenants; it now pages." {
+		t.Errorf("resolution %q", o.Resolution)
+	}
+	if len(o.PullRequests) != 2 || o.PullRequests[0] != "https://github.com/o/r/pull/12" ||
+		o.PullRequests[1] != "https://github.com/o/r/pull/9" {
+		t.Errorf("pull requests %v", o.PullRequests)
+	}
+	if o.Fields["resolution"] != "Fixed" {
+		t.Errorf("fields %v", o.Fields)
+	}
+}
+
+// An adapter that does not list tracker.outcome is never sent it, which is
+// what keeps an adapter written before the method existed from being asked
+// a question it would answer with an error of its own.
+func TestOutcomeNotAdvertised(t *testing.T) {
+	c := startFileAdapter(t, buildFileAdapter(t), "testdata/outcomes-unadvertised.json")
+	_, err := c.Outcome(context.Background(), "OMNI-1")
+	var se *source.Error
+	if !errors.As(err, &se) || se.Code != source.Unsupported {
+		t.Fatalf("got %v", err)
+	}
+	if se.Message != "adapter does not advertise tracker.outcome" {
+		t.Errorf("message %q", se.Message)
+	}
+}
+
+func TestOutcomeResolutionCut(t *testing.T) {
+	long := strings.Repeat("ح", 9000)
+	fx := writeOutcomeFixture(t, map[string]ticket.Outcome{"OMNI-1": {Key: "OMNI-1", Resolution: long}})
+	c := startFileAdapter(t, buildFileAdapter(t), fx)
+	o, err := c.Outcome(context.Background(), "OMNI-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := utf8.RuneCountInString(o.Resolution); n != ticket.OutcomeResolutionMax {
+		t.Errorf("resolution is %d runes", n)
+	}
+	if !utf8.ValidString(o.Resolution) {
+		t.Error("the cut split a character")
+	}
+}
+
+func TestOutcomeUnknownKey(t *testing.T) {
+	c := startFileAdapter(t, buildFileAdapter(t), "testdata/outcomes.json")
+	_, err := c.Outcome(context.Background(), "OMNI-404")
+	var se *source.Error
+	if !errors.As(err, &se) || se.Code != source.NotFound {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// An answer about a different record is not this record's outcome, and a
+// pull request on it would be tied to the wrong key.
+func TestOutcomeWrongKey(t *testing.T) {
+	fx := writeOutcomeFixture(t, map[string]ticket.Outcome{"OMNI-1": {Key: "OMNI-2", Status: "Done"}})
+	c := startFileAdapter(t, buildFileAdapter(t), fx)
+	_, err := c.Outcome(context.Background(), "OMNI-1")
+	var se *source.Error
+	if !errors.As(err, &se) || se.Code != source.Internal {
+		t.Fatalf("got %v", err)
+	}
+	if se.Message != `tracker.outcome answered for "OMNI-2", not "OMNI-1"` {
+		t.Errorf("message %q", se.Message)
 	}
 }

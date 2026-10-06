@@ -142,13 +142,34 @@ func NewRubricer(deps runner.Deps, model string) Rubricer {
 const rubricGrace = 10 * time.Second
 
 func (p providerRubric) Judge(ctx context.Context, prDiff, agentDiff string) (Rubric, float64, error) {
+	final, cost, err := JudgeOnce(ctx, p.deps, p.model, RubricPrompt(prDiff, agentDiff), rubricSchema)
+	if err != nil {
+		return Rubric{}, cost, err
+	}
+	r, err := RubricFromJSON(final)
+	return r, cost, err
+}
+
+// JudgeOnce asks the workspace's provider one question with no tools and a structured answer.
+//
+// It is the rubric's call made reusable: anything that wants a model's
+// opinion on text it already holds asks it here, under the same single-turn
+// ceiling and with no MCP servers, so no judge can wander off and read
+// something it was not shown. An empty model is the workspace's own.
+func JudgeOnce(ctx context.Context, deps runner.Deps, model, prompt string, schema []byte) (json.RawMessage, float64, error) {
+	if deps.Provider == nil || deps.Config == nil {
+		return nil, 0, fmt.Errorf("eval: no provider to judge with")
+	}
+	if model == "" {
+		model = deps.Config.Model
+	}
 	spec := provider.SessionSpec{
-		Cwd:          p.deps.Config.Root,
-		Prompt:       RubricPrompt(prDiff, agentDiff),
-		Model:        p.model,
-		OutputSchema: rubricSchema,
+		Cwd:          deps.Config.Root,
+		Prompt:       prompt,
+		Model:        model,
+		OutputSchema: schema,
 		Policy: &provider.PermissionPolicy{
-			Root: p.deps.Config.Root,
+			Root: deps.Config.Root,
 			Mode: provider.ModeTriage,
 		},
 		Mode: provider.ModeTriage,
@@ -156,12 +177,13 @@ func (p providerRubric) Judge(ctx context.Context, prDiff, agentDiff string) (Ru
 		// reading the repository stops before it costs more than the
 		// runs it is judging.
 		Budget: provider.Budget{MaxTurns: 2, MaxMinutes: 5},
-		// No MCP servers: the judge reads two diffs out of its prompt.
+		// No MCP servers: the judge reads what it is asked about out of
+		// its prompt.
 		MCPStrict: true,
 	}
-	sess, err := p.deps.Provider.Start(ctx, spec)
+	sess, err := deps.Provider.Start(ctx, spec)
 	if err != nil {
-		return Rubric{}, 0, fmt.Errorf("eval: start the rubric session: %w", err)
+		return nil, 0, fmt.Errorf("eval: start the judge session: %w", err)
 	}
 	// Nothing further is coming, and a CLI reading stream-json holds its
 	// stdout open until it is told so.
@@ -190,12 +212,11 @@ func (p providerRubric) Judge(ctx context.Context, prDiff, agentDiff string) (Ru
 	}
 	if final == nil {
 		if waitErr != nil {
-			return Rubric{}, cost, fmt.Errorf("eval: the rubric session gave no answer: %w", waitErr)
+			return nil, cost, fmt.Errorf("eval: the judge session gave no answer: %w", waitErr)
 		}
-		return Rubric{}, cost, fmt.Errorf("eval: the rubric session gave no answer")
+		return nil, cost, fmt.Errorf("eval: the judge session gave no answer")
 	}
-	r, err := RubricFromJSON(final)
-	return r, cost, err
+	return final, cost, nil
 }
 
 // extractJSON pulls the object out of a final message that came back as

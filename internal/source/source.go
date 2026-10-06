@@ -119,6 +119,15 @@ type Transitioner interface {
 	Transitions(ctx context.Context, key string) ([]Transition, error)
 }
 
+// Outcomer is implemented by trackers that can say how a record ended. It is a read.
+//
+// It is optional for the same reason Transitioner is: an adapter that
+// cannot answer does not implement it, and shadow grading falls back to
+// the operator's own runs and manual entry.
+type Outcomer interface {
+	Outcome(ctx context.Context, key string) (ticket.Outcome, error)
+}
+
 // SelfAssignee is the value ListFilter.Assignee takes to mean "whoever
 // this workspace's credentials belong to".
 const SelfAssignee = "me"
