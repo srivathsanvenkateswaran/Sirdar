@@ -326,20 +326,25 @@ func Armed(entries []Entry) (since time.Time, ok bool) {
 	return time.Time{}, false
 }
 
-// PausedUntil reports whether the watcher is paused at now. Only the newest
-// paused line counts, a resumed line after it lifts it early, and a pause
-// whose until has passed is over without anyone writing a line for it.
+// PausedUntil reports whether the watcher is paused at now. Every paused
+// line after the newest resumed line counts and the latest until among them
+// wins, because an automatic pause (a run already in flight hitting a rate
+// limit) is written while the operator's pause may still be in force, and
+// the shorter one must not end the operator's pause early. A resumed line
+// lifts every pause before it, and a pause whose until has passed is over
+// without anyone writing a line for it.
 func PausedUntil(entries []Entry, now time.Time) (until time.Time, reason string, paused bool) {
 	for i := len(entries) - 1; i >= 0; i-- {
-		switch e := entries[i]; e.Ev {
-		case "resumed":
-			return time.Time{}, "", false
-		case "paused":
-			if e.Until == nil || !e.Until.After(now) {
-				return time.Time{}, "", false
-			}
-			return *e.Until, e.Reason, true
+		e := entries[i]
+		if e.Ev == "resumed" {
+			break
+		}
+		if e.Ev != "paused" || e.Until == nil || !e.Until.After(now) {
+			continue
+		}
+		if !paused || e.Until.After(until) {
+			until, reason, paused = *e.Until, e.Reason, true
 		}
 	}
-	return time.Time{}, "", false
+	return until, reason, paused
 }

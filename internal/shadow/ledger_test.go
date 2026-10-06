@@ -235,3 +235,28 @@ func TestAppendAfterTornLine(t *testing.T) {
 		t.Fatalf("got %+v, want the seen line and the finished line appended after the torn one", got)
 	}
 }
+
+// An automatic pause written while the operator's pause is in force (a run
+// already in flight hit a rate limit) must not end the operator's pause
+// early: the latest until since the last resume wins.
+func TestPausedUntilKeepsTheLongerOperatorPause(t *testing.T) {
+	now := t0
+	day := now.Add(24 * time.Hour)
+	half := now.Add(30 * time.Minute)
+	entries := []Entry{
+		{At: now.Add(-time.Hour), Ev: "paused", Until: &day, Reason: "paused by the operator"},
+		{At: now, Ev: "paused", Until: &half, Reason: "rate limited"},
+	}
+	until, reason, ok := PausedUntil(entries, now.Add(time.Hour))
+	if !ok || !until.Equal(day) || reason != "paused by the operator" {
+		t.Fatalf("PausedUntil = %v, %q, %v; want the operator's 24h pause", until, reason, ok)
+	}
+	until, reason, ok = PausedUntil(entries, now)
+	if !ok || !until.Equal(day) || reason != "paused by the operator" {
+		t.Fatalf("PausedUntil at the automatic pause = %v, %q, %v; want the operator's 24h pause", until, reason, ok)
+	}
+	resumed := append(append([]Entry{}, entries...), Entry{At: now.Add(time.Minute), Ev: "resumed", By: "operator"})
+	if _, _, ok := PausedUntil(resumed, now.Add(time.Hour)); ok {
+		t.Fatal("paused after a later resumed line")
+	}
+}
