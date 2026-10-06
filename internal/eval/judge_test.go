@@ -131,3 +131,25 @@ func TestCheckPRURL(t *testing.T) {
 		}
 	}
 }
+
+// No URLs is nothing to read, and must not need gh: a key with no pull
+// request is asked about on machines that have never installed it.
+func TestPullRequestFilesWithNoURLsNeedsNoGh(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	for _, urls := range [][]string{nil, {}} {
+		set, err := PullRequestFiles(context.Background(), urls)
+		if err != nil {
+			t.Fatalf("%v: %v", urls, err)
+		}
+		if len(set.Files) != 0 || len(set.PRs) != 0 || len(set.Diff) != 0 {
+			t.Errorf("%v read %+v", urls, set)
+		}
+	}
+}
+
+func TestCheckPRURLNamesNoFlag(t *testing.T) {
+	err := CheckPRURL("-x")
+	if err == nil || err.Error() != `eval: "-x" is not a pull request URL; it must be a full https:// link` {
+		t.Fatalf("got %v", err)
+	}
+}

@@ -426,6 +426,11 @@ type PullRequestSet struct {
 // to gh and one check in front of it. PRs comes back oldest first, as
 // readPullRequests sorts them; Diff is in the order the URLs were named.
 func PullRequestFiles(ctx context.Context, urls []string) (PullRequestSet, error) {
+	// A record with no pull request is a common answer, and reading it
+	// must not depend on gh being installed and logged in.
+	if len(urls) == 0 {
+		return PullRequestSet{}, nil
+	}
 	for _, u := range urls {
 		if err := CheckPRURL(u); err != nil {
 			return PullRequestSet{}, err
@@ -491,7 +496,7 @@ func ghPath(ctx context.Context) (string, error) {
 func CheckPRURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
-		return fmt.Errorf("eval: --pr %q is not a pull request URL; pass the full https:// link", raw)
+		return fmt.Errorf("eval: %q is not a pull request URL; it must be a full https:// link", raw)
 	}
 	return nil
 }
