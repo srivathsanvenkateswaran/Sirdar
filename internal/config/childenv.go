@@ -72,6 +72,9 @@ func (c *Config) CredentialEnvNames() map[string]bool {
 			}
 		}
 	}
+	// The shadow digest's webhook is one more of the same, configured
+	// outside the notify block.
+	refs = append(refs, c.Shadow.Digest.WebhookURL)
 	for _, ref := range refs {
 		if name, ok := strings.CutPrefix(ref, "env:"); ok && name != "" {
 			names[name] = true

@@ -2160,6 +2160,17 @@ func TestCredentialEnvNamesCoversServiceNowPassword(t *testing.T) {
 	}
 }
 
+// TestCredentialEnvNamesIncludesDigest: the shadow digest's webhook URL is
+// a bearer credential like any notify destination's, so no agent session
+// may read it out of its environment.
+func TestCredentialEnvNamesIncludesDigest(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Shadow.Digest.WebhookURL = "env:SHADOW_HOOK"
+	if names := cfg.CredentialEnvNames(); !names["SHADOW_HOOK"] {
+		t.Error("SHADOW_HOOK is not treated as a credential")
+	}
+}
+
 // TestFinalEndsTheSessionDeterministically is the D1 regression: the first
 // real run produced a schema-valid note at 9 minutes and then sat for
 // another 15 until the wall-clock budget killed it, because nothing closed

@@ -160,6 +160,11 @@ func New(reg *Registry, build DepsBuilder, opts Options) *Service {
 func (s *Service) Start(ctx context.Context) {
 	s.scanQuota()
 	s.watcher.Start(ctx)
+	// The watcher's first sweep ran inside Start and reported every run
+	// already on disk; what it reports from here on is change.
+	s.shadow.mu.Lock()
+	s.shadow.swept = true
+	s.shadow.mu.Unlock()
 	if s.opts.Shadow {
 		s.startShadow(ctx)
 	}
@@ -234,6 +239,7 @@ func (s *Service) scanQuota() {
 // tracker before it is fanned out.
 func (s *Service) observe(e Event) {
 	s.publish(e)
+	s.shadowObserveRun(e)
 	if e.Kind != KindRunEvent || e.Event == nil {
 		return
 	}

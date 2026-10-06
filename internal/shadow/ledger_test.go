@@ -131,6 +131,30 @@ func TestFoldSupersedesGrade(t *testing.T) {
 	}
 }
 
+// TestFoldSkipsFailedJudgeLine: a judge call that failed leaves a graded
+// line with its cost and no grade. It must not stand in for the grade
+// before it, and its cost still reaches the scorecard and the daily cap.
+func TestFoldSkipsFailedJudgeLine(t *testing.T) {
+	entries := []Entry{
+		{At: t0, Ev: "seen", Key: "A"},
+		{At: t0.Add(time.Minute), Ev: "started", Key: "A", RunID: "r1", Attempt: 1},
+		{At: t0.Add(2 * time.Minute), Ev: "finished", Key: "A", RunID: "r1", Status: "completed"},
+		{At: t0.Add(3 * time.Minute), Ev: "graded", Key: "A", ShadowRunID: "r1", Grade: "partial", Basis: "operator-triage", CostUSD: 0.03},
+		{At: t0.Add(4 * time.Minute), Ev: "graded", Key: "A", ShadowRunID: "r1", Warning: "judge failed: timeout", CostUSD: 0.02},
+	}
+	tk := Fold(entries)["A"]
+	if tk.Grade == nil || tk.Grade.Grade != "partial" {
+		t.Fatalf("grade = %+v, want the partial grade before the failed call", tk.Grade)
+	}
+	row := Report(entries, time.Time{}).Rows[0]
+	if row.CostUSD < 0.0499 || row.CostUSD > 0.0501 {
+		t.Errorf("row cost $%v, want both judge calls ($0.05)", row.CostUSD)
+	}
+	if d := Today(entries, 0, t0); d.USD < 0.0499 || d.USD > 0.0501 {
+		t.Errorf("today $%v, want both judge calls ($0.05)", d.USD)
+	}
+}
+
 func TestFoldGradeFollowsLatestAttempt(t *testing.T) {
 	entries := []Entry{
 		{At: t0, Ev: "seen", Key: "A"},

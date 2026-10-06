@@ -45,9 +45,23 @@ type slackText struct {
 	Emoji *bool  `json:"emoji,omitempty"`
 }
 
+// slackMessage is the incoming-webhook payload. Blocks is left out when
+// there are none, so a text-only message is just its text rather than its
+// text beside a null that Slack would have to read as no blocks.
 type slackMessage struct {
 	Text   string       `json:"text"`
-	Blocks []slackBlock `json:"blocks"`
+	Blocks []slackBlock `json:"blocks,omitempty"`
+}
+
+// PostSlackText posts plain text to an incoming webhook through the same
+// client, timeout and single retry as a run notification. The shadow
+// digest is its one caller; it builds its own text and wants no card.
+func PostSlackText(ctx context.Context, webhookURL, text string) error {
+	body, err := json.Marshal(slackMessage{Text: text})
+	if err != nil {
+		return fmt.Errorf("notify: slack: build message: %w", err)
+	}
+	return transport{}.post(ctx, webhookURL, body, nil)
 }
 
 func slackPayload(ev Event) slackMessage {
