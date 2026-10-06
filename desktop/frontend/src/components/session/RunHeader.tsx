@@ -46,9 +46,17 @@ export function LayoutSwitcher({
 }: {
   value: SessionLayout
   onChange: (layout: SessionLayout) => void
-  /** Why the switcher is held on `value` for this run; every option is disabled and says so. */
+  /** Why the switcher is held on `value` for this run; every option refuses the click and says so. */
   lockedBecause?: string
 }): JSX.Element {
+  const reasonId = useId()
+  const locked = lockedBecause !== undefined
+  /*
+   * A held switcher is aria-disabled rather than disabled: a disabled button
+   * leaves the tab order, and with it the only place the reason was said,
+   * which was a title a keyboard never shows. Each option keeps its focus
+   * and carries the reason as its description.
+   */
   return (
     <div className="sn-switch" role="radiogroup" aria-label="Session layout">
       {SESSION_LAYOUT_OPTIONS.map((o) => (
@@ -60,12 +68,18 @@ export function LayoutSwitcher({
           aria-checked={o.id === value}
           aria-label={o.label}
           title={lockedBecause ?? `${o.label} layout`}
-          disabled={lockedBecause !== undefined}
-          onClick={() => onChange(o.id)}
+          aria-disabled={locked || undefined}
+          aria-describedby={locked ? reasonId : undefined}
+          onClick={locked ? undefined : () => onChange(o.id)}
         >
           {LAYOUT_ICONS[o.id]}
         </button>
       ))}
+      {locked ? (
+        <span id={reasonId} className="visually-hidden">
+          {lockedBecause}
+        </span>
+      ) : null}
     </div>
   )
 }

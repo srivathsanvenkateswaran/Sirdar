@@ -5,7 +5,7 @@ import type { AppStore } from '../../store/appStore'
 import { StoreProvider } from '../../store/useAppStore'
 import { PrimaryActionProvider, usePrimaryAction } from '../../components/shell/primaryAction'
 import { resetRunJobs, setRunJob } from '../../lib/jobs'
-import { resetSessionLayout, setSessionLayout } from '../../lib/sessionLayout'
+import { resetSessionLayout, sessionLayout, setSessionLayout } from '../../lib/sessionLayout'
 import { createFakeTransport, diff, suggestion, type FakeTransport } from '../../store/fakeTransport'
 import {
   FIX_DETAIL,
@@ -1061,7 +1061,7 @@ describe('SessionConversation', () => {
       expect(screen.queryByTestId('session-document')).toBeNull()
     })
 
-    it('shows Conversation in the header switcher, disabled, and says why', async () => {
+    it('shows Conversation in the header switcher, held there, and says why to a keyboard as well as a pointer', async () => {
       setSessionLayout('document')
       const f = fake({ detail: SHADOW })
       renderScene(f)
@@ -1069,9 +1069,15 @@ describe('SessionConversation', () => {
       const group = screen.getByRole('radiogroup', { name: 'Session layout' })
       expect(within(group).getByRole('radio', { name: 'Conversation' })).toHaveAttribute('aria-checked', 'true')
       for (const radio of within(group).getAllByRole('radio')) {
-        expect(radio).toBeDisabled()
+        // Still in the tab order, so a keyboard reaches the reason.
+        expect(radio).not.toBeDisabled()
+        expect(radio).toHaveAttribute('aria-disabled', 'true')
         expect(radio).toHaveAttribute('title', 'Shadow runs open in Conversation, the read-only layout')
+        expect(radio).toHaveAccessibleDescription('Shadow runs open in Conversation, the read-only layout')
       }
+      fireEvent.click(within(group).getByRole('radio', { name: 'Workbench' }))
+      expect(sessionLayout()).toBe('document')
+      expect(screen.getByTestId('conversation')).toBeInTheDocument()
     })
 
     it('draws no instruction bubble, since the watcher started it and not the operator', async () => {
