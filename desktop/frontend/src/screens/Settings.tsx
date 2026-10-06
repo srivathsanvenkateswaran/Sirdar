@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConfigSummary, MCPInventory, Transport, Workspace } from '../api/types'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import { reasonOf } from '../lib/format'
@@ -244,6 +244,14 @@ export default function Settings(props: {
   // sidebar's, and a disabled Save that is filled all the same.
   const tools = open && page === 'tools'
   const books = open && page === 'playbooks'
+  // The settings stay mounted while closed, so a suggestion remembered on a
+  // session since the page was last up is read when it opens again.
+  const refreshSuggestions = playbooks.refreshSuggestions
+  const booksBefore = useRef(books)
+  useEffect(() => {
+    if (books && !booksBefore.current) refreshSuggestions()
+    booksBefore.current = books
+  }, [books, refreshSuggestions])
   useProvidePrimaryAction(
     !open
       ? null

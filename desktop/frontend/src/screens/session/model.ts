@@ -91,7 +91,16 @@ export type ChatItem =
   /** The structured answer being written: the StructuredOutput call. */
   | { kind: 'wrote'; index: number; what: string; seconds: number; from: string; to: string }
   /** The operator's own words. */
-  | { kind: 'you'; index: number; text: string; at: string; continuation?: string; turn?: number }
+  | {
+      kind: 'you'
+      index: number
+      /** Which log line it came from: a steer or an answer is a message Remember this can keep; a grant is a click, not words. */
+      event: 'steer' | 'answer' | 'grant'
+      text: string
+      at: string
+      continuation?: string
+      turn?: number
+    }
   /** The model's prose. */
   | { kind: 'say'; index: number; text: string; at: string }
   /**
@@ -527,6 +536,7 @@ class SessionBuilder {
         this.add({
           kind: 'you',
           index: row.index,
+          event: event.kind,
           text: event.kind === 'grant' ? grantLine(str(event.payload?.text)) : str(event.payload?.text),
           at: clock(event.t, this.startedAt),
           continuation: event.payload?.continuation,

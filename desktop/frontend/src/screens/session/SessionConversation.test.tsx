@@ -1,10 +1,12 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppEvent, RunDetail, RunEvent } from '../../api/types'
+import type { AppEvent, PlaybookSuggestion, RunDetail, RunEvent } from '../../api/types'
+import type { AppStore } from '../../store/appStore'
+import { StoreProvider } from '../../store/useAppStore'
 import { PrimaryActionProvider, usePrimaryAction } from '../../components/shell/primaryAction'
 import { resetRunJobs, setRunJob } from '../../lib/jobs'
 import { resetSessionLayout, setSessionLayout } from '../../lib/sessionLayout'
-import { createFakeTransport, diff, type FakeTransport } from '../../store/fakeTransport'
+import { createFakeTransport, diff, suggestion, type FakeTransport } from '../../store/fakeTransport'
 import {
   FIX_DETAIL,
   FIX_PATCH,
@@ -999,6 +1001,128 @@ describe('SessionConversation', () => {
       expect(line).toBeDefined()
       expect(line).toHaveAttribute('data-what', 'note')
       expect(screen.queryByTestId('filed-note')).toBeNull()
+    })
+  })
+
+  describe('a shadow run', () => {
+    const SHADOW: RunDetail = { ...TRIAGE_DETAIL, shadow: true }
+    const REASON = 'Shadow runs are measurements. Start a session to continue this work.'
+
+    it('opens read-only: the banner says nothing went out, and the composer is off with the reason', async () => {
+      const f = fake({ detail: SHADOW })
+      renderScene(f)
+      await screen.findByTestId('conversation')
+
+      expect(screen.getByText('Shadow run. Nothing was filed, sent or registered')).toBeInTheDocument()
+      const button = send('Steer')
+      expect(button).toBeDisabled()
+      expect(button).toHaveAttribute('title', REASON)
+      expect(screen.getByRole('textbox', { name: 'Steer' })).toBeDisabled()
+      await waitFor(() => expect(screen.getByTestId('published')).toHaveTextContent('Steer inline disabled'))
+    })
+
+    it('offers no Update note or Save as note, even where an ordinary run would', async () => {
+      const START = '2026-10-04T10:15:00Z'
+      const events: RunEvent[] = [init(START, ROOT), { t: START, kind: 'final', payload: { text: 'The refund is stuck.' } }]
+      const f = fake({
+        detail: { ...SHADOW, replyFirst: true, notes: ['/run/note.md'], noteWarning: 'note not filed: x' },
+        events,
+      })
+      renderScene(f)
+      await screen.findByTestId('assistant-reply')
+      expect(screen.queryByRole('button', { name: 'Update note' })).toBeNull()
+      expect(screen.queryByTestId('filed-note')).toBeNull()
+
+      cleanup()
+      const s = fake({ detail: { ...SHADOW, kind: 'session', replyFirst: true, notes: [] }, events })
+      renderScene(s)
+      await screen.findByTestId('assistant-reply')
+      expect(screen.queryByRole('button', { name: 'Save as note' })).toBeNull()
+    })
+
+    it('opens in the conversation layout whatever the preference, since that is the read-only one', async () => {
+      setSessionLayout('document')
+      const f = fake({ detail: SHADOW })
+      renderScene(f)
+      await screen.findByTestId('conversation')
+      expect(screen.getByText('Shadow run. Nothing was filed, sent or registered')).toBeInTheDocument()
+    })
+
+    it('offers no Remember this on its messages', async () => {
+      const f = fake({ detail: SHADOW })
+      renderScene(f)
+      await screen.findByTestId('you-bubble')
+      expect(screen.queryByRole('button', { name: 'Remember this' })).toBeNull()
+    })
+  })
+
+  describe('Remember this', () => {
+    function withStore(f: Fake) {
+      const toast = vi.fn()
+      const store = { toast } as unknown as AppStore
+      const view = render(
+        <StoreProvider value={store}>
+          <PrimaryActionProvider>
+            <Session
+              transport={f.transport}
+              workspaceId="ws1"
+              runId={TRIAGE_DETAIL.runId}
+              onBack={vi.fn()}
+              onOpenReview={vi.fn()}
+            />
+          </PrimaryActionProvider>
+        </StoreProvider>,
+      )
+      return { toast, ...view }
+    }
+
+    it('turns a steer into a suggestion, by the index the service counts, and says where to review it', async () => {
+      const events = triageEvents()
+      // Service.Events numbers lines from 1, and so does the feed: the
+      // steer's index is its position in the log plus one.
+      const expected = events.findIndex((e) => e.kind === 'steer') + 1
+      const f = fake({ events })
+      let release: () => void = () => {}
+      f.transport.remember = vi.fn(
+        (_ws: string, runId: string) =>
+          new Promise<PlaybookSuggestion>((resolve) => {
+            release = () => resolve(suggestion({ runId, playbook: '20-orders.md' }))
+          }),
+      )
+      const { toast } = withStore(f)
+
+      const bubble = await screen.findByTestId('you-bubble')
+      const remember = within(bubble).getByRole('button', { name: 'Remember this' })
+      fireEvent.click(remember)
+
+      expect(f.transport.remember).toHaveBeenCalledWith('ws1', TRIAGE_DETAIL.runId, expected)
+      const busy = within(bubble).getByRole('button', { name: 'Remembering…' })
+      expect(busy).toBeDisabled()
+
+      await act(async () => release())
+      expect(toast).toHaveBeenCalledWith('Suggested an addition to 20-orders.md. Review it in Settings › Playbooks.')
+      expect(within(bubble).getByRole('button', { name: 'Remember this' })).toBeEnabled()
+    })
+
+    it('toasts the refusal as an error', async () => {
+      const f = fake()
+      f.transport.remember = vi.fn(async () => {
+        throw new Error('bad_input: run x is a measurement; its messages are not remembered')
+      })
+      const { toast } = withStore(f)
+      const bubble = await screen.findByTestId('you-bubble')
+      fireEvent.click(within(bubble).getByRole('button', { name: 'Remember this' }))
+      await waitFor(() => expect(toast).toHaveBeenCalledTimes(1))
+      expect(toast.mock.calls[0][0]).toMatch(/its messages are not remembered/)
+      expect(toast.mock.calls[0][1]).toBe('error')
+    })
+
+    it('offers nothing on a permission grant', async () => {
+      const events: RunEvent[] = [init('2026-09-15T12:11:05Z', ROOT), { t: '2026-09-15T12:11:09Z', kind: 'grant', payload: { text: 'allow' } }]
+      const f = fake({ events })
+      withStore(f)
+      await screen.findByTestId('you-bubble')
+      expect(screen.queryByRole('button', { name: 'Remember this' })).toBeNull()
     })
   })
 })

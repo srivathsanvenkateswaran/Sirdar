@@ -32,6 +32,8 @@ import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import PanelToggle from '../../ui/panel-toggle'
 import ProviderMark from '../../ui/provider-mark'
 import { stateWord } from '../../ui/status-badge'
+import Banner from '../../ui/banner'
+import { useOptionalStore } from '../../store/useAppStore'
 import AnswerCard, { SupersededAnswer } from './AnswerCard'
 import AskCard from './AskCard'
 import BundleView from './BundleView'
@@ -111,6 +113,9 @@ function withLocalQueued(record: QueuedSteer[] | undefined, local: QueuedSteer[]
   const pending = local.filter((l) => !known.some((q) => q.text === l.text))
   return [...known, ...pending]
 }
+
+/** Why a shadow run's composer is off: the server refuses its steers, and the reader is told where to go instead. */
+const SHADOW_REASON = 'Shadow runs are measurements. Start a session to continue this work.'
 
 export interface SessionConversationProps {
   transport: Transport
@@ -195,6 +200,12 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const blocked = status === 'blocked'
   const isFix = detail?.kind === 'fix'
   const replyRun = isReplyRun(detail)
+  // A shadow run is a measurement the watcher started: the service refuses
+  // every steer, note and fix on it, so the screen offers none of them.
+  const shadow = Boolean(detail?.shadow)
+  const store = useOptionalStore()
+  /** The bubbles whose Remember this is in flight, by event index. */
+  const [remembering, setRemembering] = useState<number[]>([])
 
   useEffect(() => {
     setActionError('')
@@ -413,6 +424,26 @@ export default function SessionConversation(props: SessionConversationProps): JS
     }
   }, [detail, onStartFix])
 
+  /*
+   * One operator message, offered to the workspace's playbooks. The feed
+   * numbers lines from 1, as Service.Events does, so the bubble's index is
+   * the one the service reads back.
+   */
+  const remember = useCallback(
+    async (index: number) => {
+      setRemembering((prev) => [...prev, index])
+      try {
+        const made = await transport.remember(workspaceId, runId, index)
+        store?.toast(`Suggested an addition to ${made.playbook}. Review it in Settings › Playbooks.`)
+      } catch (err: unknown) {
+        store?.toast(withoutCode(err), 'error')
+      } finally {
+        setRemembering((prev) => prev.filter((i) => i !== index))
+      }
+    },
+    [transport, workspaceId, runId, store],
+  )
+
   const cancel = useCallback(async () => {
     if (!jobId) return
     setPending('cancel')
@@ -459,12 +490,14 @@ export default function SessionConversation(props: SessionConversationProps): JS
   /**
    * The model the login has no room for, when that is why the run stopped.
    * It is a choice rather than a wait — every other model on the account is
-   * answering — so the banner over the composer offers the choice.
+   * answering — so the banner over the composer offers the choice. Not on
+   * a shadow run: continuing is a resume, which the service refuses there.
    */
-  const limitedModel = blocked ? modelLimited(detail?.reason) : ''
+  const limitedModel = blocked && !shadow ? modelLimited(detail?.reason) : ''
 
   const mode: ComposerMode = useMemo(() => {
     if (!detail) return { kind: 'disabled', reason: 'Loading the run…' }
+    if (detail.shadow) return { kind: 'disabled', reason: SHADOW_REASON }
     if (steerRefusal) return { kind: 'disabled', reason: steerRefusal }
     switch (detail.status) {
       case 'blocked':
@@ -542,9 +575,13 @@ export default function SessionConversation(props: SessionConversationProps): JS
             </span>
           </div>
         )
-      case 'you':
+      case 'you': {
+        // A grant is a click, not words, and an echo of a send has no line
+        // in the log yet for the service to read back.
+        const rememberable = !shadow && item.event !== 'grant' && Number.isInteger(item.index)
+        const busy = remembering.includes(item.index)
         return (
-          <div key={item.index} className="sc-you" data-item={item.index} data-testid="you-bubble">
+          <div key={item.index} className="sc-you" data-item={item.index} data-testid="you-bubble" data-busy={busy || undefined}>
             <div className="sc-you__meta">
               <span>You</span>
               {item.at ? (
@@ -561,8 +598,14 @@ export default function SessionConversation(props: SessionConversationProps): JS
               ) : null}
             </div>
             <div dir="auto">{item.text}</div>
+            {rememberable ? (
+              <button type="button" className="sc-you__remember" disabled={busy} onClick={() => void remember(item.index)}>
+                {busy ? 'Remembering…' : 'Remember this'}
+              </button>
+            ) : null}
           </div>
         )
+      }
       case 'say':
         return (
           <div key={item.index} className="sc-agent" data-item={item.index} data-testid="assistant-message">
@@ -650,7 +693,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
    * and any of those moving redraws every row: a row drawn against a stale
    * value is a worse fault than a re-render.
    */
-  const drawnWith = [detail, openCall, highlighted, live, blocked, isFix, notePath, notesDir, onRef, openInTools, toggleCall, setPane]
+  const drawnWith = [detail, openCall, highlighted, live, blocked, isFix, notePath, notesDir, onRef, openInTools, toggleCall, setPane, shadow, remembering, remember]
   const drawn = useRef<{ with: unknown[]; items: ChatItem[]; rows: (JSX.Element | null)[] }>({ with: [], items: [], rows: [] })
   const rows = useMemo(
     () => {
@@ -751,6 +794,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
    * ended: the service refuses only a live run or one with no reply.
    */
   const noteRow = (): JSX.Element | null => {
+    if (shadow) return null
     if (detail.kind === 'session') {
       if (!terminal || model.answerIndex < 0) return null
       return <SaveNoteRow key={runId} onSave={() => transport.saveNote(workspaceId, runId)} />
@@ -775,6 +819,11 @@ export default function SessionConversation(props: SessionConversationProps): JS
 
       <div className="sc-body" data-pane={paneOpen ? undefined : 'collapsed'}>
         <div className="sc-left">
+          {shadow ? (
+            <div className="sc-shadow">
+              <Banner tone="live" title="Shadow run. Nothing was filed, sent or registered" />
+            </div>
+          ) : null}
           <div
             className="sc-stream"
             ref={streamRef}
@@ -893,7 +942,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                   reload={finished}
                   onLoaded={onDiffLoaded}
                   onOpenReview={onOpenReview}
-                  onAcceptDeviation={onStartFix ? () => void acceptDeviation() : undefined}
+                  onAcceptDeviation={onStartFix && !shadow ? () => void acceptDeviation() : undefined}
                   acceptPending={pending === 'accept'}
                   acceptError={pending === 'accept' ? '' : actionError}
                 />

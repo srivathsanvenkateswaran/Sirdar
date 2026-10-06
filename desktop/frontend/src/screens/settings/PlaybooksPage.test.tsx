@@ -6,6 +6,7 @@ import type { Transport } from '../../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../../components/shell/primaryAction'
 import {
   createFakeTransport,
+  suggestion,
   workspace as sampleWorkspace,
   type FakeTransport,
 } from '../../store/fakeTransport'
@@ -335,5 +336,183 @@ describe('the name rules', () => {
     expect(headingFor('40-database.md')).toBe('Database')
     expect(headingFor('60-tenancy-and-vocabulary.md')).toBe('Tenancy and vocabulary')
     expect(template('20-logs.md')).toMatch(/^# Logs\n\n/)
+  })
+})
+
+describe('pending suggestions', () => {
+  const BOOKS = {
+    '10-helpdesk.md': '# Helpdesk\n\nRead the thread first.\n',
+    '20-orders.md': '# Orders\n\nAn order is never deleted.\n',
+    '30-logs.md': '# Logs\n\nLoki keeps 30 days.\n',
+  }
+  const ADDITION = [
+    '- A return posts a reversal, not a delete.',
+    '- The stock report reads the movement table.',
+    '- A partial return is two movements.',
+    '- Check both before calling it double counting.',
+  ].join('\n')
+  const REMEMBERED = suggestion({ id: 's1', key: 'OMNI-3413', playbook: '20-orders.md', addition: ADDITION })
+
+  /** The card, by its heading. */
+  function card(): HTMLElement {
+    return screen.getByRole('heading', { name: 'Pending suggestions' }).closest('section, .sd-setting-card, div') as HTMLElement
+  }
+
+  it('draws no card when nothing is pending', async () => {
+    open(fake({ playbooks: BOOKS }))
+    await screen.findByText('Orders')
+    expect(screen.queryByText('Pending suggestions')).toBeNull()
+  })
+
+  it('shows the target, the source and the addition clamped to three lines with Show all', async () => {
+    open(fake({ playbooks: BOOKS, suggestions: [REMEMBERED] }))
+    const row = await screen.findByTestId('suggestion-row')
+
+    expect(within(row).getByText('20-orders.md')).toBeInTheDocument()
+    expect(row).toHaveTextContent('Remembered on OMNI-3413')
+    expect(within(row).getByText('OMNI-3413').closest('bdi')).toHaveAttribute('dir', 'ltr')
+    const text = within(row).getByTestId('suggestion-addition')
+    expect(text).toHaveAttribute('data-clamped', 'true')
+    expect(text).toHaveAttribute('dir', 'auto')
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Show all' }))
+    expect(text).not.toHaveAttribute('data-clamped')
+    expect(within(row).getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('names an RCA suggestion by the ticket it came from', async () => {
+    open(fake({ playbooks: BOOKS, suggestions: [suggestion({ source: 'rca', key: 'OMNI-3217', playbook: '30-logs.md' })] }))
+    const row = await screen.findByTestId('suggestion-row')
+    expect(row).toHaveTextContent('RCA of OMNI-3217')
+  })
+
+  it('accepts into another playbook with the text edited, sending only what changed', async () => {
+    const t = fake({ playbooks: BOOKS, suggestions: [REMEMBERED] })
+    open(t)
+    const row = await screen.findByTestId('suggestion-row')
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept' }))
+
+    const target = within(row).getByLabelText('Add to') as HTMLSelectElement
+    expect(Array.from(target.options).map((o) => o.value)).toEqual(['10-helpdesk.md', '20-orders.md', '30-logs.md', 'new'])
+    expect(target.value).toBe('20-orders.md')
+    fireEvent.change(target, { target: { value: '30-logs.md' } })
+    const area = within(row).getByLabelText('Addition') as HTMLTextAreaElement
+    expect(area.value).toBe(ADDITION)
+    fireEvent.change(area, { target: { value: '- Loki drops lines over 256 KB.' } })
+    fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(t.calls.acceptSuggestion).toHaveLength(1))
+    expect(t.calls.acceptSuggestion[0]).toEqual({
+      ws: 'ws1',
+      id: 's1',
+      input: { playbook: '30-logs.md', addition: '- Loki drops lines over 256 KB.' },
+    })
+    await waitFor(() => expect(screen.queryByText('Pending suggestions')).toBeNull())
+  })
+
+  it('sends nothing to change when the proposal is accepted as it stands', async () => {
+    const t = fake({ playbooks: BOOKS, suggestions: [REMEMBERED] })
+    open(t)
+    const row = await screen.findByTestId('suggestion-row')
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept' }))
+    fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(t.calls.acceptSuggestion).toHaveLength(1))
+    expect(t.calls.acceptSuggestion[0].input).toEqual({})
+  })
+
+  it('offers a new playbook the suggestion names as a target of its own', async () => {
+    open(fake({ playbooks: BOOKS, suggestions: [suggestion({ playbook: '40-exports.md' })] }))
+    const row = await screen.findByTestId('suggestion-row')
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept' }))
+    const target = within(row).getByLabelText('Add to') as HTMLSelectElement
+    expect(target.value).toBe('40-exports.md')
+    expect(within(target).getByRole('option', { name: '40-exports.md (new)' })).toBeInTheDocument()
+  })
+
+  it('makes the operator pick a target when the suggestion names no playbook a file could have', async () => {
+    const t = fake({ playbooks: BOOKS, suggestions: [suggestion({ source: 'rca', key: 'OMNI-3217', playbook: 'exports' })] })
+    open(t)
+    const row = await screen.findByTestId('suggestion-row')
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept' }))
+
+    const target = within(row).getByLabelText('Add to') as HTMLSelectElement
+    expect(target.value).toBe('new')
+    expect(Array.from(target.options).map((o) => o.value)).not.toContain('exports')
+    const name = within(row).getByLabelText('New playbook') as HTMLInputElement
+    expect(name.value).toBe('exports')
+    expect(within(row).getByText(/Two digits, a hyphen, a lowercase slug and \.md/)).toBeInTheDocument()
+    expect(within(row).getByRole('button', { name: 'Save' })).toBeDisabled()
+
+    fireEvent.change(name, { target: { value: '40-exports.md' } })
+    fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(t.calls.acceptSuggestion).toHaveLength(1))
+    expect(t.calls.acceptSuggestion[0].input).toEqual({ playbook: '40-exports.md' })
+  })
+
+  it('can retarget a bad name onto a playbook that exists', async () => {
+    const t = fake({ playbooks: BOOKS, suggestions: [suggestion({ playbook: 'exports' })] })
+    open(t)
+    const row = await screen.findByTestId('suggestion-row')
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept' }))
+    fireEvent.change(within(row).getByLabelText('Add to'), { target: { value: '20-orders.md' } })
+    expect(within(row).queryByLabelText('New playbook')).toBeNull()
+    fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(t.calls.acceptSuggestion).toHaveLength(1))
+    expect(t.calls.acceptSuggestion[0].input).toEqual({ playbook: '20-orders.md' })
+  })
+
+  it('shows the service\'s refusal under the editor and keeps it open', async () => {
+    const t = fake({ playbooks: BOOKS, suggestions: [REMEMBERED] })
+    t.acceptSuggestion = vi.fn(async () => {
+      throw new Error('bad_input: "x": a playbook is named like 20-logs.md')
+    })
+    open(t)
+    const row = await screen.findByTestId('suggestion-row')
+    fireEvent.click(within(row).getByRole('button', { name: 'Accept' }))
+    fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
+    expect(await within(row).findByRole('alert')).toHaveTextContent('a playbook is named like 20-logs.md')
+    expect(within(row).getByLabelText('Addition')).toBeInTheDocument()
+  })
+
+  it('reads the queue again when the page is opened, for a message remembered meanwhile', async () => {
+    const t = fake({ playbooks: BOOKS })
+    const props = {
+      transport: t,
+      workspaces: [WORKSPACE],
+      currentWorkspaceId: 'ws1',
+      onClose: vi.fn(),
+      onWorkspacesChanged: vi.fn(),
+    }
+    const view = render(
+      <PrimaryActionProvider>
+        <Settings open page="playbooks" {...props} />
+      </PrimaryActionProvider>,
+    )
+    await screen.findByText('Orders')
+    view.rerender(
+      <PrimaryActionProvider>
+        <Settings open={false} page="playbooks" {...props} />
+      </PrimaryActionProvider>,
+    )
+    await t.remember('ws1', 'r9', 4)
+    view.rerender(
+      <PrimaryActionProvider>
+        <Settings open page="playbooks" {...props} />
+      </PrimaryActionProvider>,
+    )
+    expect(await screen.findByTestId('suggestion-row')).toBeInTheDocument()
+  })
+
+  it('dismisses a suggestion and the row goes once the list is read again', async () => {
+    const t = fake({ playbooks: BOOKS, suggestions: [REMEMBERED, suggestion({ id: 's2', key: 'OMNI-9', playbook: '30-logs.md' })] })
+    open(t)
+    const rows = await screen.findAllByTestId('suggestion-row')
+    expect(rows).toHaveLength(2)
+    fireEvent.click(within(rows[0]).getByRole('button', { name: 'Dismiss' }))
+
+    await waitFor(() => expect(t.calls.dismissSuggestion).toEqual([{ ws: 'ws1', id: 's1' }]))
+    await waitFor(() => expect(screen.getAllByTestId('suggestion-row')).toHaveLength(1))
+    expect(screen.queryByText(/OMNI-3413/)).toBeNull()
+    expect(card()).toBeTruthy()
   })
 })

@@ -7,7 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
-import type { PlaybookSummary, Transport } from '../../api/types'
+import type { AcceptSuggestionInput, PlaybookSuggestion, PlaybookSummary, Transport } from '../../api/types'
 import { pointAnchor, type Anchorable } from '../../lib/anchor'
 import { reasonOf } from '../../lib/format'
 import Button from '../../ui/button'
@@ -87,7 +87,16 @@ export interface Playbooks {
   asking: boolean
   ask: () => void
   stopAsking: () => void
+  /** Reads the playbooks and the pending suggestions again. */
   reload: () => void
+  /** The playbook additions waiting for the operator, read with the list. */
+  suggestions: Loaded<PlaybookSuggestion[]>
+  /** Reads the pending suggestions again, for a Remember made since the page was last open. */
+  refreshSuggestions: () => void
+  /** Files a suggestion, retargeted or edited by `input`, and reads both lists again. Rejects with the service's refusal. */
+  accept: (id: string, input: AcceptSuggestionInput) => Promise<void>
+  /** Drops a suggestion and reads both lists again. Rejects with the service's refusal. */
+  dismiss: (id: string) => Promise<void>
 }
 
 /**
@@ -108,6 +117,8 @@ export function usePlaybooks(transport: Transport, workspaceId: string | undefin
   const [discarding, setDiscarding] = useState(false)
   const [asking, setAsking] = useState(false)
   const [reloads, setReloads] = useState(0)
+  const [suggestions, setSuggestions] = useState<Loaded<PlaybookSuggestion[]>>({ status: 'idle' })
+  const [suggestionReads, setSuggestionReads] = useState(0)
   /** The workspace the state belongs to, so a switch starts over. */
   const readFor = useRef('')
 
@@ -121,6 +132,7 @@ export function usePlaybooks(transport: Transport, workspaceId: string | undefin
     setDiscarding(false)
     setAsking(false)
     setList({ status: 'idle' })
+    setSuggestions({ status: 'idle' })
   }, [ws])
 
   useEffect(() => {
@@ -129,7 +141,9 @@ export function usePlaybooks(transport: Transport, workspaceId: string | undefin
       return
     }
     let cancelled = false
-    setList({ status: 'loading' })
+    // A re-read keeps the rows on screen until the new ones land, so filing
+    // a suggestion does not blank the list it was filed into.
+    setList((prev) => (prev.status === 'done' ? prev : { status: 'loading' }))
     transport
       .playbooks(ws)
       .then((data) => {
@@ -143,7 +157,49 @@ export function usePlaybooks(transport: Transport, workspaceId: string | undefin
     }
   }, [transport, ws, reloads])
 
+  useEffect(() => {
+    if (!ws) {
+      setSuggestions({ status: 'idle' })
+      return
+    }
+    let cancelled = false
+    setSuggestions((prev) => (prev.status === 'done' ? prev : { status: 'loading' }))
+    transport
+      .suggestions(ws)
+      .then((data) => {
+        if (!cancelled) setSuggestions({ status: 'done', data })
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setSuggestions({ status: 'error', message: reasonOf(err) })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [transport, ws, reloads, suggestionReads])
+
   const reload = useCallback(() => setReloads((n) => n + 1), [])
+  const refreshSuggestions = useCallback(() => setSuggestionReads((n) => n + 1), [])
+
+  // Accepting writes a playbook, possibly a new one, so both lists are read
+  // again; dismissing touches only the queue, but one reload is simpler than
+  // two and the playbook list does not blank while it runs.
+  const accept = useCallback(
+    async (id: string, input: AcceptSuggestionInput) => {
+      if (!ws) return
+      await transport.acceptSuggestion(ws, id, input)
+      reload()
+    },
+    [transport, ws, reload],
+  )
+
+  const dismiss = useCallback(
+    async (id: string) => {
+      if (!ws) return
+      await transport.dismissSuggestion(ws, id)
+      reload()
+    },
+    [transport, ws, reload],
+  )
 
   const dirty = Boolean(draft && draft.text !== draft.original)
 
@@ -306,6 +362,10 @@ export function usePlaybooks(transport: Transport, workspaceId: string | undefin
     ask: () => setAsking(true),
     stopAsking: () => setAsking(false),
     reload,
+    suggestions,
+    refreshSuggestions,
+    accept,
+    dismiss,
   }
 }
 
@@ -415,6 +475,207 @@ function PlaybookRow({
   )
 }
 
+/** The select's value for "a playbook that does not exist yet, named below". */
+const NEW_TARGET = 'new'
+
+/**
+ * Past this an addition is drawn clamped to three lines with Show all. The
+ * clamp itself is CSS; this only decides whether the toggle is worth a row.
+ */
+const CLAMP_LINES = 3
+const CLAMP_CHARS = 240
+
+function clamps(text: string): boolean {
+  return text.split('\n').length > CLAMP_LINES || text.length > CLAMP_CHARS
+}
+
+/**
+ * Where an accept starts. A target the list has, or a new name a file may
+ * be created under, is offered as it is. Anything else — an RCA that named
+ * a topic, "exports", rather than a file — would only come back refused,
+ * so the editor opens on a new name for the operator to finish instead.
+ */
+function startingTarget(s: PlaybookSuggestion, names: string[]): { target: string; newName: string } {
+  if (names.includes(s.playbook) || NAME.test(s.playbook)) return { target: s.playbook, newName: '' }
+  return { target: NEW_TARGET, newName: s.playbook }
+}
+
+/**
+ * One pending addition: where it would go, the words, and where they came
+ * from. Accept opens the editor in place, since a proposal is a draft; the
+ * row says no more than that until it is asked to.
+ */
+function SuggestionRow({
+  suggestion,
+  names,
+  onAccept,
+  onDismiss,
+}: {
+  suggestion: PlaybookSuggestion
+  names: string[]
+  onAccept: (input: AcceptSuggestionInput) => Promise<void>
+  onDismiss: () => Promise<void>
+}): JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [target, setTarget] = useState('')
+  const [newName, setNewName] = useState('')
+  const [text, setText] = useState(suggestion.addition)
+  const [busy, setBusy] = useState<'' | 'accept' | 'dismiss'>('')
+  const [failure, setFailure] = useState('')
+  const targetId = useId()
+  const nameId = useId()
+  const textId = useId()
+
+  const known = names.includes(suggestion.playbook)
+  const ownIsNew = !known && NAME.test(suggestion.playbook)
+  const chosen = target === NEW_TARGET ? newName.trim() : target
+  const problem = target === NEW_TARGET ? nameProblem(newName, names) : ''
+  const long = clamps(suggestion.addition)
+
+  function startEditing(): void {
+    const start = startingTarget(suggestion, names)
+    setTarget(start.target)
+    setNewName(start.newName)
+    setText(suggestion.addition)
+    setFailure('')
+    setEditing(true)
+  }
+
+  async function run(what: 'accept' | 'dismiss', call: () => Promise<void>): Promise<void> {
+    setBusy(what)
+    setFailure('')
+    try {
+      await call()
+    } catch (err) {
+      setFailure(reasonOf(err))
+    } finally {
+      setBusy('')
+    }
+  }
+
+  function save(): void {
+    // Only what the operator changed goes: the service keeps the proposal's
+    // own value for a field left out.
+    const input: AcceptSuggestionInput = {}
+    if (chosen !== suggestion.playbook) input.playbook = chosen
+    if (text.trim() !== suggestion.addition.trim()) input.addition = text
+    void run('accept', () => onAccept(input))
+  }
+
+  return (
+    <div className="suggestion-row" data-testid="suggestion-row">
+      <div className="suggestion-row__head">
+        <code className="suggestion-row__target" dir="ltr">
+          {suggestion.playbook}
+        </code>
+        <span className="suggestion-row__source">
+          {suggestion.source === 'rca' ? 'RCA of ' : 'Remembered on '}
+          <bdi dir="ltr">{suggestion.key}</bdi>
+        </span>
+      </div>
+      {editing ? (
+        <div className="suggestion-edit">
+          <label className="playbook-name__label" htmlFor={targetId}>
+            Add to
+          </label>
+          <select
+            id={targetId}
+            className="suggestion-edit__target"
+            value={target}
+            dir="ltr"
+            onChange={(e) => setTarget(e.target.value)}
+          >
+            {names.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+            {ownIsNew ? <option value={suggestion.playbook}>{`${suggestion.playbook} (new)`}</option> : null}
+            <option value={NEW_TARGET}>New playbook…</option>
+          </select>
+          {target === NEW_TARGET ? (
+            <>
+              <label className="playbook-name__label" htmlFor={nameId}>
+                New playbook
+              </label>
+              <input
+                id={nameId}
+                className="playbook-name"
+                value={newName}
+                dir="ltr"
+                placeholder="40-exports.md"
+                aria-describedby={`${nameId}-help`}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+              <p className="settings-note" id={`${nameId}-help`}>
+                {problem || 'A new file, read in the order its two digits give.'}
+              </p>
+            </>
+          ) : null}
+          <label className="playbook-name__label" htmlFor={textId}>
+            Addition
+          </label>
+          <textarea
+            id={textId}
+            className="playbook-editor suggestion-edit__text"
+            value={text}
+            dir="auto"
+            spellCheck={false}
+            onChange={(e) => setText(e.target.value)}
+          />
+          {failure && (
+            <p className="form-error" role="alert" dir="auto">
+              {failure}
+            </p>
+          )}
+          <div className="playbook-editor__actions">
+            <Button variant="ghost" onClick={() => setEditing(false)} disabled={busy !== ''}>
+              Cancel
+            </Button>
+            <Button
+              busy={busy === 'accept'}
+              disabled={Boolean(problem) || !chosen || text.trim() === ''}
+              onClick={save}
+            >
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p
+            className="suggestion-row__addition"
+            data-testid="suggestion-addition"
+            data-clamped={long && !expanded ? 'true' : undefined}
+            dir="auto"
+          >
+            {suggestion.addition}
+          </p>
+          {failure && (
+            <p className="form-error" role="alert" dir="auto">
+              {failure}
+            </p>
+          )}
+          <div className="suggestion-row__actions">
+            {long ? (
+              <Button size="sm" variant="ghost" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
+                {expanded ? 'Show less' : 'Show all'}
+              </Button>
+            ) : null}
+            <Button size="sm" variant="ghost" busy={busy === 'dismiss'} onClick={() => void run('dismiss', onDismiss)}>
+              Dismiss
+            </Button>
+            <Button size="sm" variant="pale" onClick={startEditing} disabled={busy !== ''}>
+              Accept
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /**
  * Settings › Playbooks: the markdown files under `.sirdar/playbooks/` that
  * every run's prompt is built from.
@@ -441,6 +702,7 @@ export default function PlaybooksPage({
 
   const rows = list.status === 'done' ? list.data : []
   const taken = rows.map((p) => p.name)
+  const pending = playbooks.suggestions.status === 'done' ? playbooks.suggestions.data : []
   const problem = playbooks.asking ? nameProblem(newName, taken) : ''
 
   useEffect(() => {
@@ -521,6 +783,21 @@ export default function PlaybooksPage({
 
   return (
     <>
+      {pending.length > 0 && (
+        <SettingCard heading="Pending suggestions">
+          <div className="suggestion-rows">
+            {pending.map((s) => (
+              <SuggestionRow
+                key={s.id}
+                suggestion={s}
+                names={taken}
+                onAccept={(input) => playbooks.accept(s.id, input)}
+                onDismiss={() => playbooks.dismiss(s.id)}
+              />
+            ))}
+          </div>
+        </SettingCard>
+      )}
       <SettingCard heading="Files in .sirdar/playbooks">
         {list.status === 'error' ? (
           <p className="form-error" role="alert">

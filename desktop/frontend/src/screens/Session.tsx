@@ -115,6 +115,9 @@ export default function Session(props: SessionProps): JSX.Element {
     () => notePathFor(headNoteKind(detail?.kind), detail?.notes),
     [detail?.kind, detail?.notes],
   )
+  // A shadow run opens in the conversation layout whatever the preference:
+  // that is the layout that draws it read-only, the way the service treats it.
+  const shown: SessionLayout = detail?.shadow ? 'conversation' : layout
 
   // The frame is always here, switch or no switch: adding it only while the
   // switch is on would remount the layout it is meant to keep on screen.
@@ -125,19 +128,19 @@ export default function Session(props: SessionProps): JSX.Element {
           detail={detail}
           title={title}
           sources={sources}
-          variant={layout === 'workbench' ? 'workbench' : 'default'}
+          variant={shown === 'workbench' ? 'workbench' : 'default'}
           notePath={notePath}
           fallbackModel={fallbackModel}
           transport={transport}
           workspaceId={workspaceId}
         />
       ) : null}
-      {layout === 'conversation' ? (
+      {shown === 'conversation' ? (
         <SessionConversation {...props} feed={feed} />
-      ) : layout === 'workbench' ? (
+      ) : shown === 'workbench' ? (
         <SessionWorkbench {...props} feed={feed} />
       ) : (
-        <SessionShared {...props} feed={feed} layout={layout} />
+        <SessionShared {...props} feed={feed} layout={shown} />
       )}
     </div>
   )

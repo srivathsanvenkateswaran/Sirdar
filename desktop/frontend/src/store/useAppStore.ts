@@ -12,6 +12,15 @@ export function useStore(): AppStore {
   return store
 }
 
+/**
+ * The store, or null outside the provider. A screen that reaches the store
+ * only to toast is also mounted on its own, by its tests and by the
+ * library, and there it has no window to toast in rather than a fault.
+ */
+export function useOptionalStore(): AppStore | null {
+  return useContext(StoreContext)
+}
+
 const whole = (state: AppState): AppState => state
 
 /**

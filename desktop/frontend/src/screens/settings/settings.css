@@ -681,6 +681,90 @@
   unicode-bidi: isolate;
 }
 
+/* Pending suggestions: target and source on one line, the words under them. */
+.suggestion-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.suggestion-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-3);
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.suggestion-row:first-child {
+  border-block-start: 0;
+}
+
+.suggestion-row__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sd-space-1) var(--sd-space-3);
+}
+
+.suggestion-row__target {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-weight: 500;
+  unicode-bidi: isolate;
+}
+
+.suggestion-row__source {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+/* The addition is the operator's or the model's words, in either language. */
+.suggestion-row__addition {
+  margin: 0;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-body);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+
+.suggestion-row__addition[data-clamped='true'] {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.suggestion-row__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sd-space-2);
+}
+
+.suggestion-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-1);
+}
+
+.suggestion-edit__target {
+  inline-size: min(100%, 320px);
+  min-block-size: var(--sd-control-h);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+}
+
+/* An addition is a few lines, not a file: the editor starts short. */
+.suggestion-edit__text {
+  min-block-size: 140px;
+}
+
 /* ---------- Providers › Models: the picker's list, one provider at a time ---------- */
 
 .settings-models {
