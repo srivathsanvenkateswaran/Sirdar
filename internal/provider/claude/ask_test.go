@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -58,7 +59,7 @@ func TestAskMapsToInterruptingDeny(t *testing.T) {
 // TestGrantMapsToAllow: once the operator has allowed the call, the same
 // request is answered allow with the input passed through.
 func TestGrantMapsToAllow(t *testing.T) {
-	ask := provider.PermissionAsk{Kind: provider.AskBash, Tool: "Bash", Summary: "rg -n refund src", Patterns: []string{"rg *"}}
+	ask := askedFor("Bash", "rg -n refund src")
 	for _, verdict := range []string{provider.VerdictAllow, provider.VerdictAllowRun} {
 		ev, line := runAsk(t, &provider.PermissionPolicy{
 			BashAllow: []string{"cat *"}, Ask: true,
@@ -76,7 +77,7 @@ func TestGrantMapsToAllow(t *testing.T) {
 // TestDenyGrantMapsToDenyWithReason: a call the operator denied is refused
 // with their reason, and does not interrupt or ask again.
 func TestDenyGrantMapsToDenyWithReason(t *testing.T) {
-	ask := provider.PermissionAsk{Kind: provider.AskBash, Tool: "Bash", Summary: "rg x", Patterns: []string{"rg *"}}
+	ask := askedFor("Bash", "rg x")
 	ev, line := runAsk(t, &provider.PermissionPolicy{
 		BashAllow: []string{"cat *"}, Ask: true,
 		Grants: provider.NewGrants(provider.GrantFor(ask, provider.VerdictDeny, "use the index instead")),
@@ -87,4 +88,16 @@ func TestDenyGrantMapsToDenyWithReason(t *testing.T) {
 	if !strings.Contains(line, "use the index instead") || strings.Contains(line, "interrupt") {
 		t.Errorf("control_response %s", line)
 	}
+}
+
+// askedFor is the question a policy with no shell allow-list puts for
+// command, digest and all, so a grant made from it matches the call the way
+// one the operator gave would.
+func askedFor(tool, command string) provider.PermissionAsk {
+	input, _ := json.Marshal(map[string]string{"command": command})
+	d := (&provider.PermissionPolicy{Ask: true}).Decide(tool, input)
+	if d.Ask == nil {
+		panic("no question for " + command)
+	}
+	return *d.Ask
 }

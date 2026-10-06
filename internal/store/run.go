@@ -287,6 +287,7 @@ type PermissionAsk struct {
 	Patterns []string `json:"patterns,omitempty"`
 	Verdict  string   `json:"verdict"`
 	Reason   string   `json:"reason"`
+	Digest   string   `json:"digest,omitempty"`
 }
 
 // Grant is one answer the operator gave, kept for the rest of the run. It
@@ -298,6 +299,7 @@ type Grant struct {
 	Summary  string   `json:"summary"`
 	Patterns []string `json:"patterns,omitempty"`
 	Reason   string   `json:"reason,omitempty"`
+	Digest   string   `json:"digest,omitempty"`
 }
 
 // RequestedModel is the model a session of this run should ask for: the

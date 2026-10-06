@@ -461,3 +461,34 @@ func TestReproRefusedListedHostSaysWhy(t *testing.T) {
 		t.Errorf("trailing-dot host: %+v", d)
 	}
 }
+
+// TestReproClippedSummaryIsNotTheSameNavigate: two navigates sharing their
+// first summaryMax compacted characters share a summary. An allow-for-run
+// on the first must not let the second through as "the same call" when it
+// goes to another host — by a duplicate key past the cut, or with a
+// padding key that pushes url there.
+func TestReproClippedSummaryIsNotTheSameNavigate(t *testing.T) {
+	long := "https://a.example/" + strings.Repeat("A", 420)
+	for _, second := range []string{
+		`{"url":"` + long + `","url":"https://evil.example/"}`,
+		`{"pad":"` + strings.Repeat("B", 420) + `","url":"https://evil.example/"}`,
+	} {
+		first := `{"url":"` + long + `"}`
+		if strings.HasPrefix(second, `{"pad"`) {
+			first = `{"pad":"` + strings.Repeat("B", 420) + `","url":"https://a.example/"}`
+		}
+		p := reproPolicy(false)
+		d := decideJSON(p, pwNavigate, first)
+		if d.Ask == nil {
+			t.Fatalf("off-host navigate not askable: %+v", d)
+		}
+		p.Grants = NewGrants(GrantFor(*d.Ask, VerdictAllowRun, ""))
+		d = decideJSON(p, pwNavigate, second)
+		if d.Allow || d.Ask == nil {
+			t.Errorf("navigate to evil.example sharing a clipped summary: got %+v, want a question", d)
+		}
+		if d := decideJSON(p, pwNavigate, first); !d.Allow {
+			t.Errorf("the identical navigate is not matched: %+v", d)
+		}
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -200,5 +201,60 @@ func TestCommandPattern(t *testing.T) {
 		if got := commandPattern(in); got != want {
 			t.Errorf("commandPattern(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestSameCallIsJudgedOnTheWholeCall: a summary is clipped at summaryMax
+// for display, so two commands sharing their first 400 characters share a
+// summary. "The same call" is the digest of the whole command; matching on
+// the summary let an allowed long command carry `; touch x` past the cut.
+func TestSameCallIsJudgedOnTheWholeCall(t *testing.T) {
+	long := "printf " + strings.Repeat("a", 420)
+	extended := long + "; touch x"
+	base := &PermissionPolicy{BashAllow: []string{"cat *"}, Root: t.TempDir(), Ask: true}
+	ask := base.Decide("Bash", bashInput(long)).Ask
+	if ask == nil {
+		t.Fatal("the long command was not asked about")
+	}
+	if ask.Digest == "" || ask.Digest == base.Decide("Bash", bashInput(extended)).Ask.Digest {
+		t.Fatalf("digests do not tell the calls apart: %q", ask.Digest)
+	}
+
+	for _, verdict := range []string{VerdictAllowRun, VerdictAllow} {
+		p := *base
+		p.Grants = NewGrants(GrantFor(*ask, verdict, ""))
+		if d := p.Decide("Bash", bashInput(extended)); d.Allow {
+			t.Errorf("%s on the long command allowed it with `; touch x` appended: %+v", verdict, d)
+		}
+		if d := p.Decide("Bash", bashInput(long)); !d.Allow || d.Granted != verdict {
+			t.Errorf("%s: the identical call is not matched: %+v", verdict, d)
+		}
+	}
+
+	// A deny on the long command still refuses the identical call.
+	p := *base
+	p.Grants = NewGrants(GrantFor(*ask, VerdictDeny, "no"))
+	if d := p.Decide("Bash", bashInput(long)); d.Allow || d.Granted != VerdictDeny {
+		t.Errorf("denied call: %+v", d)
+	}
+
+	// A grant recorded before digests existed never counts as the same
+	// call: an allow-once has nothing else to match on, and an
+	// allow-for-run still matches through its patterns.
+	legacy := GrantFor(*ask, VerdictAllow, "")
+	legacy.Digest = ""
+	p.Grants = NewGrants(legacy)
+	if d := p.Decide("Bash", bashInput(long)); d.Allow {
+		t.Errorf("a digest-less allow-once matched on its summary: %+v", d)
+	}
+	legacy.Verdict, legacy.Patterns = VerdictAllowRun, nil
+	p.Grants = NewGrants(legacy)
+	if d := p.Decide("Bash", bashInput(long)); d.Allow {
+		t.Errorf("a digest-less, pattern-less allow-for-run matched on its summary: %+v", d)
+	}
+	legacy.Patterns = ask.Patterns
+	p.Grants = NewGrants(legacy)
+	if d := p.Decide("Bash", bashInput(long)); !d.Allow {
+		t.Errorf("a digest-less allow-for-run no longer matches through its patterns: %+v", d)
 	}
 }
