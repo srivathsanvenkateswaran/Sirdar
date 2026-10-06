@@ -631,6 +631,22 @@ type Config struct {
 		InPlace             bool `yaml:"inPlace"`
 	} `yaml:"fix"`
 	Playbooks string `yaml:"playbooks"`
+	// PlaybooksMaxBytes caps the "# Playbooks" section of a prompt. It is
+	// a pointer because 0 is meaningful (no limit) and distinct from an
+	// unset key, which takes DefaultPlaybooksMaxBytes. Read it through
+	// Config.PlaybooksBudget.
+	PlaybooksMaxBytes *int `yaml:"playbooksMaxBytes"`
+	// Phases sets the reply and note turns' model and turn cap, apart
+	// from the run's own model and budget.maxTurns.
+	Phases PhasesConfig `yaml:"phases"`
+	// Gather configures the read-only lookups prepare runs before the
+	// prompt is assembled: the built-in pull-request and history
+	// gatherers, and the workspace's own config-defined steps.
+	Gather GatherConfig `yaml:"gather"`
+	// Repro names the staging hosts, and the kinds of run, that get a
+	// confined browser for reproducing the ticket before the agent
+	// concludes anything about what a user sees.
+	Repro     ReproConfig `yaml:"repro"`
 	Providers struct {
 		Claude struct {
 			Path string `yaml:"path"`
@@ -859,6 +875,7 @@ func applyDefaults(c *Config) {
 	if h := c.Sources.Helpdesk; h != nil && h.Adapter == "zohodesk" && h.TrackerField == "" {
 		h.TrackerField = DefaultZohoTrackerField
 	}
+	applyInvestigationDefaults(c)
 }
 
 // FindRoot walks up from dir to the first directory containing .sirdar/config.yaml.
@@ -957,6 +974,9 @@ func (c *Config) Validate() error {
 		if err := credentialRef("sources.slack.token", s.Token); err != nil {
 			return err
 		}
+	}
+	if err := validateInvestigation(c); err != nil {
+		return err
 	}
 	if err := validateWebhooks(&c.Webhooks); err != nil {
 		return err

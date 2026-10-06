@@ -101,6 +101,11 @@ rather than being silently ignored.
 | `fix.prIncludesComplaint` | bool | `false` | Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public |
 | `fix.inPlace` | bool | `false` | Run the fix session in the operator's own working tree (`git checkout -B`) instead of a linked worktree under `.sirdar/worktrees/<run-id>`; see Fix worktrees below |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
+| `playbooksMaxBytes` | int | `16384` | Byte budget for the prompt's "# Playbooks" section; `0` means no limit. See Investigation below |
+| `phases.reply.model`, `phases.note.model` | string, optional | `""` | Model for the reply turn and the note turn; `""` falls back to the run's own model. See Investigation below |
+| `phases.reply.maxTurns`, `phases.note.maxTurns` | int | `0` (off), `8` | Turn cap for the reply and note turns; `0` turns the cap off. See Investigation below |
+| `gather.*` | object | see Investigation below | Config-defined and built-in gatherers that run before the prompt is assembled |
+| `repro.*` | object | see Investigation below | Staging hosts and run kinds a browser may reproduce the ticket against |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
 | `openai.baseUrl` | string | none (required for `provider: openai`) | Chat Completions base URL, e.g. `https://openrouter.ai/api/v1` or `http://localhost:11434/v1` |
@@ -812,6 +817,89 @@ died in its first one.
 
 A budget that expires *after* the note has been written and filed does not throw the note away:
 the run completes and the overrun is recorded as a warning on it.
+
+## Investigation: playbook scope, phases, gather, repro
+
+These keys parse, default and validate; nothing in Sirdar reads them yet (they land with the
+investigation skeleton, in a later change). A workspace that sets none of them keeps today's
+behaviour byte for byte, except `phases.note.maxTurns`, which defaults to `8` from the day this
+section ships.
+
+| Key | Default | Validation |
+|---|---|---|
+| `playbooksMaxBytes` | `16384` | ≥ 0 |
+| `phases.reply.model`, `phases.note.model` | `""` | trimmed; no whitespace inside |
+| `phases.reply.maxTurns` | `0` (off) | ≥ 0 |
+| `phases.note.maxTurns` | `8` (explicit `0` turns the cap off) | ≥ 0 |
+| `gather.enabled` | `true` | — |
+| `gather.timeoutSeconds` / `totalSeconds` | `20` / `60` | 1–300 / 1–600 |
+| `gather.maxBytes` / `totalBytes` | `131072` / `1048576` | 1024–4194304 / ≥ `maxBytes`, ≤ 16777216 |
+| `gather.allow` | `[]` | each entry non-empty after trim, with no unapproved shell construct |
+| `gather.pr` | `{enabled: true, anyRepo: false, max: 5, history: true}` | `max` 1–20 |
+| `gather.variables.<name>` | — | name `^[a-z][a-z0-9_]{0,31}$`; `pattern` compiles with exactly one capture group; `from` ⊆ `ticket`, `thread`, `slack`, `instruction`; `max` 1–10 |
+| `gather.steps[]` | — | `name` unique, `^[a-z0-9][a-z0-9-]{0,39}$`; exactly one of `command`/`mcp`; `kinds` ⊆ `session`, `triage`, `rca`, `fix`; `timeoutSeconds` 1–300; `command[0]` carries no `{{…}}`; every `{{x}}` in a command element or an `mcp.args` string leaf names a declared variable; no `mcp.args` map key carries `{{`; `mcp.server` and `mcp.tool` non-empty |
+| `repro.hosts` | `[]` | each entry passes the same host-glob rule as `permissions.fetch` |
+| `repro.server` | `playwright` | must be a usable MCP server name (the same rule a `.mcp.json` entry answers to) |
+| `repro.kinds` | `[triage, session]` | ⊆ `triage`, `session` (`rca` is named explicitly in the error) |
+
+**Phases** (`phases.reply`, `phases.note`) give the reply turn and the note turn their own model
+and turn cap, apart from the run's own model and `budget.maxTurns`:
+
+```yaml
+phases:
+  reply:
+    model: ""        # default: the run's model
+    maxTurns: 0      # default: no reply cap beyond budget.maxTurns
+  note:
+    model: ""        # default: the run's model
+    maxTurns: 8      # default 8; 0 turns the cap off
+```
+
+**Gather** (`gather`) configures the read-only lookups `prepare` runs before the prompt is
+assembled — the built-in pull-request and file-history gatherers, plus the workspace's own
+variables and steps:
+
+```yaml
+gather:
+  enabled: true            # default true; false turns off built-ins and steps
+  timeoutSeconds: 20       # per step, default 20
+  totalSeconds: 60         # all gatherers, default 60
+  maxBytes: 131072         # per file, default 128 KiB
+  totalBytes: 1048576      # per run, default 1 MiB
+  allow: []                # extra argv globs for command steps, on top of permissions.bash
+  pr: {enabled: true, anyRepo: false, max: 5, history: true}
+  variables:
+    domain:
+      pattern: '(?i)(?:domain|الدومين)\W{0,6}([a-z0-9][a-z0-9-]{1,62})'
+      from: [ticket, thread, slack, instruction]   # default: all four
+      max: 3                                        # distinct values, default 3
+  steps:
+    - name: company
+      about: Company row for the ticket's domain
+      kinds: [triage, rca, session]                 # default
+      mcp:
+        server: metabase
+        tool: resolve_company
+        args: {domain: "{{domain}}"}
+    - name: systems-tags
+      about: Latest OXO.Systems release tags
+      command: [git, -C, ~/Documents/Work/Coding/GitHub/OXO.Systems, tag, --sort=-creatordate, --list, "v*"]
+      timeoutSeconds: 10
+```
+
+A variable's `pattern` is a Go regexp with exactly one capture group; a step has exactly one of
+`command` (an argv list) or `mcp` (`server`, `tool`, `args`), and every `{{name}}` it references
+must name a declared variable — `argv[0]` and any `mcp.args` map key may never carry one.
+
+**Repro** (`repro`) names the staging hosts, and the run kinds, a browser may be let loose on to
+reproduce the ticket:
+
+```yaml
+repro:
+  hosts: ["staging.oxo.example", "*.stg.oxo.example"]   # host globs, permissions.fetch syntax
+  server: playwright                                     # MCP server name, default "playwright"
+  kinds: [triage, session]                               # default; rca is not allowed
+```
 
 ## `permissions.bash` glob semantics
 

@@ -193,6 +193,11 @@ func dedupe(names []string) []string {
 	return out
 }
 
+// ValidServerName is validServerName for callers outside this package: the
+// configuration checks repro.server against the same rule a .mcp.json name
+// answers to, so a name that could never be namespaced fails the load.
+func ValidServerName(name string) bool { return validServerName(name) }
+
 // validServerName reports whether a name from .mcp.json is one Sirdar can
 // namespace safely. Tool names reach the model as mcp__<server>__<tool>
 // and are split back on the first "__" after the prefix, so a name
