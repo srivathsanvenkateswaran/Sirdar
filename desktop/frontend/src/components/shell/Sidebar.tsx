@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { Quota, RunSummary, SearchHit, SourcesSummary, Workspace } from '../../api/types'
+import type { Quota, RunSummary, SearchHit, ShadowStatus, SourcesSummary, Workspace } from '../../api/types'
 import { showLibrary, subscribeShowLibrary } from '../../lib/library'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import { useDebounced } from '../../lib/useDebounced'
@@ -20,6 +20,7 @@ import {
   RegisterIcon,
   SessionsIcon,
   SettingsIcon,
+  ShadowIcon,
   SwitcherIcon,
 } from './icons'
 import { usePrimaryAction } from './primaryAction'
@@ -33,12 +34,13 @@ export type { SessionActions } from './SessionsList'
 /** How long the notes search waits after a keystroke before it asks the service. */
 export const NOTES_SEARCH_DEBOUNCE_MS = 250
 
-type NavName = 'sessions' | 'board' | 'register' | 'eval' | 'library' | 'settings'
+type NavName = 'sessions' | 'board' | 'register' | 'shadow' | 'eval' | 'library' | 'settings'
 
 const ROWS: { name: NavName; label: string; icon: JSX.Element }[] = [
   { name: 'sessions', label: 'Sessions', icon: <SessionsIcon /> },
   { name: 'board', label: 'Board', icon: <BoardIcon /> },
   { name: 'register', label: 'Register', icon: <RegisterIcon /> },
+  { name: 'shadow', label: 'Shadow', icon: <ShadowIcon /> },
   { name: 'eval', label: 'Eval', icon: <EvalIcon /> },
   { name: 'library', label: 'Library', icon: <LibraryIcon /> },
   { name: 'settings', label: 'Settings', icon: <SettingsIcon /> },
@@ -71,7 +73,7 @@ function rowOf(screen: Screen): NavName {
 
 /**
  * The app's left edge: the wordmark, the workspace on its own row under it,
- * the six screens, the sessions list (`SessionsList`) with the search field
+ * its screens, the sessions list (`SessionsList`) with the search field
  * as its first line, and a footer card with how much of each provider's
  * plan is gone and the one button that starts a session.
  *
@@ -99,6 +101,8 @@ function Sidebar(props: {
   now?: number
   /** Inbound deliveries waiting to be read, badged on the Board row. */
   inboundCount?: number
+  /** The current workspace's shadow watcher. The Shadow row is offered while it is on or has left a ledger. */
+  shadow?: ShadowStatus
   /** What a session row's menu can reach: delete, open, copy links, settings. */
   sessionActions?: SessionActions
   /** The "Search notes" mode's question to the service. Without it the toggle is not offered. */
@@ -116,6 +120,7 @@ function Sidebar(props: {
     sources,
     now,
     inboundCount = 0,
+    shadow,
     sessionActions,
     onSearchNotes,
     onSelectWorkspace,
@@ -228,7 +233,13 @@ function Sidebar(props: {
   const openRun = useCallback((runId: string) => onNavigate({ name: 'run', runId }), [onNavigate])
 
   const current = rowOf(screen)
-  const rows = library ? ROWS : ROWS.filter((row) => row.name !== 'library')
+  // A workspace that never turned shadow on has nothing to show there, so
+  // the row would only be a screen that says so. One that turned it off
+  // keeps it while its ledger is there to read.
+  const shadowShown = Boolean(shadow && (shadow.enabled || shadow.hasLedger))
+  const rows = ROWS.filter(
+    (row) => (row.name !== 'library' || library) && (row.name !== 'shadow' || shadowShown),
+  )
   const currentRunId =
     screen.name === 'run' || screen.name === 'review' ? screen.runId : undefined
   const newest = recentRuns(runs, 1)[0]

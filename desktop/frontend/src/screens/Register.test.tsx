@@ -380,6 +380,19 @@ describe('Register', () => {
     expect(within(t).getByText('running')).toBeInTheDocument()
   })
 
+  it('leaves a shadow run off the sheet as it updates', async () => {
+    const { transport } = mount()
+    const t = await table()
+    act(() => {
+      transport.emit({
+        kind: 'run.updated',
+        workspaceId: 'ws1',
+        run: run({ runId: 'sh-9', key: 'OMNI-9', status: 'running', shadow: true }),
+      })
+    })
+    expect(within(t).queryByText('OMNI-9')).toBeNull()
+  })
+
   it('opens the run when its key is pressed', async () => {
     const { onOpenRun } = mount()
     const t = await table()

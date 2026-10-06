@@ -46,7 +46,9 @@ export interface RunSummary { runId: string; key: string; helpdeskKey?: string; 
   /** `"note not filed: <reason>"` when the note turn failed; absent otherwise. */
   noteWarning?: string
   /** The run answers in chat: every session run, and a triage or RCA run started by anything but eval. */
-  replyFirst?: boolean }
+  replyFirst?: boolean
+  /** A shadow measurement the watcher started unattended. The store keeps it out of Sessions and the Board; the Shadow screen lists it. */
+  shadow?: boolean }
 /**
  * One steer typed on a working run. `queued` waits for the run's next turn
  * boundary; `delivered` reached the live session after turn `turn`; `held`
@@ -228,6 +230,103 @@ export interface SearchHit { runId: string; key: string; kind: string; status: s
 /** `type` is the canonical ticket type — 'bug', 'story', 'subtask' — or '' when the tracker names none. */
 export interface Ticket { key: string; title: string; type: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
+/**
+ * What the shadow watcher is doing for one workspace (`app.ShadowStatus`), as
+ * `shadowStatus`, `shadowPause`, `shadowResume`, `shadowPoll` and the
+ * `shadow.status` event carry it. Times are RFC 3339.
+ */
+export interface ShadowStatus {
+  enabled: boolean
+  state: 'watching' | 'paused' | 'gated' | 'locked-elsewhere' | 'stopped' | 'disabled'
+  reason: string
+  pausedUntil?: string
+  lastPoll?: string
+  nextPoll?: string
+  lastError?: string
+  consecutiveErrors: number
+  today: ShadowToday
+  /** Run ids of the shadow runs still going. */
+  inFlight: string[]
+  /** The workspace has a shadow ledger, so there is a scorecard to read even with shadow off. */
+  hasLedger: boolean
+  /** Today's finished lines that broke the read-only rule or ran blind. */
+  breaches: number
+}
+/** Today's use of the daily caps. */
+export interface ShadowToday { runs: number; maxPerDay: number; usd: number; maxUSDPerDay: number }
+/** The scorecard over the keys first started since `since` (`shadow.ShadowReport`). */
+export interface ShadowReport { since: string; headline: ShadowHeadline; rows: ShadowRow[]; byClassification: ShadowClassRow[] }
+/**
+ * The scorecard's summary. Rates are 0..1 of `graded`; costs are raw float
+ * sums and are rounded only for display.
+ */
+export interface ShadowHeadline {
+  started: number
+  graded: number
+  confirmed: number
+  confirmedOrPartial: number
+  medianElapsedSec: number
+  /** Graded rows shadow finished before the operator started. */
+  readyBefore: number
+  /** Graded rows with a lead time at all. */
+  readyOf: number
+  costUSD: number
+  medianCostUSD: number
+}
+/** One ticket on the scorecard (`shadow.Row`). */
+export interface ShadowRow {
+  key: string
+  title: string
+  runId: string
+  startedAt: string
+  /** The latest attempt's finished status, `running` before it. */
+  status: string
+  classification: string
+  /** The first sentence, at most 160 characters. */
+  hypothesis: string
+  /** `''` while ungraded. */
+  grade: string
+  gradeReason: string
+  basis: string
+  final: boolean
+  costUSD: number
+  elapsedSec: number
+  /** provisional, operator first, backfill, no answer, ungradable. */
+  tags: string[]
+  outcome?: ShadowRowOutcome
+  reproduction: string
+  denied: ShadowDenied[]
+  questions: string[]
+  prFilesHit?: ShadowFraction
+  codeRefsPathOverlap?: ShadowFraction
+  leadMinutes?: number
+  warning?: string
+}
+/** What the operator's side of a ticket came to, merged across every outcome collected. */
+export interface ShadowRowOutcome { sources: string[]; prUrls: string[]; resolution: string; status: string }
+/** The grade tally for one classification. */
+export interface ShadowClassRow { classification: string; graded: number; confirmed: number; partial: number; wrong: number }
+/** An overlap kept with its counts, so 0.5 can be told apart as 1 of 2 or 50 of 100. */
+export interface ShadowFraction { matched: number; total: number; score: number }
+/** A tool call the read-only guard refused a shadow run. */
+export interface ShadowDenied { tool: string; summary: string }
+/** A manual outcome as the Shadow screen's form sends it. */
+export interface ShadowOutcomeInput { key: string; prUrls: string[]; resolution: string }
+/** A pending playbook addition (`app.Suggestion`). */
+export interface PlaybookSuggestion {
+  id: string
+  at: string
+  source: 'remember' | 'rca'
+  runId: string
+  key: string
+  /** The playbook it is meant for. An RCA may name one that does not exist yet. */
+  playbook: string
+  addition: string
+  reason: string
+  costUSD: number
+}
+/** What accepting a suggestion may change. Either left out keeps the proposal's own. */
+export interface AcceptSuggestionInput { playbook?: string; addition?: string }
 export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string; title: string; company: string }
 /** A doctor row. 'warn' is advisory: ok stays true and no exit code moves. */
 export type CheckLevel = 'ok'|'warn'|'fail'
@@ -446,6 +545,8 @@ export type AppEvent =
   | { kind: 'job.finished'; jobId: string; workspaceId: string; outcomes: { key: string; status: RunState; runId: string }[] }
   | { kind: 'hook.received'; source: string; key?: string; outcome: HookOutcome }
   | { kind: 'log'; text: string }
+  /** The shadow watcher's state changed: a poll, a pause, a resume, a gate. */
+  | { kind: 'shadow.status'; workspaceId: string; shadow: ShadowStatus }
   /**
    * The transport's own word on the stream, never sent by the service: 'lost'
    * when the event source drops (it retries on its own), 'open' when it is
@@ -662,6 +763,28 @@ export interface Transport {
    */
   mcpCall(ws: string, server: string, tool: string, args?: unknown): Promise<MCPCallResult>;
   register(ws: string): Promise<RegisterRow[]>; doctor(ws: string): Promise<Check[]>; quota(): Promise<Quota[]>;
+  /** What the shadow watcher is doing for the workspace, whichever process is doing it. */
+  shadowStatus(ws: string): Promise<ShadowStatus>;
+  /** The scorecard. `since` is empty for 30 days, a duration back (`7d`) or a date (`2026-10-01`). */
+  shadowReport(ws: string, since?: string): Promise<ShadowReport>;
+  /** One watcher tick now. Another process watching the workspace refuses it. */
+  shadowPoll(ws: string): Promise<ShadowStatus>;
+  /** Stops new shadow starts for `forDuration` (`4h`, `2d`); 24 hours when left out. */
+  shadowPause(ws: string, forDuration?: string): Promise<ShadowStatus>;
+  /** Lifts a pause early. */
+  shadowResume(ws: string): Promise<ShadowStatus>;
+  /** Records an outcome entered by hand, grades the key against it and answers with its row. */
+  shadowOutcome(ws: string, input: ShadowOutcomeInput): Promise<ShadowRow>;
+  /** Collects outcomes for one key and grades it now. */
+  shadowRegrade(ws: string, key: string): Promise<ShadowRow>;
+  /** Turns one operator message on a run into a pending playbook addition. `index` 0 is the run's instruction. */
+  remember(ws: string, runId: string, index: number): Promise<PlaybookSuggestion>;
+  /** The pending playbook additions, oldest first. */
+  suggestions(ws: string): Promise<PlaybookSuggestion[]>;
+  /** Files a pending suggestion into its playbook, or the one `input.playbook` names. */
+  acceptSuggestion(ws: string, id: string, input?: AcceptSuggestionInput): Promise<PlaybookSuggestion>;
+  /** Takes a pending suggestion out of the queue. */
+  dismissSuggestion(ws: string, id: string): Promise<void>;
   subscribe(handler: (e: AppEvent) => void): () => void;
   /** Desktop build version, e.g. "1.2.3" or "dev". Only the Wails transport implements it. */
   version?(): Promise<string>;
@@ -718,6 +841,9 @@ export const TRANSPORT_METHODS = [
   'runDiff', 'dropHunk',
   'mcpServers', 'mcpTools', 'mcpCall',
   'register', 'doctor', 'quota', 'subscribe',
+  'shadowStatus', 'shadowReport', 'shadowPoll', 'shadowPause', 'shadowResume',
+  'shadowOutcome', 'shadowRegrade',
+  'remember', 'suggestions', 'acceptSuggestion', 'dismissSuggestion',
   'version', 'openConfig', 'openNote', 'openRunDir',
 ] as const;
 /** One of the names above. */

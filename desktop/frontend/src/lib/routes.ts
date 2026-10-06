@@ -12,7 +12,7 @@ import type { Screen } from '../store/appStore'
  *
  *   #/                        the board
  *   #/new                     a new session
- *   #/register  #/eval  #/library
+ *   #/register  #/shadow  #/eval  #/library
  *   #/settings  #/settings/<page>
  *   #/runs/<workspaceId>/<runId>
  *   #/runs/<workspaceId>/<runId>/review
@@ -57,6 +57,7 @@ export function parseRoute(hash: string): Route | null {
       return parts.length === 1 ? { screen: { name: 'board' } } : null
     case 'new':
     case 'register':
+    case 'shadow':
     case 'eval':
     case 'library':
       // A library link parses whether or not the switch is on. The window

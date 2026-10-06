@@ -10,6 +10,7 @@ describe('parseRoute', () => {
     ['#/board', 'board'],
     ['#/new', 'new'],
     ['#/register', 'register'],
+    ['#/shadow', 'shadow'],
     ['#/eval', 'eval'],
     ['#/settings', 'settings'],
     ['#/library', 'library'],
@@ -69,6 +70,7 @@ describe('routeHash', () => {
   it.each([
     [{ name: 'board' } as Screen, '#/'],
     [{ name: 'register' } as Screen, '#/register'],
+    [{ name: 'shadow' } as Screen, '#/shadow'],
     [{ name: 'eval' } as Screen, '#/eval'],
     [{ name: 'settings' } as Screen, '#/settings'],
     [{ name: 'settings', page: 'providers' } as Screen, '#/settings/providers'],
@@ -96,6 +98,7 @@ describe('routeHash', () => {
     const screens: Screen[] = [
       { name: 'board' },
       { name: 'register' },
+      { name: 'shadow' },
       { name: 'eval' },
       { name: 'settings' },
       { name: 'settings', page: 'mcp' },

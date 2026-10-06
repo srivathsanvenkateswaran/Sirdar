@@ -15,6 +15,7 @@ import type {
   MCPInventory,
   MCPToolList,
   PermissionDecision,
+  PlaybookSuggestion,
   PlaybookSummary,
   RetroReport,
   Quota,
@@ -25,6 +26,11 @@ import type {
   RunSummary,
   SearchHit,
   SessionStarted,
+  ShadowOutcomeInput,
+  ShadowReport,
+  ShadowRow,
+  ShadowStatus,
+  AcceptSuggestionInput,
   SteerStarted,
   Ticket,
   Transport,
@@ -49,6 +55,7 @@ const EVENT_KINDS: AppEvent['kind'][] = [
   'job.finished',
   'hook.received',
   'log',
+  'shadow.status',
 ]
 
 /**
@@ -442,6 +449,41 @@ export function createHTTPTransport(): Transport {
     register: (ws) => getJSON<RegisterRow[]>(`/workspaces/${encodeURIComponent(ws)}/register`),
     doctor: (ws) => getJSON<Check[]>(`/workspaces/${encodeURIComponent(ws)}/doctor`),
     quota: () => getJSON<Quota[]>('/quota'),
+    shadowStatus: (ws) =>
+      getJSON<ShadowStatus>(`/workspaces/${encodeURIComponent(ws)}/shadow/status`),
+    shadowReport: (ws, since) =>
+      getJSON<ShadowReport>(`/workspaces/${encodeURIComponent(ws)}/shadow/report${query({ since })}`),
+    shadowPoll: (ws) =>
+      postJSON<ShadowStatus>(`/workspaces/${encodeURIComponent(ws)}/shadow/poll`, {}),
+    shadowPause: (ws, forDuration) =>
+      postJSON<ShadowStatus>(
+        `/workspaces/${encodeURIComponent(ws)}/shadow/pause`,
+        forDuration ? { for: forDuration } : {},
+      ),
+    shadowResume: (ws) =>
+      postJSON<ShadowStatus>(`/workspaces/${encodeURIComponent(ws)}/shadow/resume`, {}),
+    shadowOutcome: (ws, input) =>
+      postJSON<ShadowRow>(`/workspaces/${encodeURIComponent(ws)}/shadow/outcomes`, input),
+    shadowRegrade: (ws, key) =>
+      postJSON<ShadowRow>(`/workspaces/${encodeURIComponent(ws)}/shadow/regrade`, { key }),
+    remember: (ws, runId, index) =>
+      postJSON<PlaybookSuggestion>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/remember`,
+        { index },
+      ),
+    suggestions: async (ws) =>
+      list(await getJSON<PlaybookSuggestion[] | null>(`/workspaces/${encodeURIComponent(ws)}/suggestions`)),
+    acceptSuggestion: (ws, id, input) =>
+      postJSON<PlaybookSuggestion>(
+        `/workspaces/${encodeURIComponent(ws)}/suggestions/${encodeURIComponent(id)}/accept`,
+        input ?? {},
+      ),
+    dismissSuggestion: async (ws, id) => {
+      await postJSON<void>(
+        `/workspaces/${encodeURIComponent(ws)}/suggestions/${encodeURIComponent(id)}/dismiss`,
+        {},
+      )
+    },
     subscribe,
   }
 }
@@ -540,6 +582,17 @@ interface BridgeBindings {
   StartSession(ws: string, o: { reference: string; instruction: string; access: string; provider: string; model: string }): Promise<SessionStarted>
   UpdateNote(ws: string, runId: string): Promise<string>
   SaveNote(ws: string, runId: string): Promise<string>
+  ShadowStatus(ws: string): Promise<ShadowStatus>
+  ShadowReport(ws: string, since: string): Promise<ShadowReport>
+  ShadowPoll(ws: string): Promise<ShadowStatus>
+  ShadowPause(ws: string, forDuration: string): Promise<ShadowStatus>
+  ShadowResume(ws: string): Promise<ShadowStatus>
+  ShadowOutcome(ws: string, input: ShadowOutcomeInput): Promise<ShadowRow>
+  ShadowRegrade(ws: string, key: string): Promise<ShadowRow>
+  Remember(ws: string, runId: string, index: number): Promise<PlaybookSuggestion>
+  Suggestions(ws: string): Promise<PlaybookSuggestion[] | null>
+  AcceptSuggestion(ws: string, id: string, input: AcceptSuggestionInput): Promise<PlaybookSuggestion>
+  DismissSuggestion(ws: string, id: string): Promise<void>
 }
 
 /** The subset of the Wails runtime the transport uses. */
@@ -726,6 +779,19 @@ export function createWailsTransport(): Transport {
     register: async (ws) => list(await bridge().Register(ws)),
     doctor: async (ws) => list(await bridge().Doctor(ws)),
     quota: async () => list(await bridge().Quota()),
+    shadowStatus: (ws) => bridge().ShadowStatus(ws),
+    shadowReport: (ws, since) => bridge().ShadowReport(ws, since ?? ''),
+    shadowPoll: (ws) => bridge().ShadowPoll(ws),
+    shadowPause: (ws, forDuration) => bridge().ShadowPause(ws, forDuration ?? ''),
+    shadowResume: (ws) => bridge().ShadowResume(ws),
+    shadowOutcome: (ws, input) => bridge().ShadowOutcome(ws, input),
+    shadowRegrade: (ws, key) => bridge().ShadowRegrade(ws, key),
+    remember: (ws, runId, index) => bridge().Remember(ws, runId, index),
+    suggestions: async (ws) => list(await bridge().Suggestions(ws)),
+    acceptSuggestion: (ws, id, input) => bridge().AcceptSuggestion(ws, id, input ?? {}),
+    dismissSuggestion: async (ws, id) => {
+      await bridge().DismissSuggestion(ws, id)
+    },
     version: () => bridge().Version(),
     openConfig: async (ws) => {
       await bridge().OpenConfig(ws)

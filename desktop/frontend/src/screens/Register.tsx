@@ -194,7 +194,10 @@ export default function Register(props: {
   useEffect(
     () =>
       transport.subscribe((e) => {
+        // A shadow run files nothing and is no run of the register's; the
+        // runs read above leave it out, and so does this.
         if (e.kind === 'run.updated' && e.workspaceId === workspaceId) {
+          if (e.run.shadow) return
           setRuns((prev) => upsert(prev, e.run))
         } else if (e.kind === 'job.finished' && e.workspaceId === workspaceId) {
           void load()

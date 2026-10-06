@@ -4,7 +4,7 @@ import type { Workspace } from '../../api/types'
 import { resetShowLibrary, setShowLibrary } from '../../lib/library'
 import { stubMatchMedia } from '../../lib/mediaStub'
 import { resetSessionPrefs } from '../../lib/sessionPrefs'
-import { run, searchHit } from '../../store/fakeTransport'
+import { run, searchHit, shadowStatus } from '../../store/fakeTransport'
 import { STATE_WORDS } from '../../ui/status-badge'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
 import Sidebar, { CARD_OPEN_MS, NOTES_SEARCH_DEBOUNCE_MS, RAIL_AT, SIDEBAR_COLLAPSED_KEY } from './Sidebar'
@@ -219,6 +219,34 @@ describe('the sidebar nav', () => {
       'Settings',
     ])
     expect(screen.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('offers no Shadow row while shadow is off and has no ledger', () => {
+    setShowLibrary(false)
+    mount({ shadow: shadowStatus({ enabled: false, hasLedger: false, state: 'disabled' }) })
+    expect(screen.queryByRole('button', { name: 'Shadow' })).toBeNull()
+  })
+
+  it('puts Shadow between Register and Eval while shadow is on, and marks it current on its screen', () => {
+    setShowLibrary(false)
+    mount({ shadow: shadowStatus({ enabled: true, hasLedger: false }), screen: { name: 'shadow' } })
+    const nav = screen.getByRole('navigation', { name: 'Screens' })
+    expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Sessions',
+      'Board',
+      'Register',
+      'Shadow',
+      'Eval',
+      'Settings',
+    ])
+    expect(screen.getByRole('button', { name: 'Shadow' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('keeps the Shadow row for a ledger after shadow is switched off', () => {
+    setShowLibrary(false)
+    const { onNavigate } = mount({ shadow: shadowStatus({ enabled: false, hasLedger: true, state: 'disabled' }) })
+    fireEvent.click(screen.getByRole('button', { name: 'Shadow' }))
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'shadow' })
   })
 
   it('drops the row the moment the switch is turned off', () => {

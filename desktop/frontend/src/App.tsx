@@ -23,6 +23,7 @@ import Register from './screens/Register'
 import Review from './screens/Review'
 import Session from './screens/Session'
 import Settings from './screens/Settings'
+import Shadow from './screens/Shadow'
 import { showLibrary, subscribeShowLibrary } from './lib/library'
 import { parseRoute, routeHash, sameScreen } from './lib/routes'
 import type { AppState, AppStore, EvalOptions, FixOptions, Screen } from './store/appStore'
@@ -48,6 +49,7 @@ const selectMe = (s: AppState) => s.meByWorkspace[s.currentWorkspaceId]
 const selectRepos = (s: AppState) => s.reposByWorkspace[s.currentWorkspaceId]
 const selectQueueUnsupported = (s: AppState): boolean => Boolean(s.queueUnsupported[s.currentWorkspaceId])
 const selectWorkspace = (s: AppState) => s.workspaces.find((w) => w.id === s.currentWorkspaceId)
+const selectShadow = (s: AppState) => s.shadowByWorkspace[s.currentWorkspaceId]
 
 /**
  * A window that opened on nothing in particular, in a workspace with no runs
@@ -156,6 +158,7 @@ const ConnectedSidebar = memo(function ConnectedSidebar({
   const runs = useAppState(selectRuns)
   const sources = useAppState(selectSources)
   const inboundCount = useAppState((s) => s.inbound.length)
+  const shadow = useAppState(selectShadow)
   const onSelectWorkspace = useCallback((id: string) => store.setWorkspace(id), [store])
   const onAddWorkspace = useCallback(
     () => store.navigate({ name: 'settings', page: 'general' }),
@@ -195,6 +198,7 @@ const ConnectedSidebar = memo(function ConnectedSidebar({
       runs={runs ?? NO_RUNS}
       sources={sources}
       inboundCount={inboundCount}
+      shadow={shadow}
       sessionActions={sessionActions}
       onSearchNotes={onSearchNotes}
       onSelectWorkspace={onSelectWorkspace}
@@ -229,6 +233,7 @@ function Shell(): JSX.Element {
   const inbound = useAppState((s) => s.inbound)
   const quota = useAppState((s) => s.quota)
   const keylessJobs = useAppState((s) => s.keylessJobs)
+  const shadowStatus = useAppState(selectShadow)
   const libraryOn = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
   const filterRef = useRef<HTMLInputElement | null>(null)
 
@@ -408,6 +413,16 @@ function Shell(): JSX.Element {
         <Register
           transport={transport}
           workspaceId={workspaceId}
+          onOpenRun={(runId) => navigate({ name: 'run', runId })}
+        />
+      )
+      break
+    case 'shadow':
+      page = (
+        <Shadow
+          transport={transport}
+          workspaceId={workspaceId}
+          status={shadowStatus}
           onOpenRun={(runId) => navigate({ name: 'run', runId })}
         />
       )

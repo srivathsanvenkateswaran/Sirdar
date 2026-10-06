@@ -12,6 +12,7 @@ import type {
   MCPInventory,
   MCPToolList,
   PermissionDecision,
+  PlaybookSuggestion,
   PlaybookSummary,
   Quota,
   RegisterRow,
@@ -23,6 +24,11 @@ import type {
   HelpdeskLink,
   Intake,
   SessionStart,
+  ShadowOutcomeInput,
+  ShadowReport,
+  ShadowRow,
+  ShadowStatus,
+  AcceptSuggestionInput,
   Ticket,
   Transport,
   Usage,
@@ -62,6 +68,17 @@ export interface TransportCalls {
   composeIntent: { ws: string; text: string }[]
   models: { ws: string; provider: string }[]
   refreshModels: { ws: string; provider: string }[]
+  shadowStatus: string[]
+  shadowReport: { ws: string; since?: string }[]
+  shadowPoll: string[]
+  shadowPause: { ws: string; forDuration?: string }[]
+  shadowResume: string[]
+  shadowOutcome: { ws: string; input: ShadowOutcomeInput }[]
+  shadowRegrade: { ws: string; key: string }[]
+  remember: { ws: string; runId: string; index: number }[]
+  suggestions: string[]
+  acceptSuggestion: { ws: string; id: string; input?: AcceptSuggestionInput }[]
+  dismissSuggestion: { ws: string; id: string }[]
 }
 
 export interface FakeTransport extends Transport {
@@ -83,6 +100,8 @@ export interface FakeTransport extends Transport {
   failPlaybooks(err: Error | null): void
   /** Makes `models()` and `refreshModels()` reject. */
   failModels(err: Error | null): void
+  /** Makes `shadowOutcome()` reject, e.g. with the 400 an unreadable PR URL gives. */
+  failShadowOutcome(err: Error | null): void
   /** The playbooks the fake holds right now, as filename to markdown. */
   playbookBodies(): Record<string, string>
   subscriberCount(): number
@@ -288,6 +307,96 @@ export function run(over: Partial<RunSummary> = {}): RunSummary {
   }
 }
 
+/** A watching shadow status: 3 of 10 runs and $2.10 of $10 used today. */
+export function shadowStatus(over: Partial<ShadowStatus> = {}): ShadowStatus {
+  return {
+    enabled: true,
+    state: 'watching',
+    reason: '',
+    consecutiveErrors: 0,
+    today: { runs: 3, maxPerDay: 10, usd: 2.1, maxUSDPerDay: 10 },
+    inFlight: [],
+    hasLedger: true,
+    breaches: 0,
+    ...over,
+  }
+}
+
+/** One scorecard row: a graded data-fix verdict on OMNI-1. */
+export function shadowRow(over: Partial<ShadowRow> = {}): ShadowRow {
+  return {
+    key: 'OMNI-1',
+    title: 'Statement export times out',
+    runId: 'r1',
+    startedAt: '2026-10-05T09:00:00Z',
+    status: 'completed',
+    classification: 'data-fix',
+    hypothesis: 'The tenant id is null on imported statements.',
+    grade: 'confirmed',
+    gradeReason: 'The merged PR sets the tenant on import.',
+    basis: 'pr',
+    final: true,
+    costUSD: 0.84,
+    elapsedSec: 240,
+    tags: [],
+    reproduction: 'reproduced',
+    denied: [],
+    questions: [],
+    ...over,
+  }
+}
+
+/** A scorecard over two rows: OMNI-1 graded, OMNI-2 still waiting on an outcome. */
+export function shadowReport(over: Partial<ShadowReport> = {}): ShadowReport {
+  return {
+    since: '2026-09-06T00:00:00Z',
+    headline: {
+      started: 5,
+      graded: 4,
+      confirmed: 0.25,
+      confirmedOrPartial: 0.5,
+      medianElapsedSec: 240,
+      readyBefore: 1,
+      readyOf: 2,
+      costUSD: 3.2,
+      medianCostUSD: 0.8,
+    },
+    rows: [
+      shadowRow(),
+      shadowRow({
+        key: 'OMNI-2',
+        runId: 'r2',
+        title: 'Login loop after reset',
+        classification: 'bug',
+        hypothesis: 'The session cookie is cleared before the redirect.',
+        grade: '',
+        gradeReason: '',
+        final: false,
+        costUSD: 0.5,
+        tags: ['provisional'],
+      }),
+    ],
+    byClassification: [{ classification: 'data-fix', graded: 1, confirmed: 1, partial: 0, wrong: 0 }],
+    ...over,
+  }
+}
+
+/** A pending playbook addition remembered on OMNI-1. */
+export function suggestion(over: Partial<PlaybookSuggestion> = {}): PlaybookSuggestion {
+  return {
+    id: 's1',
+    at: '2026-10-05T10:00:00Z',
+    source: 'remember',
+    runId: 'r1',
+    key: 'OMNI-1',
+    playbook: '20-data-fixes.md',
+    addition: 'Check the tenant id on imported rows before blaming the export.',
+    reason: 'The operator corrected the run on this.',
+    costUSD: 0.02,
+    ...over,
+  }
+}
+
 export function ticket(over: Partial<Ticket> = {}): Ticket {
   return {
     key: 'OMNI-9',
@@ -448,6 +557,12 @@ export function createFakeTransport(seed: {
   saveError?: Error
   /** Makes `updateNote()` reject, e.g. with the 409 a run that is not reply-first gives. */
   updateNoteError?: Error
+  /** What `shadowStatus()` answers first; leaving it out is shadow off with no ledger. */
+  shadowStatus?: ShadowStatus
+  /** What `shadowReport()` answers; leaving it out is an empty scorecard. */
+  shadowReport?: ShadowReport
+  /** The pending playbook additions `suggestions()` lists. */
+  suggestions?: PlaybookSuggestion[]
 } = {}): FakeTransport {
   let runList = seed.runs ?? []
   let ticketList = seed.tickets ?? []
@@ -456,6 +571,33 @@ export function createFakeTransport(seed: {
   let searchError: Error | null = null
   let playbookError: Error | null = null
   let modelsError: Error | null = null
+  let shadowOutcomeError: Error | null = null
+  let shadow: ShadowStatus =
+    seed.shadowStatus ??
+    shadowStatus({
+      enabled: false,
+      state: 'disabled',
+      hasLedger: false,
+      today: { runs: 0, maxPerDay: 0, usd: 0, maxUSDPerDay: 0 },
+    })
+  let report: ShadowReport =
+    seed.shadowReport ??
+    shadowReport({
+      headline: {
+        started: 0,
+        graded: 0,
+        confirmed: 0,
+        confirmedOrPartial: 0,
+        medianElapsedSec: 0,
+        readyBefore: 0,
+        readyOf: 0,
+        costUSD: 0,
+        medianCostUSD: 0,
+      },
+      rows: [],
+      byClassification: [],
+    })
+  let pendingSuggestions: PlaybookSuggestion[] = [...(seed.suggestions ?? [])]
   const modelLists: Record<string, ModelList> = { ...(seed.models ?? {}) }
   const modelListFor = (provider: string): ModelList =>
     modelLists[provider || 'claude'] ?? {
@@ -509,6 +651,24 @@ export function createFakeTransport(seed: {
     composeIntent: [],
     models: [],
     refreshModels: [],
+    shadowStatus: [],
+    shadowReport: [],
+    shadowPoll: [],
+    shadowPause: [],
+    shadowResume: [],
+    shadowOutcome: [],
+    shadowRegrade: [],
+    remember: [],
+    suggestions: [],
+    acceptSuggestion: [],
+    dismissSuggestion: [],
+  }
+
+  /** Sets the status and says so on the stream, the way the watcher publishes it. */
+  const setShadow = (ws: string, next: ShadowStatus): ShadowStatus => {
+    shadow = next
+    for (const handler of [...handlers]) handler({ kind: 'shadow.status', workspaceId: ws, shadow: next })
+    return next
   }
 
   const fake: FakeTransport = {
@@ -539,6 +699,9 @@ export function createFakeTransport(seed: {
     },
     failModels(err) {
       modelsError = err
+    },
+    failShadowOutcome(err) {
+      shadowOutcomeError = err
     },
     playbookBodies: () => ({ ...playbookBodies }),
     subscriberCount: () => handlers.size,
@@ -865,6 +1028,76 @@ export function createFakeTransport(seed: {
     register: async () => seed.register ?? ([] as RegisterRow[]),
     doctor: async () => [] as Check[],
     quota: async () => seed.quota ?? [],
+    shadowStatus: async (ws) => {
+      calls.shadowStatus.push(ws)
+      return shadow
+    },
+    shadowReport: async (ws, since) => {
+      calls.shadowReport.push({ ws, since })
+      return report
+    },
+    shadowPoll: async (ws) => {
+      calls.shadowPoll.push(ws)
+      return setShadow(ws, { ...shadow, lastPoll: new Date().toISOString() })
+    },
+    shadowPause: async (ws, forDuration) => {
+      calls.shadowPause.push({ ws, forDuration })
+      const until = new Date(Date.now() + 24 * 3_600_000).toISOString()
+      return setShadow(ws, { ...shadow, state: 'paused', reason: 'paused by the operator', pausedUntil: until })
+    },
+    shadowResume: async (ws) => {
+      calls.shadowResume.push(ws)
+      const { pausedUntil: _, ...rest } = shadow
+      return setShadow(ws, { ...rest, state: 'watching', reason: '' })
+    },
+    shadowOutcome: async (ws, input) => {
+      calls.shadowOutcome.push({ ws, input })
+      if (shadowOutcomeError) throw shadowOutcomeError
+      const row = report.rows.find((r) => r.key === input.key)
+      if (!row) throw new Error(`not_found: ${input.key} has no shadow run`)
+      const graded: ShadowRow = {
+        ...row,
+        grade: 'confirmed',
+        gradeReason: 'The PR changes what the hypothesis named.',
+        basis: 'pr',
+        final: true,
+        outcome: { sources: ['manual'], prUrls: input.prUrls, resolution: input.resolution, status: '' },
+      }
+      report = { ...report, rows: report.rows.map((r) => (r.key === input.key ? graded : r)) }
+      return graded
+    },
+    shadowRegrade: async (ws, key) => {
+      calls.shadowRegrade.push({ ws, key })
+      const row = report.rows.find((r) => r.key === key)
+      if (!row) throw new Error(`not_found: ${key} has no shadow row to grade`)
+      return row
+    },
+    remember: async (ws, runId, index) => {
+      calls.remember.push({ ws, runId, index })
+      const made = suggestion({ id: `s${pendingSuggestions.length + 1}`, runId })
+      pendingSuggestions = [...pendingSuggestions, made]
+      return made
+    },
+    suggestions: async (ws) => {
+      calls.suggestions.push(ws)
+      return [...pendingSuggestions]
+    },
+    acceptSuggestion: async (ws, id, input) => {
+      calls.acceptSuggestion.push({ ws, id, input })
+      const found = pendingSuggestions.find((x) => x.id === id)
+      if (!found) throw new Error(`not_found: no suggestion ${id}`)
+      pendingSuggestions = pendingSuggestions.filter((x) => x.id !== id)
+      return {
+        ...found,
+        ...(input?.playbook ? { playbook: input.playbook } : {}),
+        ...(input?.addition ? { addition: input.addition } : {}),
+      }
+    },
+    dismissSuggestion: async (ws, id) => {
+      calls.dismissSuggestion.push({ ws, id })
+      if (!pendingSuggestions.some((x) => x.id === id)) throw new Error(`not_found: no suggestion ${id}`)
+      pendingSuggestions = pendingSuggestions.filter((x) => x.id !== id)
+    },
     subscribe: (handler) => {
       handlers.add(handler)
       return () => {

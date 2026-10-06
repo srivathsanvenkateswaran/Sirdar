@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRunJob, resetRunJobs } from '../lib/jobs'
 import { createAppStore, INBOUND_LIMIT, isQueueUnsupported, type AppStore } from './appStore'
-import { createFakeTransport, run, searchHit, ticket, workspace } from './fakeTransport'
+import { createFakeTransport, run, searchHit, shadowStatus, ticket, workspace } from './fakeTransport'
 
 let store: AppStore | null = null
 
@@ -630,6 +630,50 @@ describe('createAppStore', () => {
 
     transport.failSearch(new Error('500 Internal Server Error'))
     await expect(store.search('x')).rejects.toThrow('500')
+  })
+})
+
+describe('shadow runs and the shadow status', () => {
+  it('keeps a shadow run out of runsByWorkspace, on the first load and as it updates', async () => {
+    const transport = createFakeTransport({
+      workspaces: [workspace({ id: 'ws1' })],
+      runs: [run({ runId: 'r1' }), run({ runId: 'sh1', key: 'OMNI-7', shadow: true })],
+    })
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+    expect(store.getState().runsByWorkspace.ws1?.map((r) => r.runId)).toEqual(['r1'])
+
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'sh2', key: 'OMNI-8', status: 'running', shadow: true }),
+    })
+    expect(store.getState().runsByWorkspace.ws1?.map((r) => r.runId)).toEqual(['r1'])
+  })
+
+  it('loads the status for the selected workspace and keeps each shadow.status event', async () => {
+    const transport = createFakeTransport({
+      workspaces: [workspace({ id: 'ws1' }), workspace({ id: 'ws2', name: 'billing' })],
+      shadowStatus: shadowStatus({ state: 'watching' }),
+    })
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+    expect(transport.calls.shadowStatus).toEqual(['ws1'])
+    expect(store.getState().shadowByWorkspace.ws1?.state).toBe('watching')
+
+    transport.emit({
+      kind: 'shadow.status',
+      workspaceId: 'ws1',
+      shadow: shadowStatus({ state: 'paused', pausedUntil: '2026-10-06T14:00:00Z' }),
+    })
+    expect(store.getState().shadowByWorkspace.ws1?.state).toBe('paused')
+
+    store.setWorkspace('ws2')
+    await settle()
+    expect(transport.calls.shadowStatus).toEqual(['ws1', 'ws2'])
+    expect(store.getState().shadowByWorkspace.ws2?.state).toBe('watching')
   })
 })
 

@@ -7,6 +7,7 @@ import type {
   RunSummary,
   SearchHit,
   SessionStart,
+  ShadowStatus,
   SourcesSummary,
   Ticket,
   Transport,
@@ -28,6 +29,8 @@ export type Screen =
   /** The run's change, full width, before a branch is made of it. */
   | { name: 'review'; runId: string }
   | { name: 'register' }
+  /** The shadow scorecard. The sidebar offers it only where shadow is on or has a ledger. */
+  | { name: 'shadow' }
   | { name: 'eval' }
   | { name: 'settings'; page?: string }
   /** The design library. Only reachable while the Settings switch is on. */
@@ -107,6 +110,12 @@ export interface AppState {
    * Absent until the summary has been read.
    */
   reposByWorkspace: Record<string, RepoSummary[]>
+  /**
+   * What the shadow watcher is doing for each workspace, from `shadowStatus`
+   * when the workspace is selected and from every `shadow.status` after.
+   * Absent until read, and for a service that cannot say.
+   */
+  shadowByWorkspace: Record<string, ShadowStatus>
   /** Workspaces whose tracker cannot list a queue (the API answers 501). */
   queueUnsupported: Record<string, boolean>
   quota: Quota[]
@@ -322,6 +331,7 @@ export function createAppStore(transport: Transport): AppStore {
     sourcesByWorkspace: {},
     meByWorkspace: {},
     reposByWorkspace: {},
+    shadowByWorkspace: {},
     queueUnsupported: {},
     quota: [],
     toasts: [],
@@ -362,7 +372,11 @@ export function createAppStore(transport: Transport): AppStore {
     try {
       const runs = await transport.runs(workspaceId)
       if (disposed) return
-      set({ runsByWorkspace: { ...state.runsByWorkspace, [workspaceId]: runs } })
+      // The service leaves shadow runs out of this list already; the filter
+      // is for one that says otherwise, since a shadow run on the Board or in
+      // Sessions would pass a measurement off as a triage somebody asked for.
+      const kept = runs.filter((r) => !r.shadow)
+      set({ runsByWorkspace: { ...state.runsByWorkspace, [workspaceId]: kept } })
     } catch (err) {
       if (!disposed) toast(`Could not load runs. ${errorText(err)}`, 'error')
     }
@@ -423,9 +437,29 @@ export function createAppStore(transport: Transport): AppStore {
     }
   }
 
+  /**
+   * The shadow watcher's state, which decides whether the sidebar offers the
+   * Shadow screen. A service that cannot answer leaves it absent, and the
+   * row is not offered; nothing else depends on it, so nothing is toasted.
+   */
+  async function loadShadow(workspaceId: string): Promise<void> {
+    try {
+      const status = await transport.shadowStatus(workspaceId)
+      if (disposed) return
+      set({ shadowByWorkspace: { ...state.shadowByWorkspace, [workspaceId]: status } })
+    } catch {
+      // Left absent on purpose.
+    }
+  }
+
   async function loadWorkspace(workspaceId: string): Promise<void> {
     if (!workspaceId) return
-    await Promise.all([loadRuns(workspaceId), loadQueue(workspaceId), loadSources(workspaceId)])
+    await Promise.all([
+      loadRuns(workspaceId),
+      loadQueue(workspaceId),
+      loadSources(workspaceId),
+      loadShadow(workspaceId),
+    ])
   }
 
   /**
@@ -519,6 +553,10 @@ export function createAppStore(transport: Transport): AppStore {
     if (disposed) return
     switch (event.kind) {
       case 'run.updated': {
+        // A shadow run is the watcher's, not this window's: it is not paired
+        // with a job asked for here, and it stays off the Board and out of
+        // Sessions. The Shadow screen reads it from the scorecard.
+        if (event.run.shadow) return
         claim(event.workspaceId, event.run)
         const existing = state.runsByWorkspace[event.workspaceId] ?? []
         set({
@@ -564,6 +602,10 @@ export function createAppStore(transport: Transport): AppStore {
         }
         set({ inbound: [entry, ...state.inbound].slice(0, INBOUND_LIMIT) })
         toast(inboundText(entry), event.outcome === 'rejected' ? 'error' : 'info')
+        return
+      }
+      case 'shadow.status': {
+        set({ shadowByWorkspace: { ...state.shadowByWorkspace, [event.workspaceId]: event.shadow } })
         return
       }
       case 'live': {
