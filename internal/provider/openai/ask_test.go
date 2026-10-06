@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +59,7 @@ func TestLoopStopsOnAQuestion(t *testing.T) {
 // TestLoopRunsAGrantedCall: with the operator's grant the same call runs.
 func TestLoopRunsAGrantedCall(t *testing.T) {
 	root := t.TempDir()
-	ask := provider.PermissionAsk{Kind: provider.AskBash, Tool: "bash", Summary: "ls", Patterns: []string{"ls *"}}
+	ask := askedFor("bash", "ls")
 	cs := newChatServer(t, scripted(
 		toolCallReply("c1", "bash", `{"command":"ls"}`, 100, 10),
 		toolCallReply("c2", submitNoteTool, noteJSON, 100, 10),
@@ -73,4 +74,16 @@ func TestLoopRunsAGrantedCall(t *testing.T) {
 	if len(got) < 3 || got[1] != "permission:bash:allow" || got[2] != "tool_started:bash" {
 		t.Fatalf("events = %v", got)
 	}
+}
+
+// askedFor is the question a policy with no shell allow-list puts for
+// command, digest and all, so a grant made from it matches the call the way
+// one the operator gave would.
+func askedFor(tool, command string) provider.PermissionAsk {
+	input, _ := json.Marshal(map[string]string{"command": command})
+	d := (&provider.PermissionPolicy{Ask: true}).Decide(tool, input)
+	if d.Ask == nil {
+		panic("no question for " + command)
+	}
+	return *d.Ask
 }

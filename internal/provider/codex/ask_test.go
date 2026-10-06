@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
@@ -55,7 +56,7 @@ func TestAskMapsToCancel(t *testing.T) {
 // allowed MCP tool is accepted with empty content, and a denied one is
 // declined with the reason on the event.
 func TestGrantsMapToAcceptAndDecline(t *testing.T) {
-	cmd := provider.PermissionAsk{Kind: provider.AskBash, Tool: "Bash", Summary: "curl -X POST https://example.invalid", Patterns: []string{"curl *"}}
+	cmd := askedFor("Bash", "curl -X POST https://example.invalid")
 	mcp := provider.PermissionAsk{Kind: provider.AskMCP, Tool: "mcp__notes__delete_everything", Patterns: []string{"mcp__notes__delete_everything"}}
 	sess := startSession(t, "script-approvals.jsonl", func(spec *provider.SessionSpec) {
 		askPolicy(spec, provider.GrantFor(cmd, provider.VerdictAllow, ""), provider.GrantFor(mcp, provider.VerdictDeny, "never in triage"))
@@ -74,4 +75,16 @@ func TestGrantsMapToAcceptAndDecline(t *testing.T) {
 	if ev, ok := permissionFor(evs, "mcp__notes__delete_everything"); !ok || ev.Decision != "deny" || ev.Text != "Sirdar policy: the operator denied mcp__notes__delete_everything for this run: never in triage" {
 		t.Errorf("mcp event %+v", ev)
 	}
+}
+
+// askedFor is the question a policy with no shell allow-list puts for
+// command, digest and all, so a grant made from it matches the call the way
+// one the operator gave would.
+func askedFor(tool, command string) provider.PermissionAsk {
+	input, _ := json.Marshal(map[string]string{"command": command})
+	d := (&provider.PermissionPolicy{Ask: true}).Decide(tool, input)
+	if d.Ask == nil {
+		panic("no question for " + command)
+	}
+	return *d.Ask
 }

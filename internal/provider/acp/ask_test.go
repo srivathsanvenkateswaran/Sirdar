@@ -1,6 +1,7 @@
 package acp
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -44,7 +45,7 @@ func TestAskMapsToCancelledOutcome(t *testing.T) {
 // allow_always, which an agent may keep beyond the run — and a denied one
 // reject_once.
 func TestGrantsMapToOptions(t *testing.T) {
-	ask := provider.PermissionAsk{Kind: provider.AskBash, Tool: "Bash", Summary: "rg -n refund src", Patterns: []string{"rg *"}}
+	ask := askedFor("Bash", "rg -n refund src")
 	for verdict, want := range map[string]string{
 		provider.VerdictAllow:    `"optionId":"yes"`,
 		provider.VerdictAllowRun: `"optionId":"yes"`,
@@ -58,4 +59,16 @@ func TestGrantsMapToOptions(t *testing.T) {
 			t.Errorf("%s: event %+v", verdict, ev)
 		}
 	}
+}
+
+// askedFor is the question a policy with no shell allow-list puts for
+// command, digest and all, so a grant made from it matches the call the way
+// one the operator gave would.
+func askedFor(tool, command string) provider.PermissionAsk {
+	input, _ := json.Marshal(map[string]string{"command": command})
+	d := (&provider.PermissionPolicy{Ask: true}).Decide(tool, input)
+	if d.Ask == nil {
+		panic("no question for " + command)
+	}
+	return *d.Ask
 }

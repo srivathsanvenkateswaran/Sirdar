@@ -561,6 +561,105 @@ func TestResumeThread(t *testing.T) {
 	}
 }
 
+// sentAll returns every line sent for method, in order.
+func sentAll(t *testing.T, res provider.Result, method string) []string {
+	t.Helper()
+	var out []string
+	for _, line := range sent(t, res) {
+		var msg inbound
+		if json.Unmarshal([]byte(line), &msg) == nil && msg.Method == method {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// turnModel is the model a sent turn/start names, or "" when it names none.
+func turnModel(t *testing.T, line string) string {
+	t.Helper()
+	var msg struct {
+		Params struct {
+			Model *string `json:"model"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal([]byte(line), &msg); err != nil {
+		t.Fatalf("turn/start line: %v", err)
+	}
+	if msg.Params.Model == nil {
+		return ""
+	}
+	return *msg.Params.Model
+}
+
+// TestResumedTurnCarriesTheModel is phases.note.model on codex: the note
+// turn resumes the reply's thread, and thread/resume takes no model, so the
+// turn names it. A fresh thread already got it from thread/start.
+func TestResumedTurnCarriesTheModel(t *testing.T) {
+	sess := startSession(t, "script-resume.jsonl", func(spec *provider.SessionSpec) {
+		spec.Resume = "th-77"
+		spec.Model = "gpt-5.5"
+	})
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got := turnModel(t, findSent(t, res, "turn/start")); got != "gpt-5.5" {
+		t.Errorf("resumed turn/start model = %q, want gpt-5.5", got)
+	}
+
+	sess = startSession(t, "script-basic.jsonl", func(spec *provider.SessionSpec) {
+		spec.Model = "gpt-5.5"
+	})
+	drain(sess)
+	res, err = sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got := turnModel(t, findSent(t, res, "turn/start")); got != "" {
+		t.Errorf("fresh turn/start carries model %q, want none", got)
+	}
+}
+
+// TestTurnModelRefusedIsRetriedWithout covers an app-server that does not
+// take a per-turn model: the turn runs anyway, under the thread's model, and
+// the transcript says the configured one was not applied.
+func TestTurnModelRefusedIsRetriedWithout(t *testing.T) {
+	sess := startSession(t, "script-resume-model-refused.jsonl", func(spec *provider.SessionSpec) {
+		spec.Resume = "th-77"
+		spec.Model = "gpt-5.5"
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got := string(res.Final); got != `{"ok":true}` {
+		t.Errorf("Result.Final = %q, want the retried turn's answer", got)
+	}
+
+	turns := sentAll(t, res, "turn/start")
+	if len(turns) != 2 {
+		t.Fatalf("sent %d turn/start, want 2: %v", len(turns), turns)
+	}
+	if got := turnModel(t, turns[0]); got != "gpt-5.5" {
+		t.Errorf("first turn/start model = %q, want gpt-5.5", got)
+	}
+	if got := turnModel(t, turns[1]); got != "" {
+		t.Errorf("retried turn/start still carries model %q", got)
+	}
+
+	var said bool
+	for _, ev := range only(t, evs, provider.EvSystem) {
+		if ev.Text == "phases.note.model not applied: codex refused a per-turn model" {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("no system event says the model was not applied: %+v", only(t, evs, provider.EvSystem))
+	}
+}
+
 func TestMCPToolCallAndUserInput(t *testing.T) {
 	sess := startSession(t, "script-tools.jsonl", nil)
 	evs := drain(sess)

@@ -2,10 +2,13 @@ package provider
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -58,6 +61,13 @@ type PermissionAsk struct {
 	Verdict string `json:"verdict"`
 	// Reason is the policy's own reason for that verdict.
 	Reason string `json:"reason"`
+	// Digest is the hex SHA-256 of the whole call Summary shortens: the
+	// full command, the full compacted arguments, the full list of
+	// refused URLs or paths. It is what "the same call" is judged on.
+	// Summary is clipped for display, and two calls sharing their first
+	// summaryMax characters are not the same call: one can carry a
+	// different URL or an extra `; touch x` past the cut.
+	Digest string `json:"digest,omitempty"`
 }
 
 // Grant is an operator's answer to a permission question, kept on the run
@@ -70,6 +80,10 @@ type Grant struct {
 	Summary  string   `json:"summary"`
 	Patterns []string `json:"patterns,omitempty"`
 	Reason   string   `json:"reason,omitempty"`
+	// Digest is the asked call's digest (PermissionAsk.Digest). A grant
+	// recorded before digests existed has none, and then matches only
+	// through its patterns, never as "the same call".
+	Digest string `json:"digest,omitempty"`
 }
 
 // GrantFor turns an answer to ask into the grant the policy will consult.
@@ -81,7 +95,28 @@ func GrantFor(ask PermissionAsk, verdict, reason string) Grant {
 		Summary:  ask.Summary,
 		Patterns: append([]string(nil), ask.Patterns...),
 		Reason:   strings.TrimSpace(reason),
+		Digest:   ask.Digest,
 	}
+}
+
+// callDigest is the Digest of a call whose whole text is full.
+func callDigest(full string) string {
+	sum := sha256.Sum256([]byte(full))
+	return hex.EncodeToString(sum[:])
+}
+
+// listDigest is the Digest of a list of refused URLs or paths. The list
+// is digested as JSON, not joined with spaces, so ["a b"] and ["a", "b"]
+// are different calls.
+func listDigest(items []string) string {
+	b, _ := json.Marshal(items)
+	return callDigest(string(b))
+}
+
+// sameDigest reports whether a grant was given for exactly this call. A
+// grant without a digest is never the same call.
+func sameDigest(g Grant, ask PermissionAsk) bool {
+	return g.Digest != "" && g.Digest == ask.Digest
 }
 
 // Label is the call as one short phrase for an event line or a progress
@@ -90,7 +125,12 @@ func (g Grant) Label() string {
 	if len(g.Patterns) > 0 {
 		labels := make([]string, 0, len(g.Patterns))
 		for _, p := range g.Patterns {
-			labels = append(labels, strings.TrimSuffix(p, " *"))
+			label := strings.TrimSuffix(p, " *")
+			if g.Kind == AskMCP {
+				// A repro navigate grant reads as the tool to the host.
+				label = strings.Replace(label, " host:", " to ", 1)
+			}
+			labels = append(labels, label)
 		}
 		return strings.Join(labels, ", ")
 	}
@@ -128,7 +168,7 @@ func (g *Grants) find(p *PermissionPolicy, ask PermissionAsk, tool string, input
 		if gr.Verdict != VerdictDeny || !sameCall(gr, ask) {
 			continue
 		}
-		if gr.Summary == ask.Summary || overlaps(gr.Patterns, ask.Patterns) {
+		if sameDigest(gr, ask) || overlaps(gr.Patterns, ask.Patterns) {
 			return gr, true
 		}
 	}
@@ -141,7 +181,7 @@ func (g *Grants) find(p *PermissionPolicy, ask PermissionAsk, tool string, input
 		if gr.Verdict != VerdictAllowRun || !sameCall(gr, ask) {
 			continue
 		}
-		if gr.Summary == ask.Summary {
+		if sameDigest(gr, ask) {
 			return gr, true
 		}
 		pooled = append(pooled, gr.Patterns...)
@@ -154,7 +194,7 @@ func (g *Grants) find(p *PermissionPolicy, ask PermissionAsk, tool string, input
 	}
 
 	for i, gr := range g.list {
-		if gr.Verdict == VerdictAllow && !g.used[i] && sameCall(gr, ask) && gr.Summary == ask.Summary {
+		if gr.Verdict == VerdictAllow && !g.used[i] && sameCall(gr, ask) && sameDigest(gr, ask) {
 			g.used[i] = true
 			return gr, true
 		}
@@ -277,6 +317,11 @@ func compactArgs(input json.RawMessage) string {
 // the workspace, an IP literal — since asking would only offer a button
 // that does nothing.
 func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (PermissionAsk, bool) {
+	// A credential typed by the agent lands in the transcript, so this is
+	// not the operator's to allow: they log in in the browser themselves.
+	if p.Repro != nil && p.Repro.credentialCall(tool, input) {
+		return PermissionAsk{}, false
+	}
 	if AlwaysDenied[tool] || fixAllowed[tool] || writeTools[tool] {
 		return PermissionAsk{}, false
 	}
@@ -285,7 +330,17 @@ func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (Permissio
 	case strings.HasPrefix(tool, mcpPrefix):
 		ask.Kind = AskMCP
 		ask.Summary = clip(compactArgs(input))
+		ask.Digest = callDigest(compactArgs(input))
 		ask.Patterns = []string{tool}
+		// A repro navigate is granted per host, as a fetch is: "allow
+		// for this run" on one off-host page is not leave to browse
+		// anywhere. A URL with no host leaves nothing to grant.
+		if host, ok := p.Repro.navigateHost(tool, input); ok {
+			if host == "" {
+				return PermissionAsk{}, false
+			}
+			ask.Patterns = []string{navigatePattern(tool, host)}
+		}
 		return ask, true
 	case FetchTools[tool]:
 		ask.Kind = AskFetch
@@ -311,6 +366,7 @@ func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (Permissio
 			ask.Patterns = appendNew(ask.Patterns, strings.ToLower(u.Hostname()))
 		}
 		ask.Summary = clip(strings.Join(denied, " "))
+		ask.Digest = listDigest(denied)
 	case IsReadTool(tool):
 		ask.Kind = AskTool
 		targets, ok := readTargets(tool, input)
@@ -327,6 +383,7 @@ func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (Permissio
 			ask.Patterns = appendNew(ask.Patterns, readDir(t))
 		}
 		ask.Summary = clip(strings.Join(denied, " "))
+		ask.Digest = listDigest(denied)
 	case tool == "Bash" || tool == "bash":
 		ask.Kind = AskBash
 		var args struct {
@@ -348,9 +405,11 @@ func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (Permissio
 			}
 		}
 		ask.Summary = clip(command)
+		ask.Digest = callDigest(command)
 	default:
 		ask.Kind = AskTool
 		ask.Summary = clip(compactArgs(input))
+		ask.Digest = callDigest(compactArgs(input))
 		ask.Patterns = []string{tool}
 		return ask, true
 	}
@@ -398,6 +457,14 @@ func (p *PermissionPolicy) allowsWith(kind, tool string, input json.RawMessage, 
 	}
 	switch kind {
 	case AskMCP, AskTool:
+		// A repro navigate is covered only by a grant naming its host;
+		// a bare tool-name pattern does not reach it.
+		if host, ok := p.Repro.navigateHost(tool, input); ok {
+			if host == "" {
+				return false
+			}
+			return slices.Contains(patterns, navigatePattern(tool, host))
+		}
 		if !IsReadTool(tool) {
 			for _, pat := range patterns {
 				if pat == tool {
@@ -408,7 +475,9 @@ func (p *PermissionPolicy) allowsWith(kind, tool string, input json.RawMessage, 
 		}
 	}
 	w := *p
-	w.Grants, w.Ask = nil, false
+	// The repro guard's decide moves confinement, and this is a dry run:
+	// it must leave the browser's state as the real decision left it.
+	w.Grants, w.Ask, w.Repro = nil, false, nil
 	switch kind {
 	case AskBash:
 		w.BashAllow = append(append([]string(nil), p.BashAllow...), patterns...)

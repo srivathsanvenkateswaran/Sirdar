@@ -1,0 +1,11 @@
+// An agent whose only config option is the model, offering a and b. The
+// session opens on a; a spec naming b has to switch it before the prompt.
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"opencode","version":"1.2.0"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-m","configOptions":[{"id":"model","name":"Model","category":"model","type":"select","currentValue":"a","options":[{"value":"a"},{"value":"b"}]}]}}
+{"$expect":"session/set_config_option"}
+{"$reply":{}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-m","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

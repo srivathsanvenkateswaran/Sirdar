@@ -2,6 +2,8 @@ package run
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -10,10 +12,18 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 )
 
+// rgAsk is the question a policy puts for `rg -n refund src`, digest and
+// all: an allow-once is matched on the digest, never on the summary.
 var rgAsk = &provider.PermissionAsk{
 	Kind: provider.AskBash, Tool: "Bash", Summary: "rg -n refund src",
 	Patterns: []string{"rg *"}, Verdict: provider.VerdictDeny,
 	Reason: "Sirdar policy: not permitted by permissions.bash",
+	Digest: callDigest("rg -n refund src"),
+}
+
+func callDigest(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
 }
 
 func askEvent() provider.Event {

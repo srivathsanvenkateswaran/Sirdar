@@ -272,6 +272,13 @@ type PermissionPolicy struct {
 	// Grants are the operator's answers to earlier questions in this run,
 	// consulted before the policy asks again. Nil means none.
 	Grants *Grants
+
+	// Repro confines the reproduction browser to repro.hosts when
+	// reproduction is active for this run: navigation elsewhere is refused
+	// whatever permissions.mcp says, page interaction is allowed only on a
+	// repro host, and typing a credential is refused outright. Nil — every
+	// run without reproduction — leaves the MCP rules as they were.
+	Repro *ReproGuard
 }
 
 // IsFix reports whether this policy is a fix policy.
@@ -295,7 +302,14 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 		if g.Verdict == VerdictDeny {
 			return Decision{Allow: false, Message: deniedMessage(g), Granted: g.Verdict}
 		}
-		return Decision{Allow: true, Message: grantedMessage(g), Granted: g.Verdict}
+		msg := grantedMessage(g)
+		// A repro call the guard refused keeps the guard's reason beside
+		// the grant, so the transcript shows the browser left the repro
+		// hosts with the operator's leave.
+		if strings.Contains(d.Message, reproNotConfined) {
+			msg += " (" + reproNotConfined + ")"
+		}
+		return Decision{Allow: true, Message: msg, Granted: g.Verdict}
 	}
 	if p.Ask && p.askable(ask, tool, input) {
 		d.Ask = &ask
@@ -307,7 +321,7 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 // own rules alone.
 func (p *PermissionPolicy) decide(tool string, input json.RawMessage) Decision {
 	if strings.HasPrefix(tool, mcpPrefix) {
-		return p.decideMCP(tool)
+		return p.decideMCP(tool, input)
 	}
 	// Before FetchTools, for a triage run: AlwaysDenied is a tool that is
 	// never permitted, and that has to hold whatever else its name also
@@ -1105,8 +1119,18 @@ func spanTokens(segment string) []tokenSpan {
 // decideMCP applies permissions.mcp when the workspace configured it, and
 // the write-verb heuristic when it did not. Both answers come out of
 // DecideMCPTool, which is also what `sirdar mcp tools` reports: one
-// function, so a verdict read without a run is the verdict a run gets.
-func (p *PermissionPolicy) decideMCP(tool string) Decision {
+// function, so a verdict read without a run is the verdict a run gets. The
+// repro guard answers first for the browser tools it governs.
+func (p *PermissionPolicy) decideMCP(tool string, input json.RawMessage) Decision {
+	if d, ok := p.Repro.decide(tool, input, func() Decision { return p.decideMCPRules(tool) }); ok {
+		return d
+	}
+	return p.decideMCPRules(tool)
+}
+
+// decideMCPRules is decideMCP without the repro guard: permissions.mcp, or
+// the write-verb heuristic.
+func (p *PermissionPolicy) decideMCPRules(tool string) Decision {
 	v := DecideMCPTool(tool, p.MCPAllow)
 	switch {
 	case v.Allow:
