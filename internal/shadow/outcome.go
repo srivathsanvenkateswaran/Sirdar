@@ -103,6 +103,8 @@ func operatorLine(root string, st store.State) (Entry, bool) {
 		if !ok {
 			return Entry{}, false
 		}
+		v.CodeRefs = capList(v.CodeRefs)
+		v.OpenQuestions = capList(v.OpenQuestions)
 		return Entry{Source: "operator-triage", RunID: st.RunID, Verdict: v}, true
 	}
 	return Entry{}, false
@@ -112,6 +114,26 @@ func operatorLine(root string, st store.State) (Entry, bool) {
 // The schema asks for three to five sentences; this is room for those and
 // a guard against a summary that is a pasted log.
 const maxSummaryRunes = 2000
+
+// maxListItems and maxItemRunes bound the code references and open
+// questions an operator-triage line copies from a note, which sets no
+// limit of its own. At these sizes the two lists stay well under the
+// ledger's 64 KiB line limit, and the judge still sees what a reader would.
+const (
+	maxListItems = 20
+	maxItemRunes = 300
+)
+
+func capList(items []string) []string {
+	if len(items) > maxListItems {
+		items = items[:maxListItems]
+	}
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = cutRunes(it, maxItemRunes)
+	}
+	return out
+}
 
 // ManualOutcome validates and builds a manual outcome line.
 func ManualOutcome(key string, prURLs []string, resolution string, now time.Time) (Entry, error) {

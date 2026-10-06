@@ -261,3 +261,25 @@ func TestTrackerOutcomeDedupe(t *testing.T) {
 		t.Errorf("status change: ok=%v err=%v, want true nil", ok, err)
 	}
 }
+
+func TestOperatorOutcomesTriageListsCapped(t *testing.T) {
+	root := t.TempDir()
+	dir := writeRun(t, root, store.State{RunID: "20261006T100000Z-dddd", Key: "OMNI-1", Kind: store.KindTriage,
+		Status: store.StatusCompleted, StartedAt: t0}, "")
+	refs := make([]string, 100)
+	for i := range refs {
+		refs[i] = `"` + strings.Repeat("r", 5000) + `"`
+	}
+	doc := `{"classification":"code","rootCause":{"hypothesis":"h","confidence":"low","codeRefs":[` + strings.Join(refs, ",") +
+		`]},"openQuestions":[` + strings.Join(refs, ",") + `]}`
+	if err := os.WriteFile(filepath.Join(dir, "result.json"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lines, _, err := OperatorOutcomes(root, "OMNI-1", nil, t0)
+	if err != nil || len(lines) != 1 {
+		t.Fatalf("lines = %d, err = %v", len(lines), err)
+	}
+	if err := Append(root, lines[0]); err != nil {
+		t.Errorf("the capped line still does not fit the ledger: %v", err)
+	}
+}
