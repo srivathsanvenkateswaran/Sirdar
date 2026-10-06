@@ -51,6 +51,13 @@ describe('statusLine', () => {
       'Paused until 7 Oct 09:05 · 3 of 10 today · $2.10 of $10',
     )
   })
+
+  it('names the year of a time in another year', () => {
+    const until = new Date(2099, 0, 1, 5, 30).toISOString()
+    expect(statusLine(shadowStatus({ state: 'paused', pausedUntil: until, today }), NOW)).toBe(
+      'Paused until 1 Jan 2099 05:30 · 3 of 10 today · $2.10 of $10',
+    )
+  })
 })
 
 describe('Shadow', () => {
@@ -272,6 +279,16 @@ describe('Shadow', () => {
     expect(within(drawer).getByRole('link', { name: 'https://github.com/o/r/pull/9' })).toBeInTheDocument()
     expect(within(drawer).getByText('Set the tenant on import')).toBeInTheDocument()
     expect(within(drawer).getByText('reproduced')).toBeInTheDocument()
+  })
+
+  it('draws no tag that only restates the grade', async () => {
+    const report = shadowReport()
+    report.rows = [shadowRow({ grade: 'no-answer', tags: ['no answer', 'provisional'] })]
+    mount(undefined, { shadowReport: report })
+    const row = within(await screen.findByRole('table')).getAllByRole('row')[1]
+    expect(within(row).getByText('no-answer')).toBeInTheDocument()
+    expect(within(row).queryByText('no answer')).toBeNull()
+    expect(within(row).getByText('provisional')).toBeInTheDocument()
   })
 
   it('keeps an Arabic title in its own direction', async () => {

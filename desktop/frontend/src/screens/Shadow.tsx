@@ -29,9 +29,11 @@ function clock(iso: string, now: number): string {
   if (Number.isNaN(ms)) return iso
   const d = new Date(ms)
   const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-  return d.toDateString() === new Date(now).toDateString()
-    ? hhmm
-    : `${d.getDate()} ${MONTHS[d.getMonth()]} ${hhmm}`
+  const today = new Date(now)
+  if (d.toDateString() === today.toDateString()) return hhmm
+  // Another year says so: "1 Jan" for a pause that runs to 2099 reads as next month.
+  const year = d.getFullYear() === today.getFullYear() ? '' : ` ${d.getFullYear()}`
+  return `${d.getDate()} ${MONTHS[d.getMonth()]}${year} ${hhmm}`
 }
 
 /** A cap with no cents reads as "$10", the way it was written in the config. */
@@ -106,7 +108,9 @@ function GradeCell({ row }: { row: ShadowRow }): JSX.Element {
   return (
     <span className="shadow-grade">
       <Badge title={row.gradeReason || undefined}>{row.grade || 'Pending'}</Badge>
-      {row.tags.map((tag) => (
+      {/* A tag that only restates the grade ("no answer" beside "no-answer")
+          says nothing the badge did not. */}
+      {row.tags.filter((tag) => tag.replace(/ /g, '-') !== row.grade).map((tag) => (
         <span key={tag} className="shadow-tag">
           {tag}
         </span>
