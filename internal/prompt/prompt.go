@@ -72,6 +72,11 @@ type TriageInput struct {
 	// Repro is the staging browser and hosts the session may reproduce on,
 	// nil when the run has none. Only TriageReply renders it.
 	Repro *ReproPrompt
+	// Shadow says the run is a shadow measurement: nobody reads the reply
+	// before the ticket is worked and nobody can answer a question, so the
+	// prompt says so rather than leave the agent waiting on an operator.
+	// Triage and TriageReply render it; an rca and the note turns do not.
+	Shadow bool
 }
 
 // RCAInput is everything RCA needs to assemble an rca prompt: the same
@@ -160,6 +165,9 @@ func Triage(in TriageInput) string {
 	if s := operatorRequestSection(in.Instruction); s != "" {
 		sections = append(sections, s)
 	}
+	if s := shadowSection(in.Shadow); s != "" {
+		sections = append(sections, s)
+	}
 	sections = append(sections, languageSection(in.NotesLanguage, in.CustomerLanguage))
 	if s := repositoriesSection(in.Repositories); s != "" {
 		sections = append(sections, s)
@@ -185,6 +193,24 @@ func Triage(in TriageInput) string {
 
 	sections = append(sections, "Respond with the JSON object only.")
 	return strings.Join(sections, "\n\n") + "\n"
+}
+
+// ShadowHeading names the unattended-run section.
+const ShadowHeading = "# Unattended run"
+
+// ShadowNotice is the text of that section, fixed so a measurement does not move between runs.
+const ShadowNotice = "This run is unattended. Nobody will read your reply before the ticket is worked, " +
+	"and nobody can answer a question or approve a refused tool. Investigate as you would for the " +
+	"operator. When a tool is refused or you need an answer, record what you wanted and why under " +
+	"openQuestions, and continue."
+
+// shadowSection is the unattended-run section a shadow run's prompt
+// carries, or "" for every other run.
+func shadowSection(on bool) string {
+	if !on {
+		return ""
+	}
+	return ShadowHeading + "\n\n" + ShadowNotice
 }
 
 // RCA assembles the prompt for an rca session.

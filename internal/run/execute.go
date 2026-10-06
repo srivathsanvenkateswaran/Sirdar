@@ -829,10 +829,16 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 
 	// A refusal the operator could lift is put to them, unless the
 	// workspace said not to or nobody is there to answer: an eval replays
-	// a bundle unattended, and a question would only stall the score. The
-	// run's own answers so far are what the policy consults first.
-	spec.Policy.Ask = cfg.AskOperator() && !p.state.Eval
+	// a bundle unattended, and a shadow run is started by a watcher with
+	// nobody at the screen, so a question would only stall the
+	// measurement. The run's own answers so far are what the policy
+	// consults first.
+	spec.Policy.Ask = cfg.AskOperator() && !p.state.Measurement()
 	spec.Policy.Grants = sessionGrants(p)
+	if p.state.Shadow {
+		// Nobody can answer a shadow run's question, so nobody can have granted it anything.
+		spec.Policy.Grants = nil
+	}
 
 	// A run that reproduces on staging gets a new guard with every session
 	// it starts, so the guard's idea of where the browser is starts from
@@ -1351,6 +1357,14 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		ex.stall.hold()
 
 	case provider.EvPermission:
+		// A shadow run asks nobody, so a refusal is the end of that call and
+		// the session goes on. What it was refused is kept, because the call
+		// it wanted to make is half of what the measurement is for.
+		if p.state.Shadow && ev.Decision == "deny" && len(p.state.Denied) < store.MaxDenied {
+			p.state.Denied = append(p.state.Denied, store.DeniedCall{
+				At: r.now(), Tool: ev.Tool, Summary: strings.TrimSpace(toolDetail(ev.Input)),
+			})
+		}
 		if ev.Decision != "ask" || ev.Ask == nil || ex.ask != nil {
 			break
 		}
@@ -1364,6 +1378,11 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 
 	case provider.EvQuestion:
 		ex.question = ev.Text
+		// A shadow run's questions are kept across resumes, so the watcher
+		// that answers them can show every one the run needed.
+		if p.state.Shadow {
+			p.state.Questions = append(p.state.Questions, ev.Text)
+		}
 		// The agent is waiting on an operator who is not here — the
 		// blocked state `sirdar resume` exists for. Counting that
 		// silence as a stall would turn every question into a failure.
@@ -2565,6 +2584,7 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 		NotePath:       rcaPath,
 		Title:          strings.TrimSpace(f.RCA.Title),
 		Company:        company,
+		PRURL:          rcaPRURL(p),
 	})
 	r.appendRegister(p, store.RegisterRow{
 		Kind:           string(note.Resolution),
@@ -2583,6 +2603,16 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 		Confidence:     f.RCA.Confidence,
 		Classification: f.RCA.Classification,
 	}, nil
+}
+
+// rcaPRURL is the merged PR an rca run was handed, or "" when it was handed
+// none; only the RCA row carries it, because the resolution row describes
+// the fix in the vault and not the PR it was read from.
+func rcaPRURL(p *prepared) string {
+	if p.state.RCAInputs == nil {
+		return ""
+	}
+	return p.state.RCAInputs.PRURL
 }
 
 // registerCompany is the company the register records for a note: the
