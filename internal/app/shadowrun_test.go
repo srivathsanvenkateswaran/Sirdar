@@ -87,21 +87,14 @@ func TestRunsHidesShadow(t *testing.T) {
 		t.Errorf("Runs = %+v, want the attended run alone", runs)
 	}
 
-	all, err := svc.runs(wsID, "", true)
+	// The watcher still publishes run.updated for a shadow run, and its
+	// summary says what it is so the frontend keeps it out of Sessions.
+	_, st, err := store.Open(root, "20260910T100000Z-bbbb")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var found bool
-	for _, r := range all {
-		if r.RunID == "20260910T100000Z-bbbb" {
-			found = true
-			if !r.Shadow {
-				t.Errorf("the shadow run's summary has Shadow false: %+v", r)
-			}
-		}
-	}
-	if len(all) != 2 || !found {
-		t.Errorf("runs(includeShadow) = %+v, want both runs", all)
+	if sum := SummaryFor(runDir(root, st.Key, st.RunID), st, selfIn(root)); !sum.Shadow {
+		t.Errorf("the shadow run's summary has Shadow false: %+v", sum)
 	}
 }
 

@@ -454,14 +454,10 @@ func (s *Service) root(wsID string) (string, error) {
 
 // Runs lists a workspace's runs, newest first. An empty key lists all.
 // Shadow runs are left out: they are the watcher's measurements, and the
-// Runs list is the record of work someone asked for.
+// Runs list is the record of work someone asked for. The Shadow screen
+// needs no list of them, since each scorecard row carries its run id and
+// opens it through Run.
 func (s *Service) Runs(wsID, key string) ([]RunSummary, error) {
-	return s.runs(wsID, key, false)
-}
-
-// runs is Runs with the choice of whether shadow runs are listed, for the
-// screens that show them on purpose.
-func (s *Service) runs(wsID, key string, includeShadow bool) ([]RunSummary, error) {
 	root, err := s.root(wsID)
 	if err != nil {
 		return nil, err
@@ -481,7 +477,7 @@ func (s *Service) runs(wsID, key string, includeShadow bool) ([]RunSummary, erro
 	self := selfIn(root)
 	out := make([]RunSummary, 0, len(states))
 	for _, st := range states {
-		if st.Shadow && !includeShadow {
+		if st.Shadow {
 			continue
 		}
 		out = append(out, SummaryFor(runDir(root, st.Key, st.RunID), st, self))
