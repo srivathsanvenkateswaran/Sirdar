@@ -74,6 +74,14 @@ type prepared struct {
 	userMCP       []provider.UserMCPServer
 	userMCPRead   bool
 	userMCPNotice string
+	userMCPErr    error
+
+	// repro is the staging reproduction this run's sessions are guarded
+	// for, nil when it is off; reproReason says why it is off when the
+	// workspace asked for it. Both are settled once, by reproFor.
+	repro       *reproPlan
+	reproReason string
+	reproRead   bool
 
 	// usageBase is what the run had spent before this execute: zero for a
 	// fresh run and for a resume, the run's recorded usage for a steer,
@@ -323,6 +331,20 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	}
 	gathered := r.gather(ctx, p, log, o, rca, bundle, slackMD)
 
+	// Reproduction is said once, here, either way: the line names where the
+	// agent may browse, and the warning says why a workspace that asked for
+	// it did not get it on this run.
+	var repro *prompt.ReproPrompt
+	if cfg.ReproConfigured() {
+		if plan, reason := r.reproFor(p); plan != nil {
+			repro = &prompt.ReproPrompt{Server: plan.Server, Hosts: plan.Hosts}
+			r.prepareLine(p, log, "system", eventPayload{Text: "Reproduction on staging: " +
+				strings.Join(plan.Hosts, ", ") + " through mcp__" + plan.Server + "__ tools"})
+		} else {
+			p.state.Warnings = append(p.state.Warnings, "repro configured but not active: "+reason)
+		}
+	}
+
 	in := prompt.TriageInput{
 		OtherRepos:          others,
 		Origin:              origin,
@@ -338,6 +360,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		NotesLanguage:       cfg.NotesLanguage(),
 		CustomerLanguage:    cfg.CustomerLanguage(),
 		Repositories:        repositories(cfg, bundle, slackMD, p.state.Instruction),
+		Repro:               repro,
 	}
 
 	switch kind {
@@ -367,6 +390,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 			NotesLanguage:    cfg.NotesLanguage(),
 			CustomerLanguage: cfg.CustomerLanguage(),
 			Repositories:     in.Repositories,
+			Repro:            repro,
 		}
 		if !noBundle {
 			sin.Bundle = &in.Bundle

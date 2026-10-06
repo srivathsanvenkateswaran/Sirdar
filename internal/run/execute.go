@@ -780,7 +780,11 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			// plus this run's own directory and the bundle of ticket
 			// text and attachments staged inside it. A fix session's
 			// root is its worktree, which contains neither.
-			ReadRoots: []string{p.run.Dir, p.run.BundleDir()},
+			// The playbooks directory is there too, because the prompt
+			// lists playbooks it does not load and tells the agent to read
+			// them; one kept outside the workspace would otherwise be named
+			// and refused.
+			ReadRoots: []string{p.run.Dir, p.run.BundleDir(), cfg.ExpandPath(cfg.Playbooks)},
 			ReadAlso:  cfg.ReadAlso(),
 		},
 		Mode: provider.ModeTriage,
@@ -819,7 +823,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// lists a triage gets: neither question changes because the
 		// session is allowed to edit files.
 		spec.Policy.FetchAllow = cfg.Permissions.Fetch
-		spec.Policy.ReadRoots = []string{p.run.Dir, p.run.BundleDir()}
+		spec.Policy.ReadRoots = []string{p.run.Dir, p.run.BundleDir(), cfg.ExpandPath(cfg.Playbooks)}
 		spec.Policy.ReadAlso = cfg.ReadAlso()
 	}
 
@@ -829,6 +833,16 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 	// run's own answers so far are what the policy consults first.
 	spec.Policy.Ask = cfg.AskOperator() && !p.state.Eval
 	spec.Policy.Grants = sessionGrants(p)
+
+	// A run that reproduces on staging gets a new guard with every session
+	// it starts, so the guard's idea of where the browser is starts from
+	// nothing: a steer sent after the operator logged in has to navigate
+	// to a staging host before anything there is let through unasked. The
+	// note turn below and the wrap-up replace the policy with notePolicy,
+	// so neither carries it; a fix never reproduces.
+	if plan, _ := r.reproFor(p); plan != nil && p.kind != store.KindFix {
+		spec.Policy.Repro = provider.NewReproGuard(plan.Server, plan.Hosts, plan.Evaluate)
+	}
 
 	// The note turn writes down what the reply turn already found. It is
 	// held to the note's schema and may read its own run directory and
@@ -888,11 +902,15 @@ func notePolicy(p *prepared) *provider.PermissionPolicy {
 // out is said once, in the run's transcript.
 func (r *Runner) userServers(p *prepared) error {
 	if p.userMCPRead {
-		return nil
+		return p.userMCPErr
 	}
 	p.userMCPRead = true
 	all, err := r.Config.UserMCPServers(r.childEnv())
 	if err != nil || len(all) == 0 {
+		// Kept, so a read made earlier for another reason — whether the
+		// repro browser is among these servers — still fails the run when
+		// execute asks.
+		p.userMCPErr = err
 		return err
 	}
 	name := r.providerName()
