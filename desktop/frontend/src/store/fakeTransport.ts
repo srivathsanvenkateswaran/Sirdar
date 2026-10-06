@@ -100,6 +100,8 @@ export interface FakeTransport extends Transport {
   failPlaybooks(err: Error | null): void
   /** Makes `models()` and `refreshModels()` reject. */
   failModels(err: Error | null): void
+  /** Swaps what the next `shadowReport()` answers with, as a grade landing would. */
+  setShadowReport(report: ShadowReport): void
   /** Makes `shadowOutcome()` reject, e.g. with the 400 an unreadable PR URL gives. */
   failShadowOutcome(err: Error | null): void
   /** The playbooks the fake holds right now, as filename to markdown. */
@@ -699,6 +701,9 @@ export function createFakeTransport(seed: {
     },
     failModels(err) {
       modelsError = err
+    },
+    setShadowReport(next) {
+      report = next
     },
     failShadowOutcome(err) {
       shadowOutcomeError = err

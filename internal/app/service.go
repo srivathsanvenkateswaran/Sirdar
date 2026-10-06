@@ -919,6 +919,19 @@ func (s *Service) startJob(
 	work func(context.Context, runner.Deps) []JobOutcome,
 	onBuildError func(error) []JobOutcome,
 ) (JobID, error) {
+	return s.startJobAs(ctx, wsID, providerName, model, false, done, work, onBuildError)
+}
+
+// startJobAs is startJob with shadow, which marks the job's job.finished as
+// the watcher's own; see Event.ShadowJob.
+func (s *Service) startJobAs(
+	ctx context.Context,
+	wsID, providerName, model string,
+	shadow bool,
+	done func(),
+	work func(context.Context, runner.Deps) []JobOutcome,
+	onBuildError func(error) []JobOutcome,
+) (JobID, error) {
 	// Every start funnels through here, so this is where a provider name
 	// nobody drives is refused — over HTTP and over the Wails bridge alike,
 	// since the bridge binds this Service and never passes through
@@ -968,7 +981,7 @@ func (s *Service) startJob(
 
 		s.dropJob(id)
 		s.notified(outcomes)
-		s.publish(Event{Kind: KindJobFinished, JobID: id, WorkspaceID: ws.ID, Outcomes: outcomes})
+		s.publish(Event{Kind: KindJobFinished, JobID: id, WorkspaceID: ws.ID, Outcomes: outcomes, ShadowJob: shadow})
 	}()
 	return id, nil
 }

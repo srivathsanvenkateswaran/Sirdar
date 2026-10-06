@@ -61,6 +61,8 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
+  /* No token is this size: it is the Register's floor for the same table,
+     under which the page scrolls rather than the table. */
   min-block-size: 200px;
 }
 
@@ -123,7 +125,9 @@
 
 .shadow-tag {
   display: inline-block;
-  padding-block: 2px;
+  /* Half the smallest space token, which keeps the chip on the badge's line
+     height; the Register's chips use the same. */
+  padding-block: calc(var(--sd-space-1) / 2);
   padding-inline: var(--sd-space-2);
   border: 1px solid var(--sd-rule-strong);
   border-radius: var(--sd-radius-sm);

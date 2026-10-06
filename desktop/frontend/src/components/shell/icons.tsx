@@ -7,9 +7,9 @@ import type { SVGProps } from 'react'
  * 1.5, and the switcher chevron keeps that size.
  *
  * They are written out rather than pulled from a package because the desktop
- * app has to work offline and seven outlines are not worth a dependency, a
- * bundle and a tree-shaking config. Each one is `aria-hidden`: the row it sits
- * in carries the word.
+ * app has to work offline and a handful of outlines is not worth a
+ * dependency, a bundle and a tree-shaking config. Each one is `aria-hidden`:
+ * the row it sits in carries the word.
  */
 
 function Icon(props: SVGProps<SVGSVGElement>): JSX.Element {

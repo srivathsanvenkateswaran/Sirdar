@@ -1111,7 +1111,7 @@ func (s *Service) shadowLaunch(ctx context.Context, ws Workspace, cfg *config.Co
 		return s.failed([]string{key}, err)
 	}
 
-	jobID, err := s.startJob(ctx, ws.ID, "", cfg.ShadowModel(), done, work, onBuildError)
+	jobID, err := s.startJobAs(ctx, ws.ID, "", cfg.ShadowModel(), true, done, work, onBuildError)
 	if err != nil {
 		s.shadowRecordFinished(root, key, runID, store.State{}, err)
 		done()

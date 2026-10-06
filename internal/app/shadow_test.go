@@ -1070,3 +1070,29 @@ func TestShadowInFlightUSDOfResumedRun(t *testing.T) {
 		t.Errorf("today's USD %v, want 0.72 (0.30 ledgered and 0.42 since)", got)
 	}
 }
+
+// TestShadowJobFinishedIsMarked: a shadow run's job.finished says it was
+// the watcher's, so a window that never asked for it raises no toast. The
+// mark rides on the event itself because a shadow job that fails to build
+// finishes without any run.updated before it.
+func TestShadowJobFinishedIsMarked(t *testing.T) {
+	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{})
+	events, stop := f.svc.Subscribe()
+	defer stop()
+	f.tick(t) // arms
+	f.clock.Add(time.Minute)
+	f.tr.set(bug("OMNI-1", f.clock.Now()))
+	f.tick(t)
+	e := waitFor(t, events, "job.finished", func(e Event) bool { return e.Kind == KindJobFinished })
+	f.waitIdle(t)
+	if !e.ShadowJob {
+		t.Errorf("a shadow job's job.finished is not marked: %+v", e)
+	}
+	raw, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"shadowJob":true`) {
+		t.Errorf("the wire form does not carry shadowJob: %s", raw)
+	}
+}

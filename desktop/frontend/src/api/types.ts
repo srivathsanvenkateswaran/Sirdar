@@ -542,7 +542,8 @@ export type AppEvent =
   /** A run directory `deleteRun` took off disk; every window drops the row. */
   | { kind: 'run.removed'; workspaceId: string; runId: string }
   | { kind: 'quota.updated'; quota: Quota }
-  | { kind: 'job.finished'; jobId: string; workspaceId: string; outcomes: { key: string; status: RunState; runId: string }[] }
+  /** `shadowJob` marks a job the shadow watcher started: no window asked for it, so none toasts it. */
+  | { kind: 'job.finished'; jobId: string; workspaceId: string; outcomes: { key: string; status: RunState; runId: string }[]; shadowJob?: boolean }
   | { kind: 'hook.received'; source: string; key?: string; outcome: HookOutcome }
   | { kind: 'log'; text: string }
   /** The shadow watcher's state changed: a poll, a pause, a resume, a gate. */

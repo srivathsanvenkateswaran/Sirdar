@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ShadowStatus } from '../api/types'
-import { createFakeTransport, shadowReport, shadowRow, shadowStatus } from '../store/fakeTransport'
-import Shadow, { statusLine } from './Shadow'
+import { createFakeTransport, run, shadowReport, shadowRow, shadowStatus } from '../store/fakeTransport'
+import Shadow, { SHADOW_RELOAD_MS, statusLine } from './Shadow'
 
 afterEach(cleanup)
 
@@ -155,6 +155,72 @@ describe('Shadow', () => {
     expect(await within(drawer).findByText('confirmed')).toBeInTheDocument()
     // The scorecard is read again so the table agrees with the drawer.
     await waitFor(() => expect(transport.calls.shadowReport.length).toBeGreaterThanOrEqual(2))
+  })
+
+  it('empties the form once the outcome is saved', async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Statement export times out' }))
+    const drawer = screen.getByRole('dialog', { name: 'OMNI-1' })
+    const prs = within(drawer).getByLabelText('Pull requests') as HTMLTextAreaElement
+    const resolution = within(drawer).getByLabelText('Resolution') as HTMLTextAreaElement
+    fireEvent.change(prs, { target: { value: 'https://github.com/o/r/pull/9' } })
+    fireEvent.change(resolution, { target: { value: 'Fixed null tenant' } })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(prs.value).toBe(''))
+    expect(resolution.value).toBe('')
+  })
+
+  it('asks for something to save rather than sending an empty outcome', async () => {
+    const { transport } = mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Statement export times out' }))
+    const drawer = screen.getByRole('dialog', { name: 'OMNI-1' })
+    fireEvent.change(within(drawer).getByLabelText('Pull requests'), { target: { value: '  \n ' } })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Save' }))
+    expect(await within(drawer).findByRole('alert')).toHaveTextContent(
+      'Add a pull request URL or a resolution before saving.',
+    )
+    expect(transport.calls.shadowOutcome).toEqual([])
+  })
+
+  it('shows the row as the scorecard read it again, not as the save answered it', async () => {
+    const { transport } = mount()
+    fireEvent.click(await screen.findByRole('button', { name: 'Statement export times out' }))
+    const drawer = screen.getByRole('dialog', { name: 'OMNI-1' })
+    fireEvent.change(within(drawer).getByLabelText('Resolution'), { target: { value: 'Fixed null tenant' } })
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(transport.calls.shadowReport).toHaveLength(2))
+
+    // A later grade lands, and the scorecard is read again on its event.
+    const regraded = shadowReport()
+    regraded.rows = [shadowRow({ grade: 'wrong', gradeReason: 'The PR changed the pager.' }), ...regraded.rows.slice(1)]
+    transport.setShadowReport(regraded)
+    act(() => transport.emit({ kind: 'shadow.status', workspaceId: 'ws1', shadow: shadowStatus() }))
+    expect(await within(drawer).findByText('wrong', {}, { timeout: SHADOW_RELOAD_MS + 1000 })).toBeInTheDocument()
+  })
+
+  it('reads the scorecard again once after a burst of shadow events, and not for anything else', async () => {
+    const { transport } = mount()
+    await screen.findByText('of 5 started')
+    expect(transport.calls.shadowReport).toHaveLength(1)
+    act(() => {
+      transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: run({ runId: 'r9', shadow: true }) })
+      transport.emit({ kind: 'shadow.status', workspaceId: 'ws1', shadow: shadowStatus() })
+      transport.emit({ kind: 'job.finished', jobId: 'j', workspaceId: 'ws1', outcomes: [], shadowJob: true })
+      transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: run({ runId: 'r8' }) })
+      transport.emit({ kind: 'shadow.status', workspaceId: 'other', shadow: shadowStatus() })
+    })
+    await waitFor(() => expect(transport.calls.shadowReport).toHaveLength(2), { timeout: SHADOW_RELOAD_MS + 1000 })
+    await new Promise((resolve) => setTimeout(resolve, SHADOW_RELOAD_MS + 100))
+    expect(transport.calls.shadowReport).toHaveLength(2)
+
+    // A non-shadow run or another workspace's event alone reads nothing.
+    act(() => {
+      transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: run({ runId: 'r8' }) })
+      transport.emit({ kind: 'job.finished', jobId: 'k', workspaceId: 'ws1', outcomes: [] })
+      transport.emit({ kind: 'shadow.status', workspaceId: 'other', shadow: shadowStatus() })
+    })
+    await new Promise((resolve) => setTimeout(resolve, SHADOW_RELOAD_MS + 100))
+    expect(transport.calls.shadowReport).toHaveLength(2)
   })
 
   it('says why a manual outcome was refused, inside the drawer', async () => {

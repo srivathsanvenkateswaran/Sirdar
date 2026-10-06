@@ -592,6 +592,11 @@ type Event struct {
 	Outcome string `json:"outcome,omitempty"`
 	// Shadow carries a shadow.status event.
 	Shadow *ShadowStatus `json:"shadow,omitempty"`
+	// ShadowJob marks a job.finished whose job was a shadow run the
+	// watcher started. No window asked for it, so none should toast it,
+	// and a shadow job that fails to build finishes before any run.updated
+	// could say whose it was.
+	ShadowJob bool `json:"shadowJob,omitempty"`
 }
 
 // runDir is where the core keeps one run: <root>/.sirdar/runs/<key>/<id>.

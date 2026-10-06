@@ -576,6 +576,10 @@ export function createAppStore(transport: Transport): AppStore {
         return
       }
       case 'job.finished': {
+        // The watcher's own job: this window never tracked it, its runs are
+        // not on the Board, and a toast for every ticket shadow triaged
+        // would bury the ones somebody asked for.
+        if (event.shadowJob) return
         release(event.jobId)
         const done = event.outcomes ?? []
         const failed = done.filter(

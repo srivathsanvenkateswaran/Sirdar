@@ -11,6 +11,13 @@ import PageHead from '../ui/page-head'
 import StatCard from '../ui/stat-card'
 import './shadow.css'
 
+/**
+ * How long the screen waits after a shadow event before it reads the
+ * scorecard again. A run's progress arrives as a run.updated per state
+ * change, and each one would otherwise be a read of the whole ledger.
+ */
+export const SHADOW_RELOAD_MS = 400
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /**
@@ -109,9 +116,11 @@ function GradeCell({ row }: { row: ShadowRow }): JSX.Element {
 }
 
 /**
- * One row's drawer: what the operator's side came to, how far shadow's
- * verdict overlapped it, what the read-only guard refused, what shadow
- * would have asked, and a form for the outcome when nothing collected one.
+ * One row's drawer: the grade, what the operator's side came to, how far
+ * shadow's verdict overlapped it, what the read-only guard refused, what
+ * shadow would have asked, and a form for recording an outcome by hand.
+ * The form is always there: an outcome entered here is merged with what
+ * the tracker gave, so it can add a PR the collector missed.
  */
 function RowDrawer(props: {
   row: ShadowRow
@@ -127,14 +136,24 @@ function RowDrawer(props: {
 
   async function submit(e: FormEvent): Promise<void> {
     e.preventDefault()
+    const urls = prs
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const said = resolution.trim()
+    // An outcome with neither would be graded against nothing; the service
+    // refuses it too, but the reader should not wait for a round trip to
+    // learn the form was empty.
+    if (urls.length === 0 && !said) {
+      setError('Add a pull request URL or a resolution before saving.')
+      return
+    }
     setSaving(true)
     setError('')
     try {
-      const urls = prs
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean)
-      await onSave(urls, resolution.trim())
+      await onSave(urls, said)
+      setPrs('')
+      setResolution('')
     } catch (err) {
       setError(reasonOf(err))
     } finally {
@@ -298,6 +317,9 @@ export default function Shadow(props: {
       if (mine !== generation.current) return
       setReport(got)
       setError('')
+      // The row as saved stood in until the scorecard had it; from here the
+      // scorecard's own is newer, and a later regrade must show through.
+      setSaved((prev) => (prev && got.rows.some((r) => r.key === prev.key) ? null : prev))
     } catch (err) {
       if (mine !== generation.current) return
       setError(reasonOf(err))
@@ -311,6 +333,29 @@ export default function Shadow(props: {
       generation.current += 1
     }
   }, [load])
+
+  // While the screen is open, a shadow run moving, a shadow job ending or
+  // the watcher's status changing can each change the scorecard. They come
+  // in bursts, so they are gathered into one read a moment after the last.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const off = transport.subscribe((e) => {
+      const ours =
+        (e.kind === 'shadow.status' && e.workspaceId === workspaceId) ||
+        (e.kind === 'run.updated' && e.workspaceId === workspaceId && e.run.shadow === true) ||
+        (e.kind === 'job.finished' && e.workspaceId === workspaceId && e.shadowJob === true)
+      if (!ours) return
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        void load()
+      }, SHADOW_RELOAD_MS)
+    })
+    return () => {
+      if (timer) clearTimeout(timer)
+      off()
+    }
+  }, [transport, workspaceId, load])
 
   const act = useCallback(
     async (call: () => Promise<ShadowStatus>) => {

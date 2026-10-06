@@ -652,6 +652,25 @@ describe('shadow runs and the shadow status', () => {
     expect(store.getState().runsByWorkspace.ws1?.map((r) => r.runId)).toEqual(['r1'])
   })
 
+  it('raises no toast and reads nothing again when a shadow job finishes', async () => {
+    const transport = createFakeTransport({ workspaces: [workspace({ id: 'ws1' })] })
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+    const reads = transport.calls.runs.length
+
+    transport.emit({
+      kind: 'job.finished',
+      jobId: 'job-sh',
+      workspaceId: 'ws1',
+      outcomes: [{ key: 'OMNI-7', status: 'failed', runId: '' }],
+      shadowJob: true,
+    })
+    await settle()
+    expect(store.getState().toasts).toEqual([])
+    expect(transport.calls.runs.length).toBe(reads)
+  })
+
   it('loads the status for the selected workspace and keeps each shadow.status event', async () => {
     const transport = createFakeTransport({
       workspaces: [workspace({ id: 'ws1' }), workspace({ id: 'ws2', name: 'billing' })],
