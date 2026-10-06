@@ -957,11 +957,11 @@ shadow:
 | `judge.model` | `""` (the workspace model) | trimmed |
 | `digest.enabled` | `false` | |
 | `digest.at` | `09:00` | `HH:MM`, 00–23 and 00–59 |
-| `digest.webhookUrl` | `""` | required when `digest.enabled` is true; a credential reference (`env:`, `keychain:`, `file:`, `cmd:`), never the URL. The host must be `hooks.slack.com`, which is checked when the digest is sent and by `sirdar doctor` |
+| `digest.webhookUrl` | `""` | required when `digest.enabled` is true; a credential reference (`env:`, `keychain:`, `file:`, `cmd:`), never the URL. The URL it resolves to must be `https` on the host `hooks.slack.com`, which is checked when the digest is sent and by `sirdar doctor` |
 
 Durations take Go's syntax (`90m`, `1h30m`) or a whole number of days with a `d` suffix (`7d`).
 Every validation error starts `config: shadow.<key>:`, and a misspelled key fails the load like
-anywhere else in this file.
+anywhere else in this file. The block is validated even when `enabled` is false.
 
 A shadow run leaves nothing outside `.sirdar/`: no vault note, no register row, no notification,
 and no tracker or helpdesk write. What it did is recorded in the ledger at `.sirdar/shadow.jsonl`.

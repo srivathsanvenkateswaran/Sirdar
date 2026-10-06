@@ -227,7 +227,7 @@ func TestSelect(t *testing.T) {
 			policy:  with(func(p *Policy) { p.Statuses = []string{"open"} }),
 		},
 		{
-			name:    "a listed key held back by concurrency stays a candidate",
+			name:    "a listed key seen on an earlier tick and never started stays a candidate",
 			entries: []Entry{seen("A", 10*time.Minute)},
 			listed:  onA,
 			policy:  with(func(p *Policy) { p.Concurrency = 1 }),
@@ -376,5 +376,35 @@ func TestSelectCutsSeenText(t *testing.T) {
 	}
 	if len(plan.Start) != 1 {
 		t.Errorf("start %+v, want the ticket started", plan.Start)
+	}
+}
+
+// TestSelectConcurrencyHoldBack: two new tickets with room for one run
+// start one, and the other, already seen, starts on the next tick once the
+// first has finished.
+func TestSelectConcurrencyHoldBack(t *testing.T) {
+	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	p := Policy{Types: []string{"bug"}, Since: now.Add(-24 * time.Hour), MaxPerDay: 10, MaxUSDPerDay: 10, Concurrency: 1, Interval: 5 * time.Minute}
+	listed := []Listed{
+		{Key: "A", Type: "bug", Status: "Open", CreatedAt: now.Add(-2 * time.Hour)},
+		{Key: "B", Type: "bug", Status: "Open", CreatedAt: now.Add(-time.Hour)},
+	}
+	first := Select(nil, listed, now, p, 0, 0)
+	if len(first.Seen) != 2 || len(first.Start) != 1 || first.Start[0].Key != "A" {
+		t.Fatalf("first tick seen %d, start %+v; want both seen and A started", len(first.Seen), first.Start)
+	}
+	entries := append([]Entry{}, first.Seen...)
+	entries = append(entries, Entry{At: now, Ev: "started", Key: "A", RunID: "rA", Attempt: 1})
+
+	// While A runs, B stays held back.
+	later := now.Add(5 * time.Minute)
+	if held := Select(entries, listed, later, p, 1, 0); len(held.Start) != 0 || len(held.Seen) != 0 {
+		t.Fatalf("with A in flight: seen %d, start %+v; want nothing", len(held.Seen), held.Start)
+	}
+
+	entries = append(entries, Entry{At: later, Ev: "finished", Key: "A", RunID: "rA", Status: "completed"})
+	next := Select(entries, listed, later.Add(5*time.Minute), p, 0, 0)
+	if len(next.Start) != 1 || next.Start[0].Key != "B" {
+		t.Fatalf("after A finished: start %+v, want B", next.Start)
 	}
 }
