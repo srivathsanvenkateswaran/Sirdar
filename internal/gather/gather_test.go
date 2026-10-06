@@ -519,3 +519,24 @@ func TestPreview(t *testing.T) {
 		t.Fatalf("mcp rows = %+v", rows)
 	}
 }
+
+// TestStepMayReadThePlaybooks: a command step is judged as a session's
+// Bash call is, and a session may read the playbooks directory, wherever
+// the workspace keeps it, because the prompt names playbooks it does not
+// load and tells the agent to read them. A step reading one is held to
+// the same rule, not a stricter one.
+func TestStepMayReadThePlaybooks(t *testing.T) {
+	playbooks := t.TempDir()
+	cfg := newWorkspace(t, "", "playbooks: "+q(playbooks)+"\npermissions:\n  bash: [\"cat *\"]\n")
+	run := t.TempDir()
+	p := stepPolicy(cfg, run, filepath.Join(run, "bundle"))
+
+	line := DisplayLine([]string{"cat", filepath.Join(playbooks, "10-db.md")})
+	if d := decideLine(p, line); !d.Allow {
+		t.Errorf("%s: %s, want it allowed as a session's read of the playbooks", line, d.Message)
+	}
+	outside := DisplayLine([]string{"cat", filepath.Join(t.TempDir(), "secret.md")})
+	if d := decideLine(p, outside); d.Allow {
+		t.Errorf("%s allowed, want a read outside every root refused", outside)
+	}
+}

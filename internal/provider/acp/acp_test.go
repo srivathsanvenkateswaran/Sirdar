@@ -1485,6 +1485,28 @@ func TestModelSetThroughConfigOption(t *testing.T) {
 	}
 }
 
+// TestModelAlreadyCurrentSendsNothing: every ACP session is handed the
+// run model, so a session already on it is left alone. Switching it anyway
+// would cost a workspace with no phases configured an RPC per session.
+func TestModelAlreadyCurrentSendsNothing(t *testing.T) {
+	cwd := workspace(t)
+	// The agent opens on a, which the spec also names.
+	sess := spawn(t, "script-config-option-model-unset.jsonl", cwd, func(spec *provider.SessionSpec) {
+		spec.Model = "a"
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if id, value := configOptionSet(t, res); id != "" || value != "" {
+		t.Errorf("session/set_config_option sent %s=%q for the model the session is already on", id, value)
+	}
+	if systemText(evs, "not applied") || systemText(evs, "selected") {
+		t.Errorf("a model notice for the current model; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
 // TestModelNotOfferedSaysSo: a model the agent does not offer is not sent,
 // and the run is told the agent's default answered instead.
 func TestModelNotOfferedSaysSo(t *testing.T) {

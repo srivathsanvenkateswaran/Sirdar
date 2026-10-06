@@ -600,6 +600,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
                   onOpenFolder={openBundleFolder}
                   folderPath={detail.bundleDir}
                   onLoaded={onBundleLoaded}
+                  revision={`${detail.status}/${detail.phase ?? ''}`}
                 />
               ) : null}
             </div>

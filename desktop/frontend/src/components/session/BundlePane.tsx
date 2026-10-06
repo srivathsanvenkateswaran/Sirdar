@@ -54,6 +54,12 @@ export interface BundlePaneProps {
   folderPath?: string
   /** Told what the prompt carried once it is read, for a tab's count or an outline. */
   onLoaded?: (bundle: Bundle | null) => void
+  /**
+   * Changes whenever the run moves on: its status and phase, as the run's
+   * own updates carry them. The pane re-reads what the run gathered each
+   * time, so a pane opened during the gather fills in when it ends.
+   */
+  revision?: string
 }
 
 function Line({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
@@ -332,33 +338,52 @@ function GatheredBlock({
     <section className="si-block" aria-label="Gathered" data-sec="gathered" data-testid="bundle-gathered">
       <h3 className="si-block__h">Gathered</h3>
       <ul className="si-gathered">
-        {shown.map((row, i) => (
-          <li key={`${row.name}-${i}`}>
-            <button
-              type="button"
-              className="si-gathered__row"
-              onClick={() => {
-                if (!row.file) return
-                onOpen({
-                  name: row.name,
-                  path: row.file,
-                  mime: row.file.endsWith('.diff') ? 'text/x-diff' : 'text/markdown',
-                  size: row.bytes,
-                })
-              }}
-            >
+        {shown.map((row) => {
+          // A failed lookup's summary says what it set out to fetch; its
+          // reason says why it did not, which is the line the reader needs.
+          const line = row.status === 'failed' ? (row.reason ?? row.summary) : (row.summary ?? row.reason)
+          const body = (
+            <>
               <bdi>{row.name}</bdi>
               <span className="si-gathered__summary" dir="auto">
-                {row.summary ?? row.reason}
+                {line}
               </span>
               {row.status !== 'ok' ? (
                 <span className="si-gathered__status" data-status={row.status}>
                   {row.status}
                 </span>
               ) : null}
-            </button>
-          </li>
-        ))}
+            </>
+          )
+          const file = row.file
+          // Each lookup is written under its own name in the bundle's
+          // index, so the name is a stable key where a position is not.
+          return (
+            <li key={row.name}>
+              {file ? (
+                <button
+                  type="button"
+                  className="si-gathered__row si-gathered__row--open"
+                  onClick={() =>
+                    onOpen({
+                      name: row.name,
+                      path: file,
+                      mime: file.endsWith('.diff') ? 'text/x-diff' : 'text/markdown',
+                      size: row.bytes,
+                    })
+                  }
+                >
+                  {body}
+                </button>
+              ) : (
+                // A row that wrote no file has nothing to open, so it is
+                // text rather than a button a keyboard can land on and
+                // press for nothing.
+                <div className="si-gathered__row">{body}</div>
+              )}
+            </li>
+          )
+        })}
       </ul>
       {hidden > 0 ? (
         <button type="button" className="si-more" onClick={() => setExpanded(true)}>
@@ -474,6 +499,7 @@ export default function BundlePane({
   onOpenFolder,
   folderPath = '',
   onLoaded,
+  revision = '',
 }: BundlePaneProps): JSX.Element {
   const [prompt, setPrompt] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -525,10 +551,15 @@ export default function BundlePane({
   }, [transport, workspaceId, runId])
 
   useEffect(() => {
-    let cancelled = false
     setGathered([])
+  }, [transport, workspaceId, runId])
+
+  useEffect(() => {
+    let cancelled = false
     // A run that gathered nothing, or whose transport predates the route,
-    // is not an error here: the section simply draws nothing.
+    // is not an error here: the section simply draws nothing. A re-read
+    // on a new revision keeps the rows already drawn until it answers,
+    // rather than blanking them for the length of a request.
     transport
       .gathered(workspaceId, runId)
       .then((list) => {
@@ -538,7 +569,7 @@ export default function BundlePane({
     return () => {
       cancelled = true
     }
-  }, [transport, workspaceId, runId])
+  }, [transport, workspaceId, runId, revision])
 
   const bundle = useMemo(() => parseBundle(prompt ?? ''), [prompt])
 

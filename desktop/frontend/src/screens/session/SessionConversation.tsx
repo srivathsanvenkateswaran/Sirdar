@@ -922,6 +922,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
                     helpdeskKey={detail.helpdeskKey}
                     onOpenFolder={openBundleFolder}
                     folderPath={detail.bundleDir}
+                    revision={`${detail.status}/${detail.phase ?? ''}`}
                   />
                 </div>
               ) : null}

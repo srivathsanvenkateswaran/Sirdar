@@ -268,75 +268,7 @@ func (d Deps) childEnv() []string {
 	if base == nil {
 		base = os.Environ()
 	}
-	secret := credentialEnvNames(d.Config)
-	out := make([]string, 0, len(base)+1)
-	for _, entry := range base {
-		if name, _, ok := strings.Cut(entry, "="); ok && secret[name] {
-			continue
-		}
-		out = append(out, entry)
-	}
-	return append(out, "SIRDAR_BILLING="+d.Config.Billing)
-}
-
-// credentialEnvNames collects the variable names behind every "env:"
-// credential reference in the workspace configuration — the sources' and
-// the model endpoint's alike. An OAuth grant's client secret and refresh
-// token matter here more, not less, than a plain "token:" ref's access
-// token: they are longer-lived, since a refresh token read out of the
-// agent's environment mints access tokens until somebody revokes it at the
-// Zoho console. A built-in tracker's or
-// helpdesk's apiToken, pat, apiKey, oauthToken, accessToken or Help Scout
-// clientId/clientSecret is stripped for the same reason: the agent reads
-// the tickets Sirdar hands it, never the source. Help Scout's pair is the
-// one worth singling out — it mints tokens on demand, so it outlives every
-// access token it has ever issued.
-func credentialEnvNames(cfg *config.Config) map[string]bool {
-	names := make(map[string]bool)
-	if cfg == nil {
-		return names
-	}
-	refs := []string{}
-	for _, s := range []*config.SourceConfig{cfg.Sources.Tracker, cfg.Sources.Helpdesk} {
-		if s == nil {
-			continue
-		}
-		refs = append(refs, s.Token, s.APIToken, s.PAT, s.APIKey, s.OAuthToken,
-			s.ClientID, s.ClientSecret, s.AccessToken, s.Password)
-		if s.Auth != nil {
-			refs = append(refs, s.Auth.ClientID, s.Auth.ClientSecret, s.Auth.RefreshToken)
-		}
-	}
-	// The model's own API key belongs to Sirdar, not to the session: the
-	// loop authenticates the chat calls itself, and a key left in the
-	// environment would be readable by every allow-listed shell command
-	// and every MCP server the run starts.
-	if cfg.OpenAI != nil {
-		refs = append(refs, cfg.OpenAI.APIKey)
-	}
-	// A notify destination's credentials are no different: an incoming
-	// webhook URL is a bearer credential, and a session that could read
-	// one out of its environment could post to the team's channel as
-	// Sirdar.
-	if n := cfg.Notify; n != nil {
-		for _, w := range []*config.WebhookConfig{n.Slack, n.Teams} {
-			if w != nil {
-				refs = append(refs, w.WebhookURL)
-			}
-		}
-		for _, g := range n.Generic {
-			refs = append(refs, g.Secret)
-			for _, v := range g.Headers {
-				refs = append(refs, v)
-			}
-		}
-	}
-	for _, ref := range refs {
-		if name, ok := strings.CutPrefix(ref, "env:"); ok && name != "" {
-			names[name] = true
-		}
-	}
-	return names
+	return d.Config.ChildEnv(base)
 }
 
 func (d Deps) providerName() string {

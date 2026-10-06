@@ -11,6 +11,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/gather"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 // playbooksCheck reports what the "# Playbooks" section of a prompt will
@@ -47,14 +48,20 @@ func playbooksCheck(cfg *config.Config) Check {
 		Detail: fmt.Sprintf("%d playbooks, %d scoped by frontmatter, %s", len(all), scoped, budget)}
 }
 
+// gatherPreview is gather.Preview, held in a variable so a test can see
+// the environment the doctor previews in.
+var gatherPreview = gather.Preview
+
 // gatherCheck reports what gather.Preview finds: a step the workspace's own
 // permissions would refuse, an MCP step whose server is not configured, or
 // gh missing from PATH while the built-in pull-request gatherer is on —
 // all three are things a run would hit silently otherwise, so they are
 // warnings here rather than a line in an events log nobody is watching.
-// Only called when gather is enabled at all.
+// Only called when gather is enabled at all. The preview runs in the child
+// environment a run gives its gather steps, credentials stripped, so a
+// program or server that resolves here resolves the same way in a run.
 func gatherCheck(cfg *config.Config) Check {
-	rows, ghPath := gather.Preview(cfg, os.Environ())
+	rows, ghPath := gatherPreview(cfg, cfg.ChildEnv(os.Environ()))
 	var warnings []string
 	for _, r := range rows {
 		switch {
@@ -84,18 +91,30 @@ func gatherCheck(cfg *config.Config) Check {
 	return Check{Name: "gather", OK: true, Detail: detail}
 }
 
-// hasAllowedOrigins reports whether a server's configured args carry
-// `--allowed-origins`, the flag that makes the repro guard auto-allow
-// browser_evaluate (spec §4.2) — the one browser tool that can issue
-// arbitrary requests from page script, so it is trusted only when
-// Playwright itself is confined to the repro origins.
-func hasAllowedOrigins(args []string) bool {
-	for _, a := range args {
-		if a == "--allowed-origins" || strings.HasPrefix(a, "--allowed-origins=") {
-			return true
+// allowedOriginsValue returns what a server's configured args pass to
+// `--allowed-origins`, in either the two-element or the = form, and whether
+// the flag is there at all. The flag's presence is what makes the repro
+// guard auto-allow browser_evaluate (spec §4.2), the one browser tool that
+// can issue arbitrary requests from page script; its value is not checked
+// by anything, so the doctor shows it and a "*" or a production origin is
+// in front of the operator rather than counted as confinement unseen.
+// Several occurrences are all shown, in order.
+func allowedOriginsValue(args []string) (string, bool) {
+	var values []string
+	found := false
+	for i, a := range args {
+		switch {
+		case a == "--allowed-origins":
+			found = true
+			if i+1 < len(args) {
+				values = append(values, args[i+1])
+			}
+		case strings.HasPrefix(a, "--allowed-origins="):
+			found = true
+			values = append(values, strings.TrimPrefix(a, "--allowed-origins="))
 		}
 	}
-	return false
+	return strings.Join(values, " "), found
 }
 
 // claudeSettingsPaths is every file the Claude CLI reads permissions.allow
@@ -167,34 +186,83 @@ func claudeSettingsAllowWarnings(cfg *config.Config, server string) []string {
 }
 
 // reproCheck reports whether staging reproduction is ready to run: the
-// repro server is among the workspace's MCP servers, it is started with
-// `--allowed-origins` (otherwise browser_evaluate stays an operator
-// question rather than auto-allowed on a repro host), and no Claude
-// settings rule pre-approves the server's tools behind the repro guard's
-// back. Only called when repro.hosts is configured at all.
+// repro server is among the servers a run's session is offered, it is
+// started with `--allowed-origins` (otherwise browser_evaluate stays an
+// operator question rather than auto-allowed on a repro host), and no
+// Claude settings rule pre-approves the server's tools behind the repro
+// guard's back. Every row names the configured origins beside repro.hosts.
+// Only called when repro.hosts is configured at all.
 func reproCheck(cfg *config.Config) Check {
-	entries, _, err := mcpclient.Inventory(cfg.Root, os.Environ(), !cfg.WorkspaceOnlyMCP())
+	args, ok, err := reproServerArgs(cfg, cfg.ChildEnv(os.Environ()))
 	if err != nil {
 		return Check{Name: "repro", Detail: err.Error()}
 	}
-	var entry *mcpclient.Entry
-	for i := range entries {
-		if entries[i].Name == cfg.Repro.Server && entries[i].Usable() {
-			entry = &entries[i]
-			break
-		}
-	}
-	if entry == nil {
+	if !ok {
 		return Check{Name: "repro", OK: false, Detail: fmt.Sprintf("mcp server %s is not configured", cfg.Repro.Server)}
 	}
+	hosts := strings.Join(cfg.Repro.Hosts, ", ")
+	origins, confined := allowedOriginsValue(args)
+	summary := fmt.Sprintf("%s is started without --allowed-origins; repro hosts: %s", cfg.Repro.Server, hosts)
+	if confined {
+		summary = fmt.Sprintf("%s is started with --allowed-origins %s; repro hosts: %s", cfg.Repro.Server, origins, hosts)
+	}
 	var warnings []string
-	if !hasAllowedOrigins(entry.Args) {
+	if !confined {
 		warnings = append(warnings, "browser_evaluate stays an operator question")
 	}
 	warnings = append(warnings, claudeSettingsAllowWarnings(cfg, cfg.Repro.Server)...)
 	if len(warnings) > 0 {
-		return warn("repro", strings.Join(warnings, "; "))
+		return warn("repro", strings.Join(append(warnings, summary), "; "))
 	}
-	return Check{Name: "repro", OK: true,
-		Detail: fmt.Sprintf("%s is started with --allowed-origins; repro hosts: %s", cfg.Repro.Server, strings.Join(cfg.Repro.Hosts, ", "))}
+	return Check{Name: "repro", OK: true, Detail: summary}
+}
+
+// reproServerArgs finds the repro server where a run looks for it
+// (internal/run's sessionServerArgs): the workspace's .mcp.json, the
+// operator's global files when mcp.workspaceOnly is off, and then the
+// Claude CLI servers mcp.userServers opts in — of those, only the ones the
+// configured provider carries into a session, since a run on any other
+// provider never sees them. env is the run's child environment, which is
+// what both lookups expand through in a run.
+func reproServerArgs(cfg *config.Config, env []string) ([]string, bool, error) {
+	server := cfg.Repro.Server
+	entries, _, err := mcpclient.Inventory(cfg.Root, env, !cfg.WorkspaceOnlyMCP())
+	if err != nil {
+		return nil, false, err
+	}
+	for _, e := range entries {
+		if e.Name == server && e.Usable() {
+			return e.Args, true, nil
+		}
+	}
+	users, err := cfg.UserMCPServers(env)
+	if err != nil {
+		return nil, false, err
+	}
+	for _, s := range users {
+		if s.Name != server || !providerCarriesUserServer(string(cfg.Provider), s) {
+			continue
+		}
+		var entry struct {
+			Args []string `json:"args"`
+		}
+		_ = json.Unmarshal(s.Entry, &entry)
+		return entry.Args, true, nil
+	}
+	return nil, false, nil
+}
+
+// providerCarriesUserServer is internal/run's rule for which of the
+// mcp.userServers a provider takes into its session: Claude Code takes
+// every one; Codex takes stdio servers and http servers with headers of
+// their own, because an OAuth grant held by the Claude CLI is not one
+// Codex can present; every other provider runs without them.
+func providerCarriesUserServer(name string, s provider.UserMCPServer) bool {
+	switch name {
+	case "claude":
+		return true
+	case "codex":
+		return s.Transport == "stdio" || (s.Headers && !s.OAuth)
+	}
+	return false
 }

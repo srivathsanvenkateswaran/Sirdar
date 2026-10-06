@@ -320,6 +320,7 @@ func (s *session) handshake(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.threadID = started.Thread.ID
+	s.threadModel = started.Model
 	s.mu.Unlock()
 	s.emit(provider.Event{Kind: provider.EvSystem, Text: method, Model: started.Model, Raw: raw})
 
@@ -347,9 +348,14 @@ func (s *session) startTurn(text string, images []string) error {
 	}
 	// thread/resume ignores the model (only thread/start takes one), so a
 	// resumed thread that should answer under another model — the note
-	// turn under phases.note.model — names it on the turn instead.
+	// turn under phases.note.model — names it on the turn instead. Only
+	// when it differs from the thread's own: every resumed turn carries
+	// the run model, and naming it anyway would cost a workspace with no
+	// phases configured a per-turn model it never asked for, and on an
+	// app-server that refuses one, a "not applied" line.
 	s.mu.Lock()
-	turnModel := s.spec.Resume != "" && s.spec.Model != "" && !s.turnModelRefused
+	threadModel := s.threadModel
+	turnModel := s.spec.Resume != "" && s.spec.Model != "" && s.spec.Model != threadModel && !s.turnModelRefused
 	s.mu.Unlock()
 	if turnModel {
 		params["model"] = s.spec.Model
@@ -367,7 +373,13 @@ func (s *session) startTurn(text string, images []string) error {
 		s.turnModelRefused = true
 		s.mu.Unlock()
 		delete(params, "model")
-		s.emit(provider.Event{Kind: provider.EvSystem, Text: "phases.note.model not applied: codex refused a per-turn model"})
+		// Worded for any switch, not only the note model's: a steer or
+		// a resume onto another model takes the same path.
+		line := "model " + s.spec.Model + " not applied: codex refused a per-turn model"
+		if threadModel != "" {
+			line += ", so the turn runs on " + threadModel
+		}
+		s.emit(provider.Event{Kind: provider.EvSystem, Text: line})
 		raw, err = s.conn.call("turn/start", params)
 	}
 	if err != nil {
@@ -412,6 +424,9 @@ type session struct {
 	mu       sync.Mutex
 	threadID string
 	turnID   string
+	// threadModel is the model the app-server reported for the thread on
+	// thread/start or thread/resume, "" when it named none.
+	threadModel string
 	// turnModelRefused is set once the app-server has refused a per-turn
 	// model, so a follow-up turn does not ask, and fail, again.
 	turnModelRefused bool

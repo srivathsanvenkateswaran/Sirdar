@@ -57,9 +57,10 @@ func (r *Runner) gather(ctx context.Context, p *prepared, log *eventLog, o Optio
 		return nil
 	}
 
-	p.state.Phase = store.PhaseGather
-	r.writePrepareState(p)
-
+	// The phase is written only once rows are planned, so a run with
+	// nothing to gather makes no state writes for it and the live view
+	// never flashes "Gathering context…" on it.
+	gathering := false
 	in := gather.Input{
 		Kind:        string(p.kind),
 		Config:      cfg,
@@ -73,6 +74,9 @@ func (r *Runner) gather(ctx context.Context, p *prepared, log *eventLog, o Optio
 		GOOS:        runtime.GOOS,
 		Now:         r.now,
 		Started: func(n int) {
+			gathering = true
+			p.state.Phase = store.PhaseGather
+			r.writePrepareState(p)
 			noun := "lookups"
 			if n == 1 {
 				noun = "lookup"
@@ -112,8 +116,10 @@ func (r *Runner) gather(ctx context.Context, p *prepared, log *eventLog, o Optio
 			p.state.Warnings = append(p.state.Warnings, "gather step "+e.Name+" denied: "+e.Call+": "+e.Reason)
 		}
 	}
-	p.state.Phase = ""
-	r.writePrepareState(p)
+	if gathering {
+		p.state.Phase = ""
+		r.writePrepareState(p)
+	}
 	return gatheredForPrompt(bundleDir, res.Entries)
 }
 
@@ -131,7 +137,11 @@ func (r *Runner) gatherEnv() []string {
 
 // prepareLine writes one event prepare owns, saying so on stderr when the
 // log will not take it: a missing line is worth a word, not a failed run.
+// A nil log is one prepare could not open, which it has already said.
 func (r *Runner) prepareLine(p *prepared, log *eventLog, kind string, payload eventPayload) {
+	if log == nil {
+		return
+	}
 	if err := log.Append(kind, payload); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
 	}

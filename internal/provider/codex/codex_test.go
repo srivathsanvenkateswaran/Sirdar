@@ -621,6 +621,27 @@ func TestResumedTurnCarriesTheModel(t *testing.T) {
 	}
 }
 
+// TestResumedTurnOnTheThreadsModelNamesNone: a resumed thread already on
+// the requested model is not asked to switch. Every resumed turn carries
+// the run model, so naming it anyway would put a per-turn model, and on an
+// app-server that refuses one a "not applied" line, on workspaces that
+// configured no phases at all.
+func TestResumedTurnOnTheThreadsModelNamesNone(t *testing.T) {
+	// script-resume.jsonl replies to thread/resume with "model":"gpt-5-codex".
+	sess := startSession(t, "script-resume.jsonl", func(spec *provider.SessionSpec) {
+		spec.Resume = "th-77"
+		spec.Model = "gpt-5-codex"
+	})
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got := turnModel(t, findSent(t, res, "turn/start")); got != "" {
+		t.Errorf("resumed turn/start on the thread's own model carries model %q, want none", got)
+	}
+}
+
 // TestTurnModelRefusedIsRetriedWithout covers an app-server that does not
 // take a per-turn model: the turn runs anyway, under the thread's model, and
 // the transcript says the configured one was not applied.
@@ -651,7 +672,7 @@ func TestTurnModelRefusedIsRetriedWithout(t *testing.T) {
 
 	var said bool
 	for _, ev := range only(t, evs, provider.EvSystem) {
-		if ev.Text == "phases.note.model not applied: codex refused a per-turn model" {
+		if ev.Text == "model gpt-5.5 not applied: codex refused a per-turn model, so the turn runs on gpt-5-codex" {
 			said = true
 		}
 	}

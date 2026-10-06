@@ -250,7 +250,7 @@ func TestNotifyCredentialsAreStrippedFromTheAgent(t *testing.T) {
         Authorization: env:HOOK_TOKEN
       secret: env:HOOK_SECRET
 `)
-	names := credentialEnvNames(cfg)
+	names := cfg.CredentialEnvNames()
 	for _, want := range []string{"SLACK_WEBHOOK", "TEAMS_WEBHOOK", "HOOK_TOKEN", "HOOK_SECRET"} {
 		if !names[want] {
 			t.Errorf("%s is left in the agent's environment", want)

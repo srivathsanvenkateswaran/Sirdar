@@ -332,11 +332,16 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	matchText := bundleText(bundle, slackMD, p.state.Instruction)
 	p.playbooks = prompt.SelectPlaybooks(all, string(kind), matchText, cfg.PlaybooksBudget())
 
+	// An event log that will not open costs the lines prepare writes, not
+	// the run, as a line it will not take does in prepareLine: execute
+	// opens the log again for the session and fails the run there if it
+	// still cannot.
 	log, err := r.prepareLog(p)
 	if err != nil {
-		return p, err
+		fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
+	} else {
+		defer log.Close()
 	}
-	defer log.Close()
 	if len(p.playbooks.Loaded)+len(p.playbooks.Listed) > 0 {
 		r.prepareLine(p, log, "system", eventPayload{Text: p.playbooks.Summary()})
 	}

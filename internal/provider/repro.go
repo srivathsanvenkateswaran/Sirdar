@@ -22,6 +22,10 @@ var credentialField = regexp.MustCompile(`(?i)pass(word|code|phrase)?|otp|one.ti
 // transcript says why a browser call that is fine on staging was refused.
 const reproNotConfined = "browser not confined to repro hosts"
 
+// navigateUnreadable is the refusal for a browser_navigate whose URL the
+// guard cannot read.
+const navigateUnreadable = "Sirdar policy: " + reproNotConfined + "; the URL could not be read"
+
 // reproInteraction names the browser tools that act on whatever page is
 // open. They are harmless on a staging host and anything but elsewhere, so
 // they are allowed only while the last navigation landed on a repro host.
@@ -134,13 +138,21 @@ func (g *ReproGuard) decide(tool string, input json.RawMessage, ordinary func() 
 	args, ok := reproArgs(input)
 	if !ok {
 		// Codex hands the policy no arguments, and an ACP agent may leave
-		// rawInput out: there is no URL to judge and no field to inspect,
-		// so the ordinary rules answer. The call may still move the
-		// browser, which is why confinement drops: nothing the guard could
-		// not see is ever auto-allowed afterwards.
+		// rawInput out. The call may still move the browser, which is why
+		// confinement drops: nothing the guard could not see is ever
+		// auto-allowed afterwards.
 		g.mu.Lock()
 		g.unconfine()
 		g.mu.Unlock()
+		// A navigate is refused: it is the one call the guard exists to
+		// judge, and the ordinary rules would let it through on a
+		// permissions.mcp entry listed for any URL, so the off-host page
+		// would be open before confinement dropped. Any other tool has no
+		// URL to judge and no field to inspect, so the ordinary rules
+		// answer.
+		if name == "browser_navigate" {
+			return Decision{Allow: false, Message: navigateUnreadable}, true
+		}
 		return Decision{}, false
 	}
 	// Before confinement: a credential is refused on a staging host too,
@@ -192,7 +204,11 @@ func (g *ReproGuard) decide(tool string, input json.RawMessage, ordinary func() 
 // permissions.mcp entry for the tool: a workspace that listed
 // browser_navigate before reproduction existed listed it for any URL.
 func (g *ReproGuard) navigate(args map[string]json.RawMessage) Decision {
-	raw := strings.TrimSpace(stringArg(args, "url"))
+	raw, readable := navigateURL(args)
+	if !readable {
+		g.unconfine()
+		return Decision{Allow: false, Message: navigateUnreadable}
+	}
 	host := urlHost(raw)
 	fetch := DecideFetchURL(g.Hosts, raw)
 	if fetch.Allow && host != "" {
@@ -236,11 +252,25 @@ func (g *ReproGuard) navigateHost(tool string, input json.RawMessage) (string, b
 	if name, ok := g.browserTool(tool); !ok || name != "browser_navigate" {
 		return "", false
 	}
+	// An unreadable URL is governed all the same and names no host, so
+	// there is nothing to grant and the operator is never asked.
 	args, ok := reproArgs(input)
 	if !ok {
+		return "", true
+	}
+	raw, _ := navigateURL(args)
+	return urlHost(raw), true
+}
+
+// navigateURL is a navigate's url argument, trimmed, and whether there was
+// one to read: a JSON string under exactly that key.
+func navigateURL(args map[string]json.RawMessage) (string, bool) {
+	var s string
+	raw, ok := args["url"]
+	if !ok || json.Unmarshal(raw, &s) != nil {
 		return "", false
 	}
-	return urlHost(stringArg(args, "url")), true
+	return strings.TrimSpace(s), true
 }
 
 // navigatePattern is what an operator's grant on an off-host repro

@@ -61,39 +61,33 @@ func TestParsePlaybookWithoutFrontmatter(t *testing.T) {
 
 func TestParsePlaybookBadFrontmatterFailsOpen(t *testing.T) {
 	cases := []struct {
-		name     string
-		data     string
-		wantErr  string // exact; "" means any non-empty error
-		wantBody string
+		name    string
+		data    string
+		wantErr string // exact; "" means any non-empty error
 	}{
 		{
-			name:     "unknown key",
-			data:     "---\nwhn: [x]\n---\nBody line.\n",
-			wantBody: "Body line.\n",
+			name: "unknown key",
+			data: "---\nwhn: [x]\n---\nBody line.\n",
 		},
 		{
-			name:     "unknown kind",
-			data:     "---\nkinds: [triage, nope]\nwhen: [db]\n---\nBody line.\n",
-			wantErr:  `unknown kind "nope"`,
-			wantBody: "Body line.\n",
+			name:    "unknown kind",
+			data:    "---\nkinds: [triage, nope]\nwhen: [db]\n---\nBody line.\n",
+			wantErr: `unknown kind "nope"`,
 		},
 		{
-			name:     "no closing line",
-			data:     "---\nkinds: [triage]\nBody line.\n",
-			wantErr:  "no closing ---",
-			wantBody: "---\nkinds: [triage]\nBody line.\n",
+			name:    "no closing line",
+			data:    "---\nkinds: [triage]\nBody line.\n",
+			wantErr: "no closing ---",
 		},
 		{
-			name:     "multi-line about",
-			data:     "---\nabout: \"one\\ntwo\"\n---\nBody line.\n",
-			wantErr:  "about is more than one line",
-			wantBody: "Body line.\n",
+			name:    "multi-line about",
+			data:    "---\nabout: \"one\\ntwo\"\n---\nBody line.\n",
+			wantErr: "about is more than one line",
 		},
 		{
-			name:     "long about",
-			data:     "---\nabout: " + strings.Repeat("a", 161) + "\n---\nBody line.\n",
-			wantErr:  "about is longer than 160 characters",
-			wantBody: "Body line.\n",
+			name:    "long about",
+			data:    "---\nabout: " + strings.Repeat("a", 161) + "\n---\nBody line.\n",
+			wantErr: "about is longer than 160 characters",
 		},
 	}
 	for _, tc := range cases {
@@ -105,8 +99,10 @@ func TestParsePlaybookBadFrontmatterFailsOpen(t *testing.T) {
 			if p.Kinds != nil || p.When != nil {
 				t.Errorf("Kinds, When = %q, %q, want nil: a bad block must load the file as always-on", p.Kinds, p.When)
 			}
-			if p.Body != tc.wantBody {
-				t.Errorf("Body = %q, want %q", p.Body, tc.wantBody)
+			// The block stays in the body: the file loads exactly as if it
+			// had no frontmatter.
+			if p.Body != tc.data {
+				t.Errorf("Body = %q, want the file unchanged %q", p.Body, tc.data)
 			}
 			if p.About != "Body line." && tc.name != "no closing line" {
 				t.Errorf("About = %q, want the lede", p.About)

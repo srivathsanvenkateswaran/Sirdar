@@ -2037,7 +2037,7 @@ func TestCredentialEnvNamesCoversBuiltinTrackers(t *testing.T) {
 	}
 	cfg.Sources.Helpdesk = &config.SourceConfig{Adapter: "zohodesk", Token: "env:ZOHO_TOKEN"}
 
-	names := credentialEnvNames(cfg)
+	names := cfg.CredentialEnvNames()
 	for _, want := range []string{"JIRA_TOKEN", "JIRA_PAT", "LINEAR_KEY", "ZOHO_TOKEN"} {
 		if !names[want] {
 			t.Errorf("%s is not treated as a credential", want)
@@ -2071,7 +2071,7 @@ func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
 		OAuthToken: "env:ZENDESK_OAUTH",
 	}
 
-	names := credentialEnvNames(cfg)
+	names := cfg.CredentialEnvNames()
 	for _, want := range []string{"ZENDESK_TOKEN", "ZENDESK_OAUTH"} {
 		if !names[want] {
 			t.Errorf("%s is not treated as a credential", want)
@@ -2097,7 +2097,7 @@ func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
 		Domain:  "acme.freshdesk.com",
 		APIKey:  "env:FRESHDESK_KEY",
 	}
-	if names2 := credentialEnvNames(cfg2); !names2["FRESHDESK_KEY"] {
+	if names2 := cfg2.CredentialEnvNames(); !names2["FRESHDESK_KEY"] {
 		t.Error("FRESHDESK_KEY is not treated as a credential")
 	}
 
@@ -2111,13 +2111,13 @@ func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
 		Email:   "ops@acme.com",
 		APIKey:  "env:GORGIAS_KEY",
 	}
-	if names3 := credentialEnvNames(cfg3); !names3["GORGIAS_KEY"] {
+	if names3 := cfg3.CredentialEnvNames(); !names3["GORGIAS_KEY"] {
 		t.Error("GORGIAS_KEY is not treated as a credential")
 	}
 }
 
 // TestCredentialEnvNamesCoversServiceNowPassword is the round-1 regression:
-// credentialEnvNames listed every SourceConfig credential field except
+// CredentialEnvNames listed every SourceConfig credential field except
 // Password, so a ServiceNow helpdesk configured with basic auth
 // (password: env:SERVICENOW_PASSWORD) left that variable readable inside
 // the agent's environment. Username is a literal login name, not a
@@ -2131,7 +2131,7 @@ func TestCredentialEnvNamesCoversServiceNowPassword(t *testing.T) {
 		Password: "env:SERVICENOW_PASSWORD",
 	}
 
-	names := credentialEnvNames(cfg)
+	names := cfg.CredentialEnvNames()
 	if !names["SERVICENOW_PASSWORD"] {
 		t.Error("SERVICENOW_PASSWORD is not treated as a credential")
 	}
@@ -2155,7 +2155,7 @@ func TestCredentialEnvNamesCoversServiceNowPassword(t *testing.T) {
 		Instance:   "acme",
 		OAuthToken: "env:SERVICENOW_OAUTH",
 	}
-	if names2 := credentialEnvNames(cfg2); !names2["SERVICENOW_OAUTH"] {
+	if names2 := cfg2.CredentialEnvNames(); !names2["SERVICENOW_OAUTH"] {
 		t.Error("SERVICENOW_OAUTH is not treated as a credential")
 	}
 }
