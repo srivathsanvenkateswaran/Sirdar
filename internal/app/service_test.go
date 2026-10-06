@@ -115,10 +115,15 @@ func TestStartTriageRunsToCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The reply turn's usage and reply, then the note turn's note.
-	if len(recorded) != 3 || next != 3 {
+	// prepare's playbooks line, the reply turn's usage and reply, then the
+	// note turn's note.
+	if len(recorded) != 4 || next != 4 {
 		t.Fatalf("events %d next %d", len(recorded), next)
 	}
+	if recorded[0].Kind != "system" || !strings.HasPrefix(recorded[0].Payload.Text, "Playbooks: ") {
+		t.Fatalf("playbooks event %+v", recorded[0])
+	}
+	recorded = recorded[1:]
 	if recorded[1].Kind != string(provider.EvFinal) || recorded[1].Payload.Phase != "" {
 		t.Fatalf("reply event %+v", recorded[1])
 	}

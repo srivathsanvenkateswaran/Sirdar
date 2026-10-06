@@ -33,6 +33,9 @@ func TestMain(m *testing.M) {
 		fakeWhisperName: fakeWhisper,
 		"ffprobe":       fakeFFprobe,
 		"broken":        fakeBrokenTranscriber,
+		"gatherstep":    fakeGatherStep,
+		"rungh":         fakeRunGH,
+		"hangmcp":       fakeHangMCP,
 	})
 	os.Exit(m.Run())
 }

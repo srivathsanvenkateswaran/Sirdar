@@ -25,11 +25,14 @@ const (
 )
 
 // PhaseNote names the second turn of a reply-first run: the one that files
-// the note after the run has already answered the operator. AccessReadOnly
-// and AccessWorktree name the two things a session run may do to the
-// workspace's files — read them, or edit them inside its own worktree.
+// the note after the run has already answered the operator. PhaseGather is
+// a preparing run running its gatherers, before any session exists.
+// AccessReadOnly and AccessWorktree name the two things a session run may
+// do to the workspace's files — read them, or edit them inside its own
+// worktree.
 const (
 	PhaseNote      = "note"
+	PhaseGather    = "gather"
 	AccessReadOnly = "read-only"
 	AccessWorktree = "worktree"
 )
@@ -261,9 +264,11 @@ type State struct {
 	// reply-first still files its note, in the second turn Phase names.
 	ReplyFirst bool `json:",omitempty"`
 
-	// Phase is "" for the ordinary course of a run, or PhaseNote while a
+	// Phase is "" for the ordinary course of a run, PhaseNote while a
 	// reply-first triage or RCA run that has already answered is filing
-	// its note. Status stays "running" through that turn.
+	// its note, and PhaseGather ("gather") while a preparing run gathers.
+	// Status stays "running" through the note turn and "preparing" through
+	// the gather.
 	Phase string `json:",omitempty"`
 
 	// Access is AccessReadOnly or AccessWorktree, and applies to session

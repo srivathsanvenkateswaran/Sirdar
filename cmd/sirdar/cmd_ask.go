@@ -16,9 +16,11 @@ func init() { commands["ask"] = cmdAsk }
 // reference. The reply comes back in chat rather than as a filed note, so
 // the command prints the reply itself, not a note path.
 func cmdAsk(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("ask", stderr, `usage: sirdar ask "instruction" [REFERENCE] [--provider NAME] [--model NAME]`)
+	fs := newFlagSet("ask", stderr, `usage: sirdar ask "instruction" [REFERENCE] [--provider NAME] [--model NAME] [--dry-run] [--no-gather]`)
 	providerName := fs.String("provider", "", "override the configured provider")
 	model := fs.String("model", "", "override the configured model")
+	dryRun := fs.Bool("dry-run", false, "write the bundle and prompt, do not start the agent")
+	noGather := fs.Bool("no-gather", false, "do not run gatherers for this run")
 	positional, ok := parseFlags(fs, args, 1, 2, stderr)
 	if !ok {
 		return exitUsage
@@ -60,10 +62,21 @@ func cmdAsk(args []string, stdout, stderr io.Writer) int {
 		Model:       *model,
 		Slack:       slackMD,
 		Reported:    reported,
+		DryRun:      *dryRun,
+		NoGather:    *noGather,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1
+	}
+	// A dry run has no reply to print; what it made is the prompt, and
+	// the operator's next step is to read it.
+	if *dryRun {
+		fmt.Fprintf(stderr, "[%s] run %s\n", out.State.Key, out.State.RunID)
+		if rn, _, err := store.Open(cfg.Root, out.State.RunID); err == nil {
+			fmt.Fprintln(stderr, filepath.Join(rn.Dir, "prompt.md"))
+		}
+		return runner.ExitCode([]runner.Outcome{out})
 	}
 	out = applyHeld(ctx, deps, []runner.Outcome{out})[0]
 

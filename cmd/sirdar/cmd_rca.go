@@ -13,7 +13,7 @@ func init() { commands["rca"] = cmdRCA }
 
 func cmdRCA(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("rca", stderr,
-		"usage: sirdar rca TICKET [--pr URL] [--resolution TEXT|@FILE] [--at COMMIT] [--keep-worktree] [--provider claude|codex|openai|acp|qwen|cursor] [--model NAME] [--no-notify]")
+		"usage: sirdar rca TICKET [--pr URL] [--resolution TEXT|@FILE] [--at COMMIT] [--keep-worktree] [--provider claude|codex|openai|acp|qwen|cursor] [--model NAME] [--no-notify] [--no-gather]")
 	prURL := fs.String("pr", "", "merged pull request; its diff is read with gh when available")
 	resolution := fs.String("resolution", "", "what was done, as text or @path to a file")
 	providerName := fs.String("provider", "", "override the configured provider")
@@ -21,6 +21,7 @@ func cmdRCA(args []string, stdout, stderr io.Writer) int {
 	noNotify := fs.Bool("no-notify", false, "do not post the configured run-completion notifications")
 	at := fs.String("at", "", "run against the repository as it stood at this commit, in a worktree of the run's own")
 	keepWorktree := fs.Bool("keep-worktree", false, "leave the --at worktree on disk when the run ends")
+	noGather := fs.Bool("no-gather", false, "do not run gatherers for this run")
 	positional, ok := parseFlags(fs, args, 1, 1, stderr)
 	if !ok {
 		return exitUsage
@@ -55,7 +56,7 @@ func cmdRCA(args []string, stdout, stderr io.Writer) int {
 
 	r := &runner.Runner{Deps: deps}
 	out, err := r.RCA(ctx, key, runner.RCAOptions{
-		Options:    runner.Options{Model: *model, NoNotify: *noNotify, At: *at, KeepWorktree: *keepWorktree, Slack: resolved.slack, Reported: resolved.reported},
+		Options:    runner.Options{Model: *model, NoNotify: *noNotify, At: *at, KeepWorktree: *keepWorktree, Slack: resolved.slack, Reported: resolved.reported, NoGather: *noGather},
 		PRURL:      *prURL,
 		Resolution: text,
 	})

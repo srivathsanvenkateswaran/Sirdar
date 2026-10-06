@@ -167,7 +167,7 @@ func TestSteerResumesTheRunInPlace(t *testing.T) {
 		t.Fatalf("steers: %+v", out.State.Steers)
 	}
 	kinds := eventKinds(t, dir)
-	want := []string{"usage", "final", "steer:resume:Re-check the partial-return path", "usage", "final"}
+	want := []string{"system:Playbooks: loaded 00-test", "usage", "final", "steer:resume:Re-check the partial-return path", "usage", "final"}
 	if strings.Join(kinds, ",") != strings.Join(want, ",") {
 		t.Fatalf("events.jsonl:\n got %v\nwant %v", kinds, want)
 	}
@@ -274,7 +274,7 @@ func TestSteerPrimedOpensAFreshSession(t *testing.T) {
 		t.Fatalf("steers: %+v", out.State.Steers)
 	}
 	kinds := eventKinds(t, dir)
-	if len(kinds) < 4 || kinds[2] != "steer:primed:Now write it up properly" || kinds[3] != "system:"+continuedInNewSession {
+	if len(kinds) < 5 || kinds[3] != "steer:primed:Now write it up properly" || kinds[4] != "system:"+continuedInNewSession {
 		t.Fatalf("events.jsonl: %v", kinds)
 	}
 

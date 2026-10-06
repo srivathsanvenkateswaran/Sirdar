@@ -233,6 +233,46 @@ func TestTriageDryRun(t *testing.T) {
 	}
 }
 
+// An ask with --dry-run writes the prompt and starts no agent: the
+// provider's path names nothing, so a started session would fail the run.
+func TestAskDryRunStartsNoAgent(t *testing.T) {
+	root, _ := newWorkspace(t, filepath.Join(t.TempDir(), "no-such-claude"))
+	chdir(t, root)
+
+	out, errb := mustRun(t, 0, "ask", "--dry-run", "hi")
+	if out != "" {
+		t.Errorf("a dry run printed a reply:\n%s", out)
+	}
+	prompts, err := filepath.Glob(filepath.Join(root, ".sirdar", "runs", "*", "*", "prompt.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prompts) != 1 {
+		t.Fatalf("want one prompt.md, got %v", prompts)
+	}
+	if !strings.Contains(errb, prompts[0]) || !strings.Contains(errb, "] run ") {
+		t.Errorf("stderr does not name the run and its prompt %s:\n%s", prompts[0], errb)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(prompts[0]), "answer.md")); !os.IsNotExist(err) {
+		t.Errorf("a dry run left an answer: %v", err)
+	}
+}
+
+// --no-gather is a flag every run that gathers takes.
+func TestNoGatherFlagIsAccepted(t *testing.T) {
+	root, _ := newWorkspace(t, filepath.Join(t.TempDir(), "no-such-claude"))
+	chdir(t, root)
+
+	mustRun(t, 0, "triage", "--dry-run", "--no-gather", "OMNI-1")
+	mustRun(t, 0, "ask", "--dry-run", "--no-gather", "hi")
+	// rca has no --dry-run; a missing triage note fails it after its
+	// flags are parsed, which is all this asks of it.
+	_, errb := mustRun(t, 1, "rca", "--no-gather", "OMNI-2")
+	if strings.Contains(errb, "flag provided but not defined") {
+		t.Fatalf("rca refused --no-gather:\n%s", errb)
+	}
+}
+
 func TestInitScaffoldsWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	chdir(t, dir)

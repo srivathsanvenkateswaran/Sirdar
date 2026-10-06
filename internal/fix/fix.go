@@ -307,14 +307,26 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		return res, fmt.Errorf("fix: the reserved files could not be read before the session, so the run cannot be checked afterwards: %w", err)
 	}
 
+	// A fix run opens no event log before its session, so what the
+	// playbooks came to is said on stderr instead.
+	books := loadPlaybooks(cfg.ExpandPath(cfg.Playbooks), stderr)
+	sel := prompt.SelectPlaybooks(books, "fix", tn.body+"\n"+o.Instruction, cfg.PlaybooksBudget())
+	for _, w := range prompt.FrontmatterWarnings(books) {
+		fmt.Fprintf(stderr, "[%s] %s\n", key, w)
+	}
+	if len(sel.Loaded)+len(sel.Listed) > 0 {
+		fmt.Fprintf(stderr, "[%s] %s\n", key, sel.Summary())
+	}
+
 	text := prompt.Fix(prompt.FixInput{
 		Instruction: o.Instruction,
 
-		Key:        key,
-		Branch:     branch,
-		Playbooks:  loadPlaybooks(cfg.ExpandPath(cfg.Playbooks), stderr),
-		TriageNote: tn.body,
-		RCANote:    rcaNote(cfg.Root, key),
+		Key:            key,
+		Branch:         branch,
+		Playbooks:      sel.Loaded,
+		OtherPlaybooks: sel.Listed,
+		TriageNote:     tn.body,
+		RCANote:        rcaNote(cfg.Root, key),
 	})
 
 	r := &runner.Runner{Deps: deps}

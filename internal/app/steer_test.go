@@ -93,8 +93,9 @@ func TestSteerContinuesTheSameRun(t *testing.T) {
 		}
 		kinds = append(kinds, ev.Kind)
 	}
-	// The triage's reply turn, its note turn, then the steer.
-	if got := strings.Join(kinds, ","); got != "usage,final,final,steer:resume,usage,final" {
+	// prepare's playbooks line, the triage's reply turn, its note turn,
+	// then the steer.
+	if got := strings.Join(kinds, ","); got != "system,usage,final,final,steer:resume,usage,final" {
 		t.Fatalf("events: %s", got)
 	}
 }

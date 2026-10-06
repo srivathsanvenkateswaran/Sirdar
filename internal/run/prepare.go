@@ -28,6 +28,10 @@ type prepared struct {
 	bundle     ticket.Bundle
 	promptText string
 
+	// playbooks is which of the workspace's playbooks this run loads in
+	// full and which it only lists, settled once by prepare.
+	playbooks prompt.Selection
+
 	// noNotify silences this run's completion notification.
 	noNotify bool
 
@@ -282,10 +286,6 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		p.bundle = bundle
 	}
 
-	playbooks, err := prompt.LoadPlaybooks(cfg.ExpandPath(cfg.Playbooks))
-	if err != nil {
-		return p, err
-	}
 	if !noBundle {
 		threadHead, truncated, err = readThreadHead(rn.BundleDir())
 		if err != nil {
@@ -303,13 +303,35 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		}
 	}
 
+	// Playbooks are chosen by what people wrote about the ticket, so the
+	// choice waits until the Slack thread is staged.
+	all, err := prompt.LoadPlaybooks(cfg.ExpandPath(cfg.Playbooks))
+	if err != nil {
+		return p, err
+	}
+	p.state.Warnings = append(p.state.Warnings, prompt.FrontmatterWarnings(all)...)
+	matchText := bundleText(bundle, slackMD, p.state.Instruction)
+	p.playbooks = prompt.SelectPlaybooks(all, string(kind), matchText, cfg.PlaybooksBudget())
+
+	log, err := r.prepareLog(p)
+	if err != nil {
+		return p, err
+	}
+	defer log.Close()
+	if len(p.playbooks.Loaded)+len(p.playbooks.Listed) > 0 {
+		r.prepareLine(p, log, "system", eventPayload{Text: p.playbooks.Summary()})
+	}
+	gathered := r.gather(ctx, p, log, o, rca, bundle, slackMD)
+
 	in := prompt.TriageInput{
 		OtherRepos:          others,
 		Origin:              origin,
 		Instruction:         p.state.Instruction,
 		Bundle:              bundle,
 		BundleDir:           rn.BundleDir(),
-		Playbooks:           playbooks,
+		Playbooks:           p.playbooks.Loaded,
+		OtherPlaybooks:      p.playbooks.Listed,
+		Gathered:            gathered,
 		ThreadHead:          threadHead,
 		ThreadHeadTruncated: truncated,
 		Slack:               slackMD,
@@ -339,7 +361,9 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		sin := prompt.SessionInput{
 			Instruction:      p.state.Instruction,
 			Access:           p.state.Access,
-			Playbooks:        playbooks,
+			Playbooks:        p.playbooks.Loaded,
+			OtherPlaybooks:   p.playbooks.Listed,
+			Gathered:         gathered,
 			NotesLanguage:    cfg.NotesLanguage(),
 			CustomerLanguage: cfg.CustomerLanguage(),
 			Repositories:     in.Repositories,

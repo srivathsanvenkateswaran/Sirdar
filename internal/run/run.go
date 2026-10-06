@@ -154,6 +154,10 @@ type Options struct {
 	// turn ahead of it would only spend the budget the score is measured
 	// against.
 	NoteOnly bool
+
+	// NoGather is --no-gather: this run files no gathered context; a
+	// replayed bundle's is kept.
+	NoGather bool
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull

@@ -12,7 +12,7 @@ func init() { commands["triage"] = cmdTriage }
 
 func cmdTriage(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("triage", stderr,
-		"usage: sirdar triage TICKET [TICKET...] [--at COMMIT] [--keep-worktree] [--provider claude|codex|openai|acp|qwen|cursor] [--model NAME] [--concurrency N] [--dry-run] [--no-notify]")
+		"usage: sirdar triage TICKET [TICKET...] [--at COMMIT] [--keep-worktree] [--provider claude|codex|openai|acp|qwen|cursor] [--model NAME] [--concurrency N] [--dry-run] [--no-notify] [--no-gather]")
 	providerName := fs.String("provider", "", "override the configured provider")
 	model := fs.String("model", "", "override the configured model")
 	concurrency := fs.Int("concurrency", 0, "parallel runs across keys (default from config)")
@@ -20,6 +20,7 @@ func cmdTriage(args []string, stdout, stderr io.Writer) int {
 	noNotify := fs.Bool("no-notify", false, "do not post the configured run-completion notifications")
 	at := fs.String("at", "", "run against the repository as it stood at this commit, in a worktree of the run's own")
 	keepWorktree := fs.Bool("keep-worktree", false, "leave the --at worktree on disk when the run ends")
+	noGather := fs.Bool("no-gather", false, "do not run gatherers for this run")
 	keys, ok := parseFlags(fs, args, 1, -1, stderr)
 	if !ok {
 		return exitUsage
@@ -54,6 +55,7 @@ func cmdTriage(args []string, stdout, stderr io.Writer) int {
 		NoNotify:     *noNotify,
 		At:           *at,
 		KeepWorktree: *keepWorktree,
+		NoGather:     *noGather,
 	})
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)

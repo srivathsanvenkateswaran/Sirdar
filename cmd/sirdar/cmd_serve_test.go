@@ -233,7 +233,8 @@ func TestServeEndToEnd(t *testing.T) {
 		Next   int            `json:"next"`
 	}
 	getJSON(t, base+"/api/workspaces/"+wsID+"/runs/"+done.RunID+"/events?after=0", &page)
-	// The reply turn's lines, then the note turn's, each marked as such.
+	// prepare's playbooks line, the reply turn's lines, then the note
+	// turn's, each marked as such.
 	kinds := make([]string, 0, len(page.Events))
 	for _, e := range page.Events {
 		kind := e.Kind
@@ -242,7 +243,7 @@ func TestServeEndToEnd(t *testing.T) {
 		}
 		kinds = append(kinds, kind)
 	}
-	if strings.Join(kinds, ",") != "system,usage,final,note:system,note:usage,note:final" {
+	if strings.Join(kinds, ",") != "system,system,usage,final,note:system,note:usage,note:final" {
 		t.Errorf("event kinds %v", kinds)
 	}
 	// `next` is what a following call passes as `after`, so it is the index

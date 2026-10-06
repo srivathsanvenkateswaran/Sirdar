@@ -714,9 +714,10 @@ func TestTriageHappyPath(t *testing.T) {
 		t.Fatalf("register note path %q want %q", row.NotePath, notePath)
 	}
 
+	// prepare's playbook line, the reply turn's lines and the note's.
 	logged := strings.Count(strings.TrimRight(readFile(t, filepath.Join(dir, "events.jsonl")), "\n"), "\n") + 1
-	if logged != len(events)+1 {
-		t.Fatalf("events.jsonl lines %d want %d, the reply turn's and the note", logged, len(events)+1)
+	if logged != len(events)+2 {
+		t.Fatalf("events.jsonl lines %d want %d, the playbooks line, the reply turn's and the note", logged, len(events)+2)
 	}
 
 	promptText := readFile(t, filepath.Join(dir, "prompt.md"))
