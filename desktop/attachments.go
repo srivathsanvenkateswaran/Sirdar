@@ -21,6 +21,14 @@ func (b *Bridge) Attachments(ws, runId string) ([]app.Attachment, error) {
 	return b.svc.Attachments(ws, runId)
 }
 
+// Gathered lists what the run gathered before it started working, for the
+// run detail screen's gathered-context panel. Previews of the files it
+// names go through AttachmentDataURL, which resolves a context/ path the
+// same way it resolves an attachments/ one.
+func (b *Bridge) Gathered(ws, runId string) ([]app.GatheredInfo, error) {
+	return b.svc.Gathered(ws, runId)
+}
+
 // AttachmentDataURL answers with one attachment as a `data:` URL the
 // webview can put in an <img>, an <object> or a media element.
 //
