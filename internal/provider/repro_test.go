@@ -203,17 +203,40 @@ func TestReproCredentialFieldIsNotAskable(t *testing.T) {
 	refused(t, p, pwType, `{"element":"Password","text":"x"}`)
 }
 
-func TestReproNilInputFallsThrough(t *testing.T) {
+// TestReproUnreadableNavigateIsDenied: a browser_navigate whose URL the
+// guard cannot read is the one call it exists to judge, so it is refused
+// outright rather than left to permissions.mcp, which lists the tool for
+// any URL. There is no host to grant, so it is not put to the operator.
+func TestReproUnreadableNavigateIsDenied(t *testing.T) {
+	const want = "Sirdar policy: browser not confined to repro hosts; the URL could not be read"
+	for _, input := range []string{"", "null", "[]", `"https://evil.example/"`, "{}", `{"URL":"https://evil.example/"}`, `{"url":5}`} {
+		p := reproPolicy(false)
+		confine(t, p)
+		d := p.Decide(pwNavigate, json.RawMessage(input))
+		if d.Allow || d.Ask != nil || d.Message != want {
+			t.Errorf("navigate with input %q: got %+v, want a deny that is not askable", input, d)
+		}
+		if p.Repro.Confined() {
+			t.Errorf("navigate with input %q left the guard confined", input)
+		}
+	}
+}
+
+// TestReproUnreadableInteractionFallsThrough: an interaction tool with no
+// readable arguments has nothing for the guard to judge, so the ordinary
+// rules answer; the browser may have moved all the same, so confinement
+// drops and nothing is auto-allowed afterwards on its account.
+func TestReproUnreadableInteractionFallsThrough(t *testing.T) {
 	p := reproPolicy(false)
-	d := p.Decide(pwNavigate, nil)
-	if !d.Allow {
-		t.Fatalf("navigate with no arguments: %s, want permissions.mcp's allow", d.Message)
-	}
-	if p.Repro.Confined() {
-		t.Error("an unjudged navigate confined the guard")
-	}
+	confine(t, p)
 	if d := p.Decide(pwClick, nil); d.Allow {
 		t.Error("click with no arguments allowed although permissions.mcp does not list it")
+	}
+	if p.Repro.Confined() {
+		t.Error("an unjudged click left the guard confined")
+	}
+	if d := decideJSON(p, pwClick, `{"element":"Save","ref":"e1"}`); d.Allow {
+		t.Error("click allowed after an unjudged call dropped confinement")
 	}
 }
 
@@ -293,19 +316,13 @@ func TestReproArgsAreReadByExactKey(t *testing.T) {
 }
 
 // TestReproArgumentlessCallUnconfines: an ACP agent may leave rawInput out
-// of a permission request. The guard cannot judge such a call, so the
-// ordinary rule answers, and since it may have moved the browser,
-// confinement drops and nothing is auto-allowed on the strength of it.
+// of a permission request. The guard cannot judge such a call, so for an
+// interaction tool the ordinary rule answers, and since it may have moved
+// the browser, confinement drops and nothing is auto-allowed on the
+// strength of it. A navigate in the same state is refused outright
+// (TestReproUnreadableNavigateIsDenied).
 func TestReproArgumentlessCallUnconfines(t *testing.T) {
 	p := reproPolicy(false)
-	confine(t, p)
-	if d := p.Decide(pwNavigate, nil); !d.Allow {
-		t.Fatalf("argumentless navigate: %s, want permissions.mcp's allow", d.Message)
-	}
-	if p.Repro.Confined() {
-		t.Fatal("argumentless navigate left the guard confined")
-	}
-
 	for _, input := range []string{"", "null", "[]", `"x"`, "{"} {
 		confine(t, p)
 		d := p.Decide(pwType, json.RawMessage(input))

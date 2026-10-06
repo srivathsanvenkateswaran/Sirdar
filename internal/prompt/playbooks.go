@@ -64,29 +64,33 @@ type frontmatter struct {
 
 // ParsePlaybook builds the Playbook for one file's contents. A file whose
 // first line is exactly `---` opens a frontmatter block that ends at the
-// next line that is exactly `---`; the block is removed from the body.
+// next line that is exactly `---`; a block that decodes is removed from the
+// body.
 //
 // A block that does not parse, names an unknown key or kind, or carries an
 // `about` that is not one short line is ignored and the reason is kept in
-// FrontmatterErr: the playbook then loads as if it had no frontmatter. That
-// fails open on purpose, because a typo should cost prompt bytes, not hide
-// a gotcha the operator wrote down. A block with no closing line is no
-// block at all, and the whole file is the body.
+// FrontmatterErr: the playbook then loads as if it had no frontmatter, with
+// the file's bytes as its body, block and all. That fails open on purpose,
+// because a typo should cost prompt bytes, not hide a gotcha the operator
+// wrote down; and a playbook that opens with a markdown thematic break was
+// never frontmatter, so it must reach the prompt as it did before blocks
+// existed. A block with no closing line is no block at all, and the whole
+// file is the body.
 func ParsePlaybook(name, path, data string) Playbook {
+	p := Playbook{Name: name, Body: data, Path: path}
 	// An editor that saves with a UTF-8 byte-order mark puts it before the
 	// opening ---, and the block would otherwise be read as body text: the
-	// playbook would load always-on with no warning to say why.
-	data = strings.TrimPrefix(data, "\uFEFF")
-	p := Playbook{Name: name, Body: data, Path: path}
-	if block, rest, found, closed := splitFrontmatter(data); found {
+	// playbook would load always-on with no warning to say why. The mark
+	// is set aside only to find the block; a file without one keeps it.
+	if block, rest, found, closed := splitFrontmatter(strings.TrimPrefix(data, "\uFEFF")); found {
 		if !closed {
 			p.FrontmatterErr = "no closing ---"
 		} else {
-			p.Body = rest
 			fm, err := decodeFrontmatter(block)
 			if err != nil {
 				p.FrontmatterErr = err.Error()
 			} else {
+				p.Body = rest
 				// An empty `kinds: []` would read as "no kind at all", which
 				// hides the playbook from every run; it is taken as naming
 				// none, the same as leaving the key out.
@@ -176,7 +180,15 @@ func FrontmatterWarnings(all []Playbook) []string {
 // The lede skips headings, list bullets, quotes and fences: what is wanted
 // is the sentence that says what the playbook is for, and a playbook that
 // opens on a bullet list has none.
+//
+// A closed block at the top is skipped whether or not it decoded. A block
+// that did not decode stays in the body so the prompt carries the file as
+// written, but the listing and the desktop app describe the playbook by
+// what it says, not by the broken YAML above it.
 func TitleAndLede(body string) (title, lede string) {
+	if _, rest, _, closed := splitFrontmatter(strings.TrimPrefix(body, "\uFEFF")); closed {
+		body = rest
+	}
 	var para []string
 	for _, raw := range strings.Split(body, "\n") {
 		line := strings.TrimSpace(raw)

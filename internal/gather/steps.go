@@ -380,13 +380,16 @@ func contains(list []string, v string) bool {
 
 // stepPolicy is the rule a command step's line meets: exactly a read-only
 // session's shell rule, with gather.allow on top of permissions.bash, no
-// operator to ask and no grants to consult.
+// operator to ask and no grants to consult. Its read scope is a session's
+// too, playbooks directory included: a step reading a playbook kept
+// outside the workspace would otherwise be judged more strictly than the
+// session the prompt tells to read it.
 func stepPolicy(cfg *config.Config, runDir, bundleDir string) *provider.PermissionPolicy {
 	allow := append(append([]string(nil), cfg.Permissions.Bash...), cfg.Gather.Allow...)
 	return &provider.PermissionPolicy{
 		BashAllow: allow,
 		Root:      cfg.Root,
-		ReadRoots: []string{runDir, bundleDir},
+		ReadRoots: []string{runDir, bundleDir, cfg.ExpandPath(cfg.Playbooks)},
 		ReadAlso:  cfg.ReadAlso(),
 	}
 }

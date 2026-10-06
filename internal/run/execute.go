@@ -1328,17 +1328,14 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 			r.endNoteTurn(sess, ex, noteCapReason(c))
 			break
 		}
-		// The reply turn's cap. Rather than end the run with nothing to
-		// show for the turns it spent, the session is stopped and asked
-		// once to answer from what it has.
-		if phasesApply(p) && p.replyTurn() && ex.wrapUp == nil && ex.replyCapped == 0 && ex.retrySession == nil {
-			if n := r.Config.ReplyMaxTurns(); n > 0 && ex.seen.Turns >= n {
-				ex.replyCapped, ex.capped = n, sess
-				r.recordSystem(p, log, fmt.Sprintf("Reply turn reached its %d-turn cap", n))
-				ex.stall.hold()
-				sess.Cancel()
-				r.startWrapUp(ctx, p, sess, log, ex, n)
-			}
+		// The reply turn's cap. More than the cap rather than as many, as
+		// for the note: Claude reports the capped turn's usage before the
+		// result line carrying its answer, and that answer is kept. Rather
+		// than end the run with nothing to show for the turns it spent, a
+		// session past the cap is stopped and asked once to answer from
+		// what it has.
+		if n := r.replyCap(p, ex); n > 0 && ex.seen.Turns > n {
+			r.capReply(ctx, p, sess, log, ex, n)
 		}
 
 	case provider.EvRateLimited:
@@ -1861,6 +1858,14 @@ func (r *Runner) handleReply(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
+	// A provider told the cap through --max-turns stops itself on the
+	// capped turn with an empty result. That is the cap, not a turn to
+	// nudge: a nudge would be a turn past it.
+	if n := r.replyCap(p, ex); text == "" && n > 0 && ex.seen.Turns >= n {
+		r.capReply(ctx, p, sess, log, ex, n)
+		return
+	}
+
 	if text == "" {
 		if ex.emptyTurns >= maxEmptyTurns {
 			ex.failure = errEmptyAnswer.Error()
@@ -2103,13 +2108,45 @@ func wrapUpPrompt(n int) string {
 		"Answer the operator now from what you have found, say what is unverified and what you would check next.", n)
 }
 
+// replyCap is the reply turn's turn cap while it can still fire, 0 for
+// none: once per execute, and never on a session a retry or the wrap-up
+// itself has already replaced.
+func (r *Runner) replyCap(p *prepared, ex *execution) int {
+	if !phasesApply(p) || !p.replyTurn() || ex.wrapUp != nil || ex.replyCapped != 0 || ex.retrySession != nil {
+		return 0
+	}
+	return r.Config.ReplyMaxTurns()
+}
+
+// capReply stops a reply session that reached its cap of n turns and
+// starts the wrap-up in its place.
+func (r *Runner) capReply(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, n int) {
+	ex.replyCapped, ex.capped = n, sess
+	r.recordSystem(p, log, fmt.Sprintf("Reply turn reached its %d-turn cap", n))
+	ex.stall.hold()
+	sess.Cancel()
+	r.startWrapUp(ctx, p, sess, log, ex, n)
+}
+
 // startWrapUp continues a reply turn cancelled at its cap with the wrap-up
-// prompt, on the provider's resume handle when it has one and primed with
-// the reply turn's prompt otherwise. The wrap-up may read its own run
+// prompt on the provider's resume handle. The wrap-up may read its own run
 // directory and nothing else and has two turns: it is there to answer, not
 // to go on investigating. Its text is the reply, through handleReply.
+//
+// A provider that cannot resume gets no wrap-up and the run ends over
+// budget. Its wrap-up would be a fresh conversation holding only the
+// ticket, with none of the capped turn's findings and no tools to find
+// them again, and the confident answer it wrote from nothing would be
+// filed as the reply and the note.
 func (r *Runner) startWrapUp(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, n int) {
 	reason := fmt.Sprintf("reply turn reached its %d-turn cap", n)
+	cont, _ := provider.PlanSteer(r.Provider)
+	handle := sess.Handle()
+	if cont != provider.ContinueResume || handle == "" {
+		ex.overBudget = reason
+		ex.stall.stop()
+		return
+	}
 	// What the reply turn spent becomes part of the base, as it does when
 	// the note turn begins: the wrap-up's counters start again, and the
 	// run budget judges its usage on top of the reply's.
@@ -2119,25 +2156,12 @@ func (r *Runner) startWrapUp(ctx context.Context, p *prepared, sess provider.Ses
 	p.usageBase = ex.base
 	p.usageBase.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(ex.started).Seconds()
 
-	cont, _ := provider.PlanSteer(r.Provider)
-	var spec provider.SessionSpec
-	if handle := sess.Handle(); cont == provider.ContinueResume && handle != "" {
-		// The same conversation, whose cost is in base now.
-		if cumulativeResumeCost[r.providerName()] {
-			ex.costOffset = ex.rawCost
-		}
-		spec = r.sessionSpec(p, handle)
-		spec.Prompt = wrapUpPrompt(n)
-	} else {
-		ex.costOffset, ex.rawCost = 0, 0
-		original, err := os.ReadFile(filepath.Join(p.run.Dir, "prompt.md"))
-		if err != nil {
-			ex.overBudget = reason
-			return
-		}
-		spec = r.sessionSpec(p, "")
-		spec.Prompt = strings.TrimSpace(string(original)) + "\n\n---\n\n" + wrapUpPrompt(n)
+	// The same conversation, whose cost is in base now.
+	if cumulativeResumeCost[r.providerName()] {
+		ex.costOffset = ex.rawCost
 	}
+	spec := r.sessionSpec(p, handle)
+	spec.Prompt = wrapUpPrompt(n)
 	spec.Policy = notePolicy(p)
 	spec.MCPConfig, spec.MCPStrict, spec.UserMCPServers = "", true, nil
 	spec.OutputSchema = nil

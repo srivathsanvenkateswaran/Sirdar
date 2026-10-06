@@ -8,13 +8,16 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/gather"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
@@ -418,5 +421,117 @@ func TestGatherDeadlineStopsAHungMCPServer(t *testing.T) {
 	proc, err := os.FindProcess(pid)
 	if err == nil && proc.Signal(syscall.Signal(0)) == nil {
 		t.Fatalf("the hung MCP server (pid %d) is still running after the gather", pid)
+	}
+}
+
+// phaseProbe sets r.Now to a clock that, each time it is read, notes the
+// phase state.json holds on disk. Every state write reads the clock first
+// and the run reads it many times after, so a phase that was ever written
+// is noted.
+func phaseProbe(t *testing.T, r *Runner) func() []string {
+	t.Helper()
+	var mu sync.Mutex
+	var seen []string
+	r.Now = func() time.Time {
+		matches, _ := filepath.Glob(filepath.Join(r.Config.Root, ".sirdar", "runs", "*", "*", "state.json"))
+		for _, m := range matches {
+			data, err := os.ReadFile(m)
+			if err != nil {
+				continue
+			}
+			var st store.State
+			if json.Unmarshal(data, &st) == nil && st.Phase != "" {
+				mu.Lock()
+				seen = append(seen, st.Phase)
+				mu.Unlock()
+			}
+		}
+		return time.Now()
+	}
+	return func() []string {
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]string(nil), seen...)
+	}
+}
+
+// A run with nothing to gather never says it is gathering: no state write
+// puts it in the gather phase, so the live view does not flash
+// "Gathering context…" on every run in a workspace that configured
+// nothing.
+func TestNothingPlannedNeverRecordsPhaseGather(t *testing.T) {
+	cfg := newWorkspace(t)
+	r := newRunner(cfg, &stubProvider{script: replay(finalEvent(triageDoc))}, stubTracker{}, stubHelpdesk{})
+	seen := phaseProbe(t, r)
+	triageOne(t, r, Options{DryRun: true})
+	for _, ph := range seen() {
+		if ph == store.PhaseGather {
+			t.Fatalf("state.json recorded phase %q with nothing planned", ph)
+		}
+	}
+
+	// The probe does see the phase when a step is planned.
+	stub := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r2, _ := gatherRunner(t, stub, true)
+	seen2 := phaseProbe(t, r2)
+	triageOne(t, r2, Options{DryRun: true})
+	if !slices.Contains(seen2(), store.PhaseGather) {
+		t.Fatalf("the probe saw %q with a step planned, want phase gather among them", seen2())
+	}
+}
+
+// startHook is the stub provider with something to do before each session
+// starts.
+type startHook struct {
+	*stubProvider
+	before func()
+}
+
+func (s startHook) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
+	s.before()
+	return s.stubProvider.Start(ctx, spec)
+}
+
+// An event log prepare cannot open costs the lines prepare would have
+// written, not the run: prepare says so on stderr and the session starts.
+// Here the log is blocked by a directory in its place while prepare runs,
+// and freed before the session opens it again.
+func TestPrepareLogOpenFailureDoesNotFailTheRun(t *testing.T) {
+	cfg := newWorkspace(t)
+	blocked := ""
+	tracker := stubTracker{gate: func(string) {
+		dirs, _ := filepath.Glob(filepath.Join(cfg.Root, ".sirdar", "runs", "*", "*"))
+		if len(dirs) != 1 {
+			t.Errorf("run directories %q, want one", dirs)
+			return
+		}
+		blocked = filepath.Join(dirs[0], "events.jsonl")
+		if err := os.Mkdir(blocked, 0o755); err != nil {
+			t.Error(err)
+		}
+	}}
+	stub := &stubProvider{script: replay(finalEvent(triageDoc))}
+	p := startHook{stubProvider: stub, before: func() {
+		if blocked != "" {
+			_ = os.Remove(blocked)
+		}
+	}}
+	r := newRunner(cfg, p, tracker, stubHelpdesk{})
+	var stderr strings.Builder
+	r.Stderr = &stderr
+
+	out := triageOne(t, r, Options{NoteOnly: true})
+	if blocked == "" {
+		t.Fatal("the event log was never blocked")
+	}
+	if stub.startCount() != 1 {
+		t.Fatalf("started %d sessions, want the run to reach its session; status %q reason %q",
+			stub.startCount(), out.State.Status, out.State.Reason)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Errorf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !strings.Contains(stderr.String(), "event log") {
+		t.Errorf("stderr does not say the event log could not be opened:\n%s", stderr.String())
 	}
 }

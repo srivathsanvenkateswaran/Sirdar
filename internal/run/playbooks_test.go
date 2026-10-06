@@ -65,20 +65,45 @@ func TestPromptLoadsScopedPlaybooks(t *testing.T) {
 
 // A workspace whose playbooks carry no frontmatter gets the prompt it got
 // before playbooks could be scoped: every playbook in full and no listing.
+// The section is compared byte for byte with the one the loader built
+// before frontmatter existed, from each file's raw bytes. A file that opens
+// with a markdown thematic break, one whose block does not decode, and one
+// saved with a byte-order mark all have no frontmatter in that sense, and
+// each loads exactly as written.
 func TestWorkspaceWithoutFrontmatterPromptUnchanged(t *testing.T) {
 	cfg := newWorkspace(t)
 	writePlaybook(t, cfg.Root, "10-more.md", "# More\n\nMORE-MARKER: a second playbook.\n")
+	writePlaybook(t, cfg.Root, "20-break.md", "---\n\nRead the release notes first.\n\n---\n\n# Releases\n")
+	writePlaybook(t, cfg.Root, "30-typo.md", "---\nDeploys: freeze on Fridays\n---\n# Release notes\n")
+	writePlaybook(t, cfg.Root, "40-bom.md", "\uFEFF# Bom\n\nSaved by an editor that writes a byte-order mark.\n")
 
 	stub := &stubProvider{script: replay(finalEvent(triageDoc))}
 	r := newRunner(cfg, stub, stubTracker{}, stubHelpdesk{})
 	out := triageOne(t, r, Options{})
 	text := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
-	if strings.Contains(text, "## Other playbooks") {
-		t.Errorf("prompt.md lists playbooks although none is scoped:\n%s", text)
+
+	dir := filepath.Join(cfg.Root, ".sirdar", "playbooks")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, want := range []string{"## 00-test\n\n# Exports\n\n" + playbookMarker, "## 10-more\n\n# More\n\nMORE-MARKER: a second playbook."} {
-		if !strings.Contains(text, want) {
-			t.Errorf("prompt.md does not carry %q in full:\n%s", want, text)
+	const heading = "# Workspace knowledge — consult when relevant"
+	want := heading
+	for _, e := range entries {
+		raw, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
 		}
+		want += "\n\n## " + strings.TrimSuffix(e.Name(), ".md") + "\n\n" + strings.TrimRight(string(raw), "\n")
+	}
+	want += "\n\n# Ticket"
+
+	start := strings.Index(text, heading)
+	end := strings.Index(text, "\n\n# Ticket")
+	if start < 0 || end < start {
+		t.Fatalf("prompt.md has no workspace knowledge section followed by the ticket:\n%s", text)
+	}
+	if got := text[start : end+len("\n\n# Ticket")]; got != want {
+		t.Errorf("playbooks section differs from the unscoped loader's\ngot:\n%q\nwant:\n%q", got, want)
 	}
 }

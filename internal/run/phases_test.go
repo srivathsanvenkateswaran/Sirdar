@@ -166,8 +166,8 @@ func TestNoteFiledOnTheEighthTurnIsKept(t *testing.T) {
 
 const wrapUpMarker = "You have used this turn's cap of 3 tool turns"
 
-// cappedReply is a reply session that reaches a 3-turn cap and keeps
-// working until cancelled, a wrap-up that answers wrapUp, and a note turn
+// cappedReply is a reply session that goes past a 3-turn cap, starting a
+// fourth turn and working until cancelled, a wrap-up that answers wrapUp, and a note turn
 // that files the note. The costs are Claude's: the wrap-up resumes the
 // reply's conversation and reports its running total.
 func cappedReply(wrapUp string) func(provider.SessionSpec, *stubSession) {
@@ -179,7 +179,7 @@ func cappedReply(wrapUp string) func(provider.SessionSpec, *stubSession) {
 			replay(provider.Event{Kind: provider.EvUsage, Turns: 1, CostUSD: 0.15},
 				provider.Event{Kind: provider.EvFinal, Text: wrapUp})(spec, s)
 		default:
-			untilCancelled(s, provider.Event{Kind: provider.EvUsage, Turns: 3, CostUSD: 0.10})
+			untilCancelled(s, provider.Event{Kind: provider.EvUsage, Turns: 4, CostUSD: 0.10})
 		}
 	}
 }
@@ -227,9 +227,9 @@ func TestReplyCapWrapsUp(t *testing.T) {
 	if !hasLine(t, dir, "Reply turn reached its 3-turn cap") {
 		t.Error("no system line marking the cap")
 	}
-	// The reply's three turns and the wrap-up's one are both the run's,
+	// The reply's four turns and the wrap-up's one are both the run's,
 	// and the conversation's running total is counted once.
-	if out.State.Usage.Turns != 4 {
+	if out.State.Usage.Turns != 5 {
 		t.Errorf("usage turns %d, want the reply's and the wrap-up's", out.State.Usage.Turns)
 	}
 	if c := out.State.Usage.CostUSD; c < 0.149 || c > 0.151 {
@@ -427,7 +427,7 @@ func TestSteerQueuedDuringTheWrapUpWaits(t *testing.T) {
 			}
 			replay(usage(1), provider.Event{Kind: provider.EvFinal, Text: "Partial answer."})(spec, s)
 		default:
-			untilCancelled(s, usage(3))
+			untilCancelled(s, usage(4))
 		}
 	}
 
@@ -459,7 +459,7 @@ func TestCappedSessionDrainIsIgnored(t *testing.T) {
 			replay(usage(1), provider.Event{Kind: provider.EvFinal, Text: "Partial answer."})(spec, s)
 		default:
 			defer s.finish()
-			if !s.emit(usage(3)) {
+			if !s.emit(usage(4)) {
 				return
 			}
 			<-s.cancelled
@@ -482,5 +482,93 @@ func TestCappedSessionDrainIsIgnored(t *testing.T) {
 	}
 	if out.State.Ask != nil {
 		t.Errorf("ask %+v from the capped session", out.State.Ask)
+	}
+}
+
+// TestReplyOnTheCappedTurnIsKept: a reply given on the capped turn itself
+// is the answer. Claude reports the turn's usage before its result line, so
+// a cap that fired on reaching n turns would cancel the session that had
+// just answered and replace that answer with a wrap-up.
+func TestReplyOnTheCappedTurnIsKept(t *testing.T) {
+	cfg := newWorkspaceWith(t, configYAML+"phases:\n  reply:\n    maxTurns: 3\n")
+	p := &stubProvider{script: replyEventsThenNote(
+		[]provider.Event{usage(3), {Kind: provider.EvFinal, Text: "FULL ANSWER"}}, finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	dir := runDir(t, cfg, out)
+	if got := strings.TrimSpace(readFile(t, filepath.Join(dir, "answer.md"))); got != "FULL ANSWER" {
+		t.Errorf("answer.md = %q", got)
+	}
+	for i := 0; i < p.startCount(); i++ {
+		if strings.Contains(p.spec(i).Prompt, wrapUpMarker) {
+			t.Fatalf("session %d is a wrap-up; the capped turn's answer was thrown away", i)
+		}
+	}
+	if n := p.startCount(); n != 2 {
+		t.Errorf("started %d sessions, want the reply and the note", n)
+	}
+	if hasLine(t, dir, "Reply turn reached its 3-turn cap") {
+		t.Error("the cap was marked on a reply that answered within it")
+	}
+}
+
+// TestEmptyFinalAtTheCapWrapsUp: a provider told the cap through
+// --max-turns stops itself on the capped turn with an empty result, and
+// that empty result is the cap, not a turn to nudge.
+func TestEmptyFinalAtTheCapWrapsUp(t *testing.T) {
+	cfg := newWorkspaceWith(t, configYAML+"phases:\n  reply:\n    maxTurns: 3\n")
+	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
+		switch {
+		case len(spec.OutputSchema) > 0:
+			replay(finalEvent(triageDoc))(spec, s)
+		case strings.Contains(spec.Prompt, wrapUpMarker):
+			replay(usage(1), provider.Event{Kind: provider.EvFinal, Text: "Partial answer."})(spec, s)
+		default:
+			replay(usage(3), provider.Event{Kind: provider.EvFinal})(spec, s)
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	dir := runDir(t, cfg, out)
+	if got := strings.TrimSpace(readFile(t, filepath.Join(dir, "answer.md"))); got != "Partial answer." {
+		t.Errorf("answer.md = %q", got)
+	}
+	if sent := p.session(0).sentTexts(); len(sent) != 0 {
+		t.Errorf("the capped reply was nudged: %q", sent)
+	}
+	if !hasLine(t, dir, "Reply turn reached its 3-turn cap") {
+		t.Error("no system line marking the cap")
+	}
+}
+
+// TestPrimedWrapUpEndsOverBudget: a provider that cannot resume would
+// have to answer in a fresh conversation that saw none of the reply
+// turn's findings, so the run ends over budget instead of filing an
+// answer made from nothing.
+func TestPrimedWrapUpEndsOverBudget(t *testing.T) {
+	cfg := newWorkspaceWith(t, configYAML+"phases:\n  reply:\n    maxTurns: 3\n")
+	stub := &stubProvider{script: cappedReply("Answer from nothing.")}
+	r := newRunner(cfg, steerable{stubProvider: stub, c: provider.ContinuePrimed}, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	if out.State.Status != store.StatusOverBudget {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if want := "reply turn reached its 3-turn cap"; out.State.Reason != want {
+		t.Errorf("reason %q, want %q", out.State.Reason, want)
+	}
+	if n := stub.startCount(); n != 1 {
+		t.Errorf("started %d sessions, want only the capped reply", n)
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "answer.md")); !os.IsNotExist(err) {
+		t.Errorf("answer.md exists (err %v)", err)
 	}
 }
