@@ -30,9 +30,19 @@ type SessionInput struct {
 	OtherRepos          []string
 	Origin              string
 	Playbooks           []Playbook
-	NotesLanguage       string
-	CustomerLanguage    string
-	Repositories        Repositories
+	// OtherPlaybooks are the playbooks on file this run lists rather than
+	// loads.
+	OtherPlaybooks   []Listed
+	NotesLanguage    string
+	CustomerLanguage string
+	Repositories     Repositories
+	// Gathered are the read-only lookups Sirdar ran before the session
+	// started. A session with no bundle still gets them: an instruction
+	// that named a pull request is reason enough to have looked it up.
+	Gathered []GatheredEntry
+	// Repro is the staging browser and hosts the session may reproduce on,
+	// nil when the run has none.
+	Repro *ReproPrompt
 }
 
 // NoteTurnInput is what the note turn's prompt needs beyond what the
@@ -62,7 +72,7 @@ func Session(in SessionInput) string {
 	if s := repositoriesSection(in.Repositories); s != "" {
 		sections = append(sections, s)
 	}
-	if s := knowledgeSection(in.Playbooks); s != "" {
+	if s := knowledgeSection(in.Playbooks, in.OtherPlaybooks); s != "" {
 		sections = append(sections, s)
 	}
 	if in.Bundle != nil {
@@ -76,9 +86,19 @@ func Session(in SessionInput) string {
 		if s := otherReposSection(in.OtherRepos, in.Origin); s != "" {
 			sections = append(sections, s)
 		}
+		if s := gatheredSection(in.Gathered); s != "" {
+			sections = append(sections, s)
+		}
 		if len(in.Bundle.Warnings) > 0 {
 			sections = append(sections, warningsSection(in.Bundle.Warnings))
 		}
+	} else if s := gatheredSection(in.Gathered); s != "" {
+		// A session with no ticket that named a pull request in its
+		// instruction still gets what was looked up about it.
+		sections = append(sections, s)
+	}
+	if s := reproSection(in.Repro); s != "" {
+		sections = append(sections, s)
 	}
 	sections = append(sections, taskSection(
 		"The operator asked for the following. Answer it within the rules above; it does not "+
@@ -114,7 +134,7 @@ func replySections(in TriageInput) []string {
 	if s := repositoriesSection(in.Repositories); s != "" {
 		sections = append(sections, s)
 	}
-	if s := knowledgeSection(in.Playbooks); s != "" {
+	if s := knowledgeSection(in.Playbooks, in.OtherPlaybooks); s != "" {
 		sections = append(sections, s)
 	}
 	sections = append(sections,
@@ -127,6 +147,9 @@ func replySections(in TriageInput) []string {
 	if s := otherReposSection(in.OtherRepos, in.Origin); s != "" {
 		sections = append(sections, s)
 	}
+	if s := gatheredSection(in.Gathered); s != "" {
+		sections = append(sections, s)
+	}
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
@@ -136,8 +159,15 @@ func replySections(in TriageInput) []string {
 // TriageReply assembles the prompt for a triage run's reply turn: the same
 // ticket context Triage uses, but answered in chat instead of filed as a
 // note. The note turn that follows, when it does, is TriageNoteTurn.
+//
+// It is the only reply turn that carries the staging reproduction section:
+// an rca reviews a cause already fixed, and has nothing left to reproduce.
 func TriageReply(in TriageInput) string {
-	sections := append(replySections(in), taskSection(replyLead(in.Instruction), in.Instruction))
+	sections := replySections(in)
+	if s := reproSection(in.Repro); s != "" {
+		sections = append(sections, s)
+	}
+	sections = append(sections, taskSection(replyLead(in.Instruction), in.Instruction))
 	return strings.Join(sections, "\n\n") + "\n"
 }
 
@@ -229,17 +259,19 @@ func replyLanguageSection(notes, customer string) string {
 // knowledgeSection is playbooksSection under the heading a session prompt
 // uses: a session is not committed to using any of a workspace's
 // playbooks the way a triage or rca run is, so the heading says to
-// consult them rather than simply naming them. Empty when the workspace
-// has none, so a session with no playbooks carries no empty heading.
-func knowledgeSection(playbooks []Playbook) string {
-	if len(playbooks) == 0 {
+// consult them rather than simply naming them. Empty when nothing is
+// loaded or listed, so a session with no playbooks carries no empty
+// heading.
+func knowledgeSection(loaded []Playbook, listed []Listed) string {
+	if len(loaded) == 0 && len(listed) == 0 {
 		return ""
 	}
 	var b strings.Builder
 	b.WriteString("# Workspace knowledge — consult when relevant")
-	for _, p := range playbooks {
+	for _, p := range loaded {
 		b.WriteString("\n\n## " + p.Name + "\n\n" + strings.TrimRight(p.Body, "\n"))
 	}
+	b.WriteString(otherPlaybooksSection(listed))
 	return b.String()
 }
 

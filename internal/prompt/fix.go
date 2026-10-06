@@ -28,11 +28,14 @@ type FixInput struct {
 	// ticket. Empty adds no section.
 	Instruction string
 
-	Key        string
-	Branch     string
-	Playbooks  []Playbook
-	TriageNote string
-	RCANote    string // may be empty
+	Key       string
+	Branch    string
+	Playbooks []Playbook
+	// OtherPlaybooks are the playbooks on file this run lists rather than
+	// loads.
+	OtherPlaybooks []Listed
+	TriageNote     string
+	RCANote        string // may be empty
 }
 
 // fixFieldGuidance gives one sentence of guidance per field of the fix
@@ -54,7 +57,7 @@ func Fix(in FixInput) string {
 		sections = append(sections, s)
 	}
 	sections = append(sections,
-		playbooksSection(in.Playbooks),
+		playbooksSection(in.Playbooks, in.OtherPlaybooks),
 		fixTicketSection(in),
 		triageNoteSection(in.TriageNote),
 	)

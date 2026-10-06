@@ -41,6 +41,24 @@ Register: [[_Issue Register]] · RCA: {{fill "RCA" .meta.Links.RCA}} · Resoluti
 {{range .doc.reproSteps}}
 1. {{.}}
 {{- end}}
+{{- if .doc.reproduction}}
+
+## Reproduction
+
+**Outcome:** {{.doc.reproduction.outcome}}{{if .doc.reproduction.where}} · {{.doc.reproduction.where}}{{end}}
+{{- if .doc.reproduction.steps}}
+{{range .doc.reproduction.steps}}
+1. {{.}}
+{{- end}}
+{{- end}}
+{{- if .doc.reproduction.evidence}}
+
+Evidence:
+{{range .doc.reproduction.evidence}}
+- {{.}}
+{{- end}}
+{{- end}}
+{{- end}}
 
 ## Root Cause Hypothesis
 

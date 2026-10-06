@@ -1,3 +1,8 @@
+---
+kinds: [triage, rca, session]
+when: [slow, latency, timeout, performance, trace, span, apm]
+about: "Traces and spans: retention, control queries, comparing with a known-good trace."
+---
 Application performance monitoring (traces, spans, error rates) shows what a request actually
 did once it hit the service, including calls the logs don't capture individually.
 

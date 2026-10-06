@@ -1,3 +1,7 @@
+---
+kinds: [triage, rca, session]
+about: "Reading the helpdesk thread, and what L1 already told the customer."
+---
 The helpdesk thread is the customer's own account of the problem, and the record of what
 L1 already told them before this ticket reached you.
 

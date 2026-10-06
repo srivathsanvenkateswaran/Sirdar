@@ -382,3 +382,35 @@ func TestPlaybookLedeIsCutAtTheLimit(t *testing.T) {
 		t.Errorf("a cut lede %q does not say it was cut", lede)
 	}
 }
+
+func TestPlaybookSummaryReadsFrontmatter(t *testing.T) {
+	scoped := "---\nkinds: [triage, session]\nwhen: [database, \"new relic\"]\nabout: Read-only MySQL.\n---\n# Database\n\nDirect access lets you confirm state.\n"
+	broken := "---\nkinds: [nope]\n---\nThe body still loads.\n"
+	svc, ws, _ := playbookService(t, map[string]string{"40-database.md": scoped, "50-broken.md": broken})
+
+	rows, err := svc.Playbooks(ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows", len(rows))
+	}
+	db := rows[0]
+	if strings.Join(db.Kinds, ",") != "triage,session" || strings.Join(db.When, ",") != "database,new relic" || db.About != "Read-only MySQL." {
+		t.Errorf("Kinds %q When %q About %q", db.Kinds, db.When, db.About)
+	}
+	if db.Title != "Database" || db.Lede != "Direct access lets you confirm state." {
+		t.Errorf("Title %q Lede %q, want them read from the body under the frontmatter", db.Title, db.Lede)
+	}
+	if db.FrontmatterError != "" {
+		t.Errorf("FrontmatterError %q", db.FrontmatterError)
+	}
+
+	bad := rows[1]
+	if bad.FrontmatterError == "" {
+		t.Error("a frontmatter naming an unknown kind has no FrontmatterError")
+	}
+	if bad.Kinds != nil || bad.Lede != "The body still loads." {
+		t.Errorf("Kinds %q Lede %q", bad.Kinds, bad.Lede)
+	}
+}

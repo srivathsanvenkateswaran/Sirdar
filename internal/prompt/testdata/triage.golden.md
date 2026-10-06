@@ -87,6 +87,7 @@ Files:
 - customerReplyDraft is a short, polite status update the engineer could send the customer, as {language, text} in the customer's language: it acknowledges the issue and says it is being investigated, and it promises no fix, no cause and no date; null when a reply draft does not apply.
 - timeline lists each event with its time, role, and summary, including what L1 already told the customer.
 - reproSteps lists the steps that reproduce the issue.
+- reproduction records the staging reproduction the investigation attempted: whether browser steps were taken, the outcome, where, the steps and the evidence; outcome not_attempted with the reason in evidence when it was blocked (for example a login the operator has not done yet); null when the run had no browser or no staging hosts.
 - rootCause states the hypothesis, a confidence level (high, medium, low, or unknown), the evidence for it, and any code references.
 - blastRadius describes who or what is affected.
 - classification is one of code, data, config, not-a-bug, or unknown.
@@ -107,6 +108,7 @@ Files:
     "customerReplyDraft",
     "timeline",
     "reproSteps",
+    "reproduction",
     "rootCause",
     "blastRadius",
     "classification",
@@ -186,6 +188,26 @@ Files:
     "reproSteps": {
       "type": "array",
       "items": { "type": "string" }
+    },
+    "reproduction": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["attempted", "outcome", "where", "steps", "evidence"],
+          "properties": {
+            "attempted": { "type": "boolean" },
+            "outcome": {
+              "type": "string",
+              "enum": ["reproduced", "not_reproduced", "not_attempted"]
+            },
+            "where": { "type": ["string", "null"] },
+            "steps": { "type": "array", "items": { "type": "string" } },
+            "evidence": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        { "type": "null" }
+      ]
     },
     "rootCause": {
       "type": "object",

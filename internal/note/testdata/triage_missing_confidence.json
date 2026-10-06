@@ -14,6 +14,7 @@
   "title": "Sample issue for template checks",
   "complaint": "Customer reports the export fails for orders over 500 lines.",
   "complaintOriginal": null,
+  "reproduction": null,
   "customerReplyDraft": null,
   "timeline": [
     {

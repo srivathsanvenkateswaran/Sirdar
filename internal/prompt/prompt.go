@@ -38,10 +38,13 @@ type TriageInput struct {
 	// session it continues. Empty adds no section at all.
 	Instruction string
 
-	Bundle     ticket.Bundle
-	BundleDir  string // absolute
-	Playbooks  []Playbook
-	ThreadHead string // thread.md, or its first 40 lines
+	Bundle    ticket.Bundle
+	BundleDir string // absolute
+	Playbooks []Playbook
+	// OtherPlaybooks are the playbooks on file that this run lists rather
+	// than loads (SelectPlaybooks). Empty adds no listing.
+	OtherPlaybooks []Listed
+	ThreadHead     string // thread.md, or its first 40 lines
 	// ThreadHeadTruncated says whether ThreadHead is only the head of a
 	// longer conversation, so the prompt's heading can say which it is.
 	ThreadHeadTruncated bool
@@ -63,6 +66,12 @@ type TriageInput struct {
 	// Repositories are the repositories the session may read and the
 	// ones the ticket and the operator named. Empty adds no section.
 	Repositories Repositories
+	// Gathered are the read-only lookups Sirdar ran before the session
+	// started. Empty, or only denied entries, adds no section.
+	Gathered []GatheredEntry
+	// Repro is the staging browser and hosts the session may reproduce on,
+	// nil when the run has none. Only TriageReply renders it.
+	Repro *ReproPrompt
 }
 
 // RCAInput is everything RCA needs to assemble an rca prompt: the same
@@ -99,6 +108,7 @@ var triageFieldGuidance = []string{
 
 	"timeline lists each event with its time, role, and summary, including what L1 already told the customer.",
 	"reproSteps lists the steps that reproduce the issue.",
+	"reproduction records the staging reproduction the investigation attempted: whether browser steps were taken, the outcome, where, the steps and the evidence; outcome not_attempted with the reason in evidence when it was blocked (for example a login the operator has not done yet); null when the run had no browser or no staging hosts.",
 	"rootCause states the hypothesis, a confidence level (high, medium, low, or unknown), the evidence for it, and any code references.",
 	"blastRadius describes who or what is affected.",
 	"classification is one of code, data, config, not-a-bug, or unknown.",
@@ -155,7 +165,7 @@ func Triage(in TriageInput) string {
 		sections = append(sections, s)
 	}
 	sections = append(sections,
-		playbooksSection(in.Playbooks),
+		playbooksSection(in.Playbooks, in.OtherPlaybooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
 	)
@@ -163,6 +173,9 @@ func Triage(in TriageInput) string {
 		sections = append(sections, s)
 	}
 	if s := otherReposSection(in.OtherRepos, in.Origin); s != "" {
+		sections = append(sections, s)
+	}
+	if s := gatheredSection(in.Gathered); s != "" {
 		sections = append(sections, s)
 	}
 	if len(in.Bundle.Warnings) > 0 {
@@ -187,7 +200,7 @@ func RCA(in RCAInput) string {
 		sections = append(sections, s)
 	}
 	sections = append(sections,
-		playbooksSection(in.Playbooks),
+		playbooksSection(in.Playbooks, in.OtherPlaybooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
 	)
@@ -195,6 +208,9 @@ func RCA(in RCAInput) string {
 		sections = append(sections, s)
 	}
 	if s := otherReposSection(in.OtherRepos, in.Origin); s != "" {
+		sections = append(sections, s)
+	}
+	if s := gatheredSection(in.Gathered); s != "" {
 		sections = append(sections, s)
 	}
 	if len(in.Bundle.Warnings) > 0 {
@@ -264,12 +280,41 @@ func languageSection(notes, customer string) string {
 	return b.String()
 }
 
-func playbooksSection(playbooks []Playbook) string {
-
+// playbooksSection is every loaded playbook in full under its own name,
+// then a line for each one on file but not loaded, so the session knows it
+// is there to read. The heading stays even with nothing under it, as it
+// always has for triage, rca and fix prompts.
+func playbooksSection(loaded []Playbook, listed []Listed) string {
 	var b strings.Builder
 	b.WriteString("# Playbooks")
-	for _, p := range playbooks {
+	for _, p := range loaded {
 		b.WriteString("\n\n## " + p.Name + "\n\n" + strings.TrimRight(p.Body, "\n"))
+	}
+	b.WriteString(otherPlaybooksSection(listed))
+	return b.String()
+}
+
+// otherPlaybooksSection lists the playbooks a run did not load: name,
+// what the playbook is about, the keyword that matched when the byte budget
+// displaced it, and the absolute path the session reads it from. "" when
+// nothing is listed, and otherwise it opens with the blank line that
+// separates it from what came before.
+func otherPlaybooksSection(listed []Listed) string {
+	if len(listed) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\n## Other playbooks\n\n")
+	b.WriteString("On file but not loaded for this run. Read one with your file tool when its subject comes up.\n")
+	for _, l := range listed {
+		b.WriteString("\n- " + l.Playbook.Name)
+		if l.Playbook.About != "" {
+			b.WriteString(" — " + l.Playbook.About)
+		}
+		if l.Matched != "" {
+			b.WriteString(" Matched \"" + l.Matched + "\"; read before querying.")
+		}
+		b.WriteString(" `" + l.Playbook.Path + "`")
 	}
 	return b.String()
 }
@@ -495,10 +540,7 @@ func slackSection(md string) string {
 	// Slack messages carry code blocks often, so the fence is one backtick
 	// longer than the longest run inside and a ``` in a message cannot
 	// close it.
-	fence := "```"
-	for strings.Contains(md, fence) {
-		fence += "`"
-	}
+	fence := fenceFor(md)
 	return "## From Slack (the thread the session was started from; also in slack.md)\n\n" +
 		fence + "\n" + strings.TrimRight(md, "\n") + "\n" + fence
 }
