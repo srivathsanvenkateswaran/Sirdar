@@ -400,6 +400,17 @@ func (s *Service) shadowObserveRun(e Event) {
 		if err != nil || !cfg.Shadow.Enabled {
 			return
 		}
+		// Only the process watching the workspace collects. A second serve
+		// that found the lock taken sees the same run complete, and
+		// collecting there too would append the outcomes twice and pay the
+		// judge twice.
+		w := s.shadowWatch(ws.ID, ws.Root)
+		s.shadow.mu.Lock()
+		watching := w.locked && w.watching
+		s.shadow.mu.Unlock()
+		if !watching {
+			return
+		}
 		// An eval run is a measurement like a shadow run, and says nothing
 		// about how the ticket ended.
 		if _, st, err := store.Open(ws.Root, runID); err != nil || st.Measurement() {

@@ -265,6 +265,7 @@ func TestObserveTriggersCollection(t *testing.T) {
 	judge := &gradeJudge{answer: confirmedAnswer, cost: 0.03}
 	judge.install(t)
 	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{Shadow: true})
+	waitWatching(t, f.svc, f.wsID)
 	now := f.clock.Now()
 	finishedShadow(t, f, "OMNI-1", now.Add(-2*time.Hour))
 	operatorRun(t, f.root, "OMNI-1", "20261006T090000Z-op01", store.KindRCA, now.Add(-time.Hour),
@@ -570,6 +571,7 @@ func TestObserveOnlyOnTransition(t *testing.T) {
 		// The operator's RCA finished before serve started.
 		writeRCAState(t, root, "20261006T090000Z-op01", store.StatusCompleted, now.Add(-time.Hour))
 	})
+	waitWatching(t, f.svc, f.wsID)
 	events, unsubscribe := f.svc.Subscribe()
 	defer unsubscribe()
 
@@ -602,6 +604,7 @@ func TestObserveAppliesWindowAndPause(t *testing.T) {
 	judge := &gradeJudge{answer: confirmedAnswer, cost: 0.03}
 	judge.install(t)
 	f := newShadowFixture(t, shadowConfig(5, ""), nil, Options{Shadow: true})
+	waitWatching(t, f.svc, f.wsID)
 	now := f.clock.Now()
 	until := now.Add(time.Hour)
 	f.append(t, shadow.Entry{At: now, Ev: "paused", Until: &until, Reason: "paused by the operator"})
@@ -690,5 +693,72 @@ func TestAppendGradedKeepsTheCost(t *testing.T) {
 	}
 	if usd := shadow.Today(*landed, 0, line.At).USD; usd != 0.07 {
 		t.Errorf("Today USD = %v, want the judge's cost", usd)
+	}
+}
+
+// waitWatching waits until svc's supervisor holds the workspace's lock.
+func waitWatching(t *testing.T, svc *Service, wsID string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		svc.shadow.mu.Lock()
+		w := svc.shadow.ws[wsID]
+		held := w != nil && w.locked && w.watching
+		svc.shadow.mu.Unlock()
+		if held {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the supervisor never took the workspace's lock")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestObserveOnlyInTheWatchingProcess: a second serve on the workspace
+// reports locked-elsewhere, and collecting there too would append the same
+// outcomes twice and pay the judge twice.
+func TestObserveOnlyInTheWatchingProcess(t *testing.T) {
+	judge := &gradeJudge{answer: confirmedAnswer, cost: 0.03}
+	judge.install(t)
+	// Everything is on disk before either process starts, so neither run
+	// watcher takes the RCA for news; the test sends the completion itself.
+	f := newObservedService(t, func(root string, now time.Time) {
+		shadowLedgerAt(t, root, "OMNI-1", now.Add(-2*time.Hour))
+		operatorRun(t, root, "OMNI-1", "20261006T090000Z-op01", store.KindRCA, now.Add(-time.Hour),
+			&store.RCAInputs{Resolution: "Null tenant on refund"}, "")
+	})
+	waitWatching(t, f.svc, f.wsID)
+
+	other := New(newRegistry(t, f.root), stubBuilder(f.p, &shadowTracker{}, stubHelpdesk{}),
+		Options{Interval: 20 * time.Millisecond, Now: f.clock.Now, Shadow: true, ShadowBy: "second serve"})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	other.Start(ctx)
+	t.Cleanup(other.Stop)
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		st, err := other.shadowStatus(f.wsID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.State == "locked-elsewhere" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the second service is %s, want locked-elsewhere", st.State)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	other.shadow.mu.Lock()
+	delete(other.shadow.runStatus, f.wsID+"\x00OMNI-1\x0020261006T090000Z-op01")
+	other.shadow.mu.Unlock()
+	other.observe(Event{Kind: KindRunUpdated, WorkspaceID: f.wsID, Run: &RunSummary{
+		RunID: "20261006T090000Z-op01", Key: "OMNI-1", Kind: "rca", Status: "completed",
+	}})
+	time.Sleep(300 * time.Millisecond)
+	if n := judge.count(); n != 0 || len(ofEv(f.ledger(t), "outcome")) != 0 {
+		t.Fatalf("a process not watching the workspace collected: %d judge calls\n%s", n, dumpLedger(f.ledger(t)))
 	}
 }
