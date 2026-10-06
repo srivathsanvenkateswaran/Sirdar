@@ -277,6 +277,11 @@ func compactArgs(input json.RawMessage) string {
 // the workspace, an IP literal — since asking would only offer a button
 // that does nothing.
 func (p *PermissionPolicy) askFor(tool string, input json.RawMessage) (PermissionAsk, bool) {
+	// A credential typed by the agent lands in the transcript, so this is
+	// not the operator's to allow: they log in in the browser themselves.
+	if p.Repro != nil && p.Repro.credentialCall(tool, input) {
+		return PermissionAsk{}, false
+	}
 	if AlwaysDenied[tool] || fixAllowed[tool] || writeTools[tool] {
 		return PermissionAsk{}, false
 	}

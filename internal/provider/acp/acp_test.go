@@ -1453,6 +1453,71 @@ func TestFixRunSelectsBuildThroughAConfigOption(t *testing.T) {
 	}
 }
 
+// TestModelSetThroughConfigOption is phases.note.model on ACP: the session
+// opens on the agent's default model, and a spec naming another one the
+// agent offers switches it before the prompt goes out.
+func TestModelSetThroughConfigOption(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-config-option-model.jsonl", cwd, func(spec *provider.SessionSpec) {
+		spec.Model = "b"
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if id, value := configOptionSet(t, res); id != "model" || value != "b" {
+		t.Errorf("session/set_config_option configId=%q value=%q, want model/b", id, value)
+	}
+	methods := sentMethods(t, res)
+	set, prompt := indexOf(methods, "session/set_config_option"), indexOf(methods, "session/prompt")
+	if set < 0 || prompt < 0 || set > prompt {
+		t.Errorf("methods = %v, want session/set_config_option before session/prompt", methods)
+	}
+	var selected bool
+	for _, ev := range only(evs, provider.EvSystem) {
+		if ev.Text == "acp model b selected" && ev.Model == "b" {
+			selected = true
+		}
+	}
+	if !selected {
+		t.Errorf("the selected model was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
+// TestModelNotOfferedSaysSo: a model the agent does not offer is not sent,
+// and the run is told the agent's default answered instead.
+func TestModelNotOfferedSaysSo(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-config-option-model-unset.jsonl", cwd, func(spec *provider.SessionSpec) {
+		spec.Model = "c"
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if id, value := configOptionSet(t, res); id != "" || value != "" {
+		t.Errorf("session/set_config_option sent %s=%q for a model the agent does not offer", id, value)
+	}
+	if !systemText(evs, "model c not applied: this agent offers a, b") {
+		t.Errorf("no not-applied notice; system events = %+v", only(evs, provider.EvSystem))
+	}
+
+	// An agent with no model option at all says that instead.
+	sess = spawn(t, "script-basic.jsonl", workspace(t), func(spec *provider.SessionSpec) {
+		spec.Model = "c"
+	})
+	evs = drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if !systemText(evs, "model c not applied: this agent advertises no model option") {
+		t.Errorf("no not-applied notice for an agent without a model option; system events = %+v",
+			only(evs, provider.EvSystem))
+	}
+}
+
 // TestConfigOptionModelIsReported: an ACP agent is under no obligation to
 // say which model it is using, and most say nothing. One that advertises a
 // `model` config option has told the client, and that is what the run

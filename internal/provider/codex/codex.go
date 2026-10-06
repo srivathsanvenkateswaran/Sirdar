@@ -345,8 +345,31 @@ func (s *session) startTurn(text string, images []string) error {
 	if len(s.spec.OutputSchema) > 0 {
 		params["outputSchema"] = json.RawMessage(s.spec.OutputSchema)
 	}
+	// thread/resume ignores the model (only thread/start takes one), so a
+	// resumed thread that should answer under another model — the note
+	// turn under phases.note.model — names it on the turn instead.
+	s.mu.Lock()
+	turnModel := s.spec.Resume != "" && s.spec.Model != "" && !s.turnModelRefused
+	s.mu.Unlock()
+	if turnModel {
+		params["model"] = s.spec.Model
+	}
 
 	raw, err := s.conn.call("turn/start", params)
+	var rpcErr *rpcError
+	if err != nil && turnModel && errors.As(err, &rpcErr) &&
+		strings.Contains(strings.ToLower(rpcErr.Message), "model") {
+		// An app-server that does not take a per-turn model still runs
+		// the turn under the thread's own model, which is better than no
+		// note at all; the system line says the configured one was not
+		// applied, and later turns stop offering it.
+		s.mu.Lock()
+		s.turnModelRefused = true
+		s.mu.Unlock()
+		delete(params, "model")
+		s.emit(provider.Event{Kind: provider.EvSystem, Text: "phases.note.model not applied: codex refused a per-turn model"})
+		raw, err = s.conn.call("turn/start", params)
+	}
 	if err != nil {
 		return fmt.Errorf("codex: turn/start: %w", err)
 	}
@@ -389,6 +412,9 @@ type session struct {
 	mu       sync.Mutex
 	threadID string
 	turnID   string
+	// turnModelRefused is set once the app-server has refused a per-turn
+	// model, so a follow-up turn does not ask, and fail, again.
+	turnModelRefused bool
 	// pendingMCP is, per server, the FIFO of tool names whose item/started
 	// has arrived but whose approval has not yet been decided. An MCP
 	// tool-call approval arrives as an elicitation, which names the server

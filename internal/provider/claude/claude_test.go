@@ -1357,6 +1357,25 @@ func TestResumeCarriesTheModel(t *testing.T) {
 	}
 }
 
+// TestArgsCarryModelBesideResume is what phases.note.model rests on for
+// claude: the note turn resumes the reply's session under its own model, so
+// each flag has to carry its own value, not merely appear somewhere.
+func TestArgsCarryModelBesideResume(t *testing.T) {
+	got := args(provider.SessionSpec{Model: "claude-sonnet-5", Resume: "abc"})
+	pairs := map[string]string{"--model": "claude-sonnet-5", "--resume": "abc"}
+	for flag, value := range pairs {
+		found := false
+		for i := 0; i+1 < len(got); i++ {
+			if got[i] == flag && got[i+1] == value {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("missing %s %s in %v", flag, value, got)
+		}
+	}
+}
+
 // TestUserServersJoinTheWorkspaceConfig is mcp.userServers on the claude
 // path: the session runs strict against a generated file holding the
 // workspace's .mcp.json servers and the opted user entries verbatim, and the

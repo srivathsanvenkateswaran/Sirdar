@@ -515,6 +515,7 @@ func (s *session) handshake(ctx context.Context) error {
 		// the same reason it was selected the first time.
 		loadedOptions := configOptionsOf(loaded)
 		s.reportModel(loadedOptions, loaded)
+		s.selectModel(s.spec.Resume, loadedOptions, loaded)
 		s.selectMode(modesOf(loaded, init), loadedOptions, loaded)
 		return nil
 	}
@@ -540,6 +541,7 @@ func (s *session) handshake(ctx context.Context) error {
 	s.mu.Unlock()
 	options := configOptionsOf(raw)
 	s.reportModel(options, raw)
+	s.selectModel(created.SessionID, options, raw)
 	s.selectMode(modesOf(raw, init), options, raw)
 	return nil
 }
@@ -572,6 +574,58 @@ func (s *session) reportModel(options []configOption, raw json.RawMessage) {
 		Text:  "acp model " + option.CurrentValue,
 		Model: option.CurrentValue,
 		Raw:   raw,
+	})
+}
+
+// selectModel puts the session on the spec's model, which is how a phase
+// model (phases.note.model) reaches an ACP agent: session/new and
+// session/load take no model, so the only lever is the agent's own model
+// config option. An agent without one, or without the model among its
+// values, answers with its default, and the system line says so rather
+// than the run recording a model that never answered.
+func (s *session) selectModel(sessionID string, options []configOption, raw json.RawMessage) {
+	want := s.spec.Model
+	if want == "" {
+		return
+	}
+	option := modelOption(options)
+	if option == nil {
+		s.emit(provider.Event{
+			Kind: provider.EvSystem,
+			Text: "model " + want + " not applied: this agent advertises no model option",
+			Raw:  raw,
+		})
+		return
+	}
+	chosen := option.value(want)
+	if chosen == "" {
+		s.emit(provider.Event{
+			Kind: provider.EvSystem,
+			Text: "model " + want + " not applied: this agent offers " + strings.Join(option.values(), ", "),
+			Raw:  raw,
+		})
+		return
+	}
+	if chosen == option.CurrentValue {
+		return
+	}
+	if _, err := s.conn.call("session/set_config_option", map[string]any{
+		"sessionId": sessionID,
+		"configId":  option.ID,
+		"value":     chosen,
+	}); err != nil {
+		s.emit(provider.Event{
+			Kind: provider.EvSystem,
+			Text: fmt.Sprintf("model %s not applied: %v", want, err),
+			Raw:  raw,
+		})
+		return
+	}
+	s.emit(provider.Event{
+		Kind:  provider.EvSystem,
+		Text:  "acp model " + chosen + " selected",
+		Model: chosen,
+		Raw:   rawOf(map[string]any{"configId": option.ID, "value": chosen}),
 	})
 }
 
