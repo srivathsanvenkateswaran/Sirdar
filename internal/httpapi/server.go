@@ -354,7 +354,7 @@ func (s *server) attachments(w http.ResponseWriter, r *http.Request) {
 // prober learns nothing from the difference between a file that is not
 // there and a path that was not allowed.
 func (s *server) attachmentFile(w http.ResponseWriter, r *http.Request) {
-	full, ctype, err := s.svc.AttachmentFile(r.PathValue("id"), r.PathValue("runId"), path.Join("attachments", r.PathValue("name")))
+	full, ctype, err := s.svc.AttachmentFile(r.PathValue("id"), r.PathValue("runId"), "attachments", path.Join("attachments", r.PathValue("name")))
 	s.serveBundleFile(w, r, full, ctype, err)
 }
 
@@ -373,10 +373,12 @@ func (s *server) gathered(w http.ResponseWriter, r *http.Request) {
 }
 
 // contextFile serves one gathered file out of bundle/context/, the same
-// way attachmentFile serves bundle/attachments/: through AttachmentFile,
-// which guards both directories identically.
+// way attachmentFile serves bundle/attachments/: through AttachmentFile.
+// Each route passes its own kind, so the two can never reach into each
+// other's directory even when the joined name's own ".." would otherwise
+// collapse into it.
 func (s *server) contextFile(w http.ResponseWriter, r *http.Request) {
-	full, ctype, err := s.svc.AttachmentFile(r.PathValue("id"), r.PathValue("runId"), path.Join("context", r.PathValue("name")))
+	full, ctype, err := s.svc.AttachmentFile(r.PathValue("id"), r.PathValue("runId"), "context", path.Join("context", r.PathValue("name")))
 	s.serveBundleFile(w, r, full, ctype, err)
 }
 

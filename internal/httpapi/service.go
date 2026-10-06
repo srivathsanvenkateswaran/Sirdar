@@ -32,9 +32,12 @@ type Service interface {
 	Prompt(wsID, runID string) (string, error)
 	// Attachments lists the run bundle's attachments; AttachmentFile
 	// resolves one bundle-relative path to a file on disk and the type to
-	// serve it as, refusing anything outside the run's own bundle.
+	// serve it as, refusing anything outside the run's own bundle. kind is
+	// the one directory ("attachments" or "context") the caller's route
+	// serves, so a name that collapses into the other directory is refused
+	// rather than served across the boundary.
 	Attachments(wsID, runID string) ([]Attachment, error)
-	AttachmentFile(wsID, runID, name string) (string, string, error)
+	AttachmentFile(wsID, runID, kind, name string) (string, string, error)
 	// Gathered lists bundle/context/index.json: the lookups Sirdar ran
 	// before the agent started. AttachmentFile also serves the files
 	// under context/, so there is no separate ContextFile method.

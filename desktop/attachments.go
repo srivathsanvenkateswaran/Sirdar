@@ -42,7 +42,11 @@ func (b *Bridge) Gathered(ws, runId string) ([]app.GatheredInfo, error) {
 // The path is bundle-relative and the service refuses anything that does
 // not resolve inside the run's own bundle directory.
 func (b *Bridge) AttachmentDataURL(ws, runId, name string) (string, error) {
-	full, ctype, err := b.svc.AttachmentFile(ws, runId, name)
+	// name already carries its own "attachments/" or "context/" prefix
+	// from a listing the desktop trusts (Attachments or Gathered), so
+	// nobody here is choosing between the bundle's two directories the
+	// way an HTTP route is — either is fine.
+	full, ctype, err := b.svc.AttachmentFile(ws, runId, "", name)
 	if err != nil {
 		return "", err
 	}

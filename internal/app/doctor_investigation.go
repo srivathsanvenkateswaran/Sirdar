@@ -102,18 +102,31 @@ func hasAllowedOrigins(args []string) bool {
 // from, in the order a rule there would be found: the user's own settings,
 // then the workspace's project and local settings, then $CLAUDE_CONFIG_DIR's
 // settings when that variable is set (the same override the user-scope MCP
-// lookup honours).
+// lookup honours). CLAUDE_CONFIG_DIR commonly points straight at ~/.claude,
+// which is the same file as the first entry under a different spelling; the
+// paths are cleaned and deduplicated so that case does not read the same
+// settings.json twice and warn about every rule in it twice.
 func claudeSettingsPaths(cfg *config.Config) []string {
-	var paths []string
+	var candidates []string
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		paths = append(paths, filepath.Join(home, ".claude", "settings.json"))
+		candidates = append(candidates, filepath.Join(home, ".claude", "settings.json"))
 	}
-	paths = append(paths,
+	candidates = append(candidates,
 		filepath.Join(cfg.Root, ".claude", "settings.json"),
 		filepath.Join(cfg.Root, ".claude", "settings.local.json"),
 	)
 	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
-		paths = append(paths, filepath.Join(dir, "settings.json"))
+		candidates = append(candidates, filepath.Join(dir, "settings.json"))
+	}
+	seen := make(map[string]bool, len(candidates))
+	paths := make([]string, 0, len(candidates))
+	for _, p := range candidates {
+		clean := filepath.Clean(p)
+		if seen[clean] {
+			continue
+		}
+		seen[clean] = true
+		paths = append(paths, clean)
 	}
 	return paths
 }
@@ -140,7 +153,12 @@ func claudeSettingsAllowWarnings(cfg *config.Config, server string) []string {
 			continue
 		}
 		for _, rule := range doc.Permissions.Allow {
-			if strings.HasPrefix(rule, prefix) {
+			// A plain HasPrefix(rule, prefix) also matches a rule for a
+			// different server whose name merely starts with this one's,
+			// e.g. "mcp__playwright2__…" against the "playwright" repro
+			// server — so the rule must name this server exactly, or one
+			// of its tools with the "__" separator Claude settings use.
+			if rule == prefix || strings.HasPrefix(rule, prefix+"__") {
 				out = append(out, fmt.Sprintf("Claude settings %s allow %s; those calls never reach Sirdar's repro guard", path, rule))
 			}
 		}
@@ -178,5 +196,5 @@ func reproCheck(cfg *config.Config) Check {
 		return warn("repro", strings.Join(warnings, "; "))
 	}
 	return Check{Name: "repro", OK: true,
-		Detail: fmt.Sprintf("%s confines the browser to %s", cfg.Repro.Server, strings.Join(cfg.Repro.Hosts, ", "))}
+		Detail: fmt.Sprintf("%s is started with --allowed-origins; repro hosts: %s", cfg.Repro.Server, strings.Join(cfg.Repro.Hosts, ", "))}
 }

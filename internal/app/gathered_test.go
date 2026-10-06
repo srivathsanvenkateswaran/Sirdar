@@ -171,7 +171,7 @@ func TestContextFileIsServed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	full, _, err := svc.AttachmentFile(ws, runID, "context/a.md")
+	full, _, err := svc.AttachmentFile(ws, runID, "context", "context/a.md")
 	if err != nil {
 		t.Fatalf("AttachmentFile: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestContextFileIsServed(t *testing.T) {
 		"the directory":    "context",
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, _, err := svc.AttachmentFile(ws, runID, path); !errors.Is(err, ErrNoSuchRun) {
+			if _, _, err := svc.AttachmentFile(ws, runID, "context", path); !errors.Is(err, ErrNoSuchRun) {
 				t.Fatalf("AttachmentFile(%q) = %v, want ErrNoSuchRun", path, err)
 			}
 		})
@@ -200,7 +200,7 @@ func TestContextFileIsServed(t *testing.T) {
 	if err := os.Symlink(secret, filepath.Join(contextDir, "leak.txt")); err != nil {
 		t.Skipf("symlink: %v", err)
 	}
-	if _, _, err := svc.AttachmentFile(ws, runID, "context/leak.txt"); !errors.Is(err, ErrNoSuchRun) {
+	if _, _, err := svc.AttachmentFile(ws, runID, "context", "context/leak.txt"); !errors.Is(err, ErrNoSuchRun) {
 		t.Fatalf("a symlink pointing out of the bundle was served: %v", err)
 	}
 }

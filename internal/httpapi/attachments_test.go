@@ -91,6 +91,33 @@ func TestAttachmentFileRefusesAnythingButAName(t *testing.T) {
 	}
 }
 
+// TestContextRouteCannotReachAttachments and its mirror pin that each
+// bundle route passes its own kind down to AttachmentFile: a name that
+// would otherwise collapse across the boundary — context/ reached through
+// the attachments route's own join, or the reverse — is refused the same
+// way anything else outside the bundle is, rather than served out of the
+// other directory.
+func TestContextRouteCannotReachAttachments(t *testing.T) {
+	f := fakeWithAttachment(t)
+	full := f.attachmentFiles["attachments/screenshot.png"]
+	f.attachmentFiles["context/../attachments/screenshot.png"] = full
+
+	w := do(t, f, "GET", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/bundle/context/..%2Fattachments%2Fscreenshot.png", "")
+	if w.Code == 200 {
+		t.Fatalf("the context route served an attachment: %q", w.Body.String())
+	}
+}
+
+func TestAttachmentsRouteCannotReachContext(t *testing.T) {
+	f := fakeWithAttachment(t)
+	f.attachmentFiles["context/index.json"] = f.attachmentFiles["attachments/screenshot.png"]
+
+	w := do(t, f, "GET", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/bundle/attachments/..%2Fcontext%2Findex.json", "")
+	if w.Code == 200 {
+		t.Fatalf("the attachments route served a gathered file: %q", w.Body.String())
+	}
+}
+
 func TestAttachmentRoutesAreScopedToTheRun(t *testing.T) {
 	f := fakeWithAttachment(t)
 	for _, target := range []string{

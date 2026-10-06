@@ -236,6 +236,95 @@ func TestReproCheckOKWithAllowedOriginsAndNoAllowRule(t *testing.T) {
 	}
 }
 
+// TestReproCheckIgnoresRuleForALongerServerName pins the fix for a prefix
+// match that was too loose: strings.HasPrefix(rule, "mcp__"+server) also
+// matched a rule for a different server whose name merely starts with the
+// repro server's own, e.g. "playwright" against "mcp__playwright2__…". That
+// rule approves calls to playwright2, not to the repro server, so it must
+// not be reported here.
+func TestReproCheckIgnoresRuleForALongerServerName(t *testing.T) {
+	home := claudeTempHome(t)
+	cfg := reproWorkspace(t, []string{"--allowed-origins", "https://staging.oxo.example"})
+
+	dir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{"permissions":{"allow":["mcp__playwright2__browser_click"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	check := reproCheck(cfg)
+	if !check.OK || check.Level == "warn" {
+		t.Fatalf("reproCheck = %+v, want OK: the rule names mcp__playwright2__…, not this repro server", check)
+	}
+}
+
+// TestClaudeSettingsPathsDedupesCLAUDE_CONFIG_DIR: when CLAUDE_CONFIG_DIR
+// points at the same directory os.UserHomeDir()'s own ".claude" already
+// resolves to, claudeSettingsPaths must list that settings.json once, not
+// twice — otherwise every rule in it is read, and warned about, twice.
+func TestClaudeSettingsPathsDedupesCLAUDE_CONFIG_DIR(t *testing.T) {
+	home := claudeTempHome(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"))
+	root := newWorkspace(t)
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	paths := claudeSettingsPaths(cfg)
+	seen := map[string]int{}
+	for _, p := range paths {
+		seen[p]++
+	}
+	for p, n := range seen {
+		if n > 1 {
+			t.Errorf("claudeSettingsPaths lists %s %d times, want once", p, n)
+		}
+	}
+}
+
+// TestReproCheckWarnsOnceWithCLAUDE_CONFIG_DIRPointingAtHome: the end-to-end
+// shape of the same bug — a rule in ~/.claude/settings.json produces one
+// warning line for that path, not one per alias the settings directory is
+// reachable under.
+func TestReproCheckWarnsOnceWithCLAUDE_CONFIG_DIRPointingAtHome(t *testing.T) {
+	home := claudeTempHome(t)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"))
+	cfg := reproWorkspace(t, []string{"--allowed-origins", "https://staging.oxo.example"})
+
+	dir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := filepath.Join(dir, "settings.json")
+	if err := os.WriteFile(settings, []byte(`{"permissions":{"allow":["mcp__playwright__browser_click"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	check := reproCheck(cfg)
+	if n := strings.Count(check.Detail, "mcp__playwright__browser_click"); n != 1 {
+		t.Errorf("Detail = %q names the rule %d times, want once", check.Detail, n)
+	}
+}
+
+// TestReproCheckOKDetailSaysWhatWasChecked: the OK row only confirms the
+// server is started with --allowed-origins, not that it "confines the
+// browser" — Sirdar never inspects what the flag actually restricts — so
+// the detail says what was checked instead of a result it cannot see.
+func TestReproCheckOKDetailSaysWhatWasChecked(t *testing.T) {
+	claudeTempHome(t)
+	cfg := reproWorkspace(t, []string{"--allowed-origins", "https://staging.oxo.example"})
+
+	check := reproCheck(cfg)
+	want := "playwright is started with --allowed-origins; repro hosts: staging.oxo.example"
+	if check.Detail != want {
+		t.Errorf("Detail = %q, want %q", check.Detail, want)
+	}
+}
+
 // TestRunDoctorDefaultRows: a default workspace has gather on and repro
 // unconfigured, so the report carries a gather row and a playbooks row,
 // both OK, and no repro row at all.
