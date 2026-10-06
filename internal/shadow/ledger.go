@@ -222,11 +222,13 @@ type Ticket struct {
 	Backfill                 bool
 	Attempts                 []Attempt // in ledger order
 	Outcomes                 []Entry
-	Grade                    *Entry // the newest graded line whose ShadowRunID is the latest attempt's RunID
+	Grade                    *Entry // the newest graded line with a grade whose ShadowRunID is the latest attempt's RunID
 	Skipped                  string // reason of the newest skipped line
 
 	// grades is every graded line for the key in ledger order, kept because
 	// each one spent a judge call even after a newer grade superseded it.
+	// That includes a judge call that failed, whose line carries its cost
+	// and no grade.
 	grades []Entry
 }
 
@@ -288,7 +290,9 @@ func Fold(entries []Entry) map[string]*Ticket {
 	// A grade is about one run, and a ticket's grade is its latest run's:
 	// a grade of an earlier attempt says nothing about the retry. Among the
 	// latest run's grades the newest wins, which is how a final grade
-	// supersedes a provisional one.
+	// supersedes a provisional one. A line with no grade records a judge
+	// call that failed; it says nothing about the run, so it cannot hide
+	// the grade before it.
 	for _, t := range out {
 		gs := t.grades
 		latest := t.Latest()
@@ -296,7 +300,7 @@ func Fold(entries []Entry) map[string]*Ticket {
 			continue
 		}
 		for i := len(gs) - 1; i >= 0; i-- {
-			if gs[i].ShadowRunID == latest.Started.RunID {
+			if gs[i].ShadowRunID == latest.Started.RunID && gs[i].Grade != "" {
 				g := gs[i]
 				t.Grade = &g
 				break

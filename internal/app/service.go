@@ -234,6 +234,7 @@ func (s *Service) scanQuota() {
 // tracker before it is fanned out.
 func (s *Service) observe(e Event) {
 	s.publish(e)
+	s.shadowObserveRun(e)
 	if e.Kind != KindRunEvent || e.Event == nil {
 		return
 	}

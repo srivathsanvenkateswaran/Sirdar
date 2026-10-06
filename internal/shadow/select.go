@@ -237,6 +237,14 @@ func statusMatches(statuses []string, status string) bool {
 	return false
 }
 
+// RetryPending reports whether the ticket's latest attempt finished in a
+// way the watcher may still retry. Its finished line is not the ticket's
+// last word until the retry runs, so collection leaves it ungraded.
+func RetryPending(t *Ticket) bool {
+	last := t.Latest()
+	return last != nil && last.Finished != nil && len(t.Attempts) < MaxAttempts && retryable(last.Finished)
+}
+
 // retryable reports whether a finished attempt ended for a reason another
 // run could get past: a provider failure, a crash that interrupted it, or a
 // rate or model limit that has since had time to lift. A not_found failure

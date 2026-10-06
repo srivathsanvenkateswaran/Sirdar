@@ -56,6 +56,9 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 		checks = append(checks, c)
 	}
 	checks = append(checks, fetchCheck(cfg), transcribeCheck(cfg))
+	if c, ok := shadowCheck(ctx, cfg); ok {
+		checks = append(checks, c)
+	}
 	checks = append(checks, playbooksCheck(cfg))
 	if cfg.GatherEnabled() {
 		checks = append(checks, gatherCheck(cfg))

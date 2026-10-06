@@ -103,8 +103,11 @@ type shadowState struct {
 	mu        sync.Mutex
 	ws        map[string]*shadowWatch
 	startedAt time.Time
-	cancel    context.CancelFunc
-	done      chan struct{}
+	// ctx is the supervisor's context, which collection passes started
+	// outside a tick run under, so Stop cancels them with everything else.
+	ctx    context.Context
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 func newShadowState() *shadowState {
@@ -134,6 +137,14 @@ type shadowWatch struct {
 
 	inFlight  map[string]bool // run ids
 	published *ShadowStatus
+
+	// collect serialises outcome passes, and nextOutcomes is when the
+	// tick next runs one. judgeFails counts failed judge calls by key and
+	// local day, so a key whose judge keeps failing stops costing money
+	// until the day turns.
+	collect      sync.Mutex
+	nextOutcomes time.Time
+	judgeFails   map[string]int
 }
 
 func (s *Service) shadowWatch(wsID, root string) *shadowWatch {
@@ -141,7 +152,7 @@ func (s *Service) shadowWatch(wsID, root string) *shadowWatch {
 	defer s.shadow.mu.Unlock()
 	w := s.shadow.ws[wsID]
 	if w == nil {
-		w = &shadowWatch{inFlight: map[string]bool{}}
+		w = &shadowWatch{inFlight: map[string]bool{}, judgeFails: map[string]int{}}
 		s.shadow.ws[wsID] = w
 	}
 	w.root = root
@@ -379,6 +390,7 @@ func (s *Service) startShadow(ctx context.Context) {
 	done := make(chan struct{})
 	s.shadow.mu.Lock()
 	s.shadow.startedAt = s.now()
+	s.shadow.ctx = sctx
 	s.shadow.cancel = cancel
 	s.shadow.done = done
 	s.shadow.mu.Unlock()
@@ -515,7 +527,9 @@ func (s *Service) shadowSuperviseOne(ctx context.Context, ws Workspace, cfg *con
 // --- one tick ---------------------------------------------------------
 
 // shadowTick is one poll of one workspace (spec §4): recover runs a crash
-// left behind, arm, gate, list, record, start.
+// left behind, arm, gate, list, record, start, collect outcomes. The daily
+// digest goes last, whichever way the tick ended: a tick that is gated or
+// paused still has a day to report.
 func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Config) error {
 	w := s.shadowWatch(ws.ID, ws.Root)
 	w.tick.Lock()
@@ -523,6 +537,7 @@ func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Conf
 	defer s.shadowPublish(ws, cfg)
 
 	now := s.now()
+	defer s.maybeSendDigest(ctx, ws, cfg, now)
 	interval := cfg.ShadowInterval()
 	root := ws.Root
 
@@ -691,6 +706,22 @@ func (s *Service) shadowTick(ctx context.Context, ws Workspace, cfg *config.Conf
 		}
 		started++
 	}
+
+	// 7. Collect outcomes and grade, on its own, longer schedule.
+	s.shadow.mu.Lock()
+	outcomesDue := !now.Before(w.nextOutcomes)
+	if outcomesDue {
+		w.nextOutcomes = now.Add(cfg.ShadowOutcomesInterval())
+	}
+	s.shadow.mu.Unlock()
+	if outcomesDue {
+		if _, err := s.shadowCollectAndGrade(ctx, ws, cfg, nil); err != nil {
+			s.shadow.mu.Lock()
+			w.lastError = err.Error()
+			s.shadow.mu.Unlock()
+		}
+	}
+
 	if plan.CapHit != "" && started == 0 {
 		settle("gated", plan.CapHit)
 		return nil

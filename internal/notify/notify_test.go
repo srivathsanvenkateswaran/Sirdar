@@ -501,3 +501,22 @@ func TestMultiReportsEveryFailure(t *testing.T) {
 		t.Fatalf("error %v", err)
 	}
 }
+
+// TestPostSlackText pins the shadow digest's payload: the text alone, with
+// no blocks, through the same transport as run notifications.
+func TestPostSlackText(t *testing.T) {
+	rec := newRecorder(t, nil)
+	if err := PostSlackText(context.Background(), rec.url("/services/T000/B000/xoxbSECRET"), "Sirdar shadow, 2026-10-06: started 1"); err != nil {
+		t.Fatal(err)
+	}
+	msg := rec.body(t)
+	if msg["text"] != "Sirdar shadow, 2026-10-06: started 1" {
+		t.Errorf("text %v", msg["text"])
+	}
+	if _, ok := msg["blocks"]; ok || len(msg) != 1 {
+		t.Errorf("payload %v, want only text", msg)
+	}
+	if h := <-rec.headers; h.Get("Content-Type") != "application/json" {
+		t.Errorf("Content-Type %q", h.Get("Content-Type"))
+	}
+}
