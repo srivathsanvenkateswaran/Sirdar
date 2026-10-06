@@ -1,0 +1,12 @@
+{
+  "rca": {
+    "title": "Refund total ignores voided lines",
+    "summary": "The refund total summed voided lines because the void flag was never read.",
+    "classification": "code",
+    "severity": "medium",
+    "confidence": "high"
+  },
+  "resolution": {
+    "summary": "Read the void flag before summing."
+  }
+}

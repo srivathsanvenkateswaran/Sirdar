@@ -1,0 +1,9 @@
+{
+  "classification": "code",
+  "rootCause": {
+    "hypothesis": "A missing null check in the order mapper drops the discount.",
+    "confidence": "medium",
+    "codeRefs": ["src/a.cs:12"]
+  },
+  "openQuestions": []
+}
