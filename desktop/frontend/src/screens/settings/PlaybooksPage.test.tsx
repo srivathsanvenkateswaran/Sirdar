@@ -364,6 +364,19 @@ describe('pending suggestions', () => {
     expect(screen.queryByText('Pending suggestions')).toBeNull()
   })
 
+  it('says so in one line when the pending suggestions cannot be read, instead of drawing nothing', async () => {
+    const t = fake({ playbooks: BOOKS })
+    t.suggestions = vi.fn(async () => {
+      throw new Error('suggestions.jsonl: permission denied')
+    })
+    open(t)
+    await screen.findByText('Orders')
+    const line = await screen.findByText(/^Could not read pending suggestions\./)
+    expect(line).toHaveTextContent('Could not read pending suggestions. suggestions.jsonl: permission denied')
+    expect(line).toHaveClass('form-error')
+    expect(screen.queryByText('Pending suggestions')).toBeNull()
+  })
+
   it('shows the target, the source and the addition clamped to three lines with Show all', async () => {
     open(fake({ playbooks: BOOKS, suggestions: [REMEMBERED] }))
     const row = await screen.findByTestId('suggestion-row')
