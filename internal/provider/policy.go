@@ -588,46 +588,17 @@ func matchCommand(root string, allow []string, command string, readable func(str
 // the same as a build's output flag would refuse that alongside the
 // output-flag cases this rule exists for.
 func escapesRoot(root string, extraReserved []string, segment string, readable func(string) bool) string {
-	previousBareFlag := false
-	previousFlag := ""
 	tokens := argTokens(segment)
 	reader := readsOnly(tokens)
-	for _, arg := range tokens {
-		isFlagValue := previousBareFlag
-		afterFlag := previousFlag
-		previousBareFlag = false
-		previousFlag = ""
-		if arg == "" {
-			continue
-		}
-		if v, ok := attachedValue(arg); ok {
-			// `sort -o~/x` and `curl -o/etc/x` carry the value in the flag's
-			// own token; it is judged like any flag value, not skipped as a
-			// bare flag.
-			arg = v
-			isFlagValue = true
-			afterFlag = ""
-		} else if strings.HasPrefix(arg, "-") {
-			// A flag carrying its value in the same token hides a path
-			// from a check that skipped every token starting with "-":
-			// `git diff --output=/Users/you/.zshrc` matched a `git diff*`
-			// pattern and wrote outside the workspace. The value half is
-			// judged like any other argument.
-			_, value, ok := strings.Cut(arg, "=")
-			if !ok || value == "" {
-				// A bare flag with no "=" in this token: whatever value it
-				// takes, if any, is the next token. Mark it so the
-				// reserved-directory check below can tell "-o .githooks"
-				// apart from an ordinary positional argument like `cd
-				// .sirdar/runs`, without also needing to know the flag's
-				// name or whether it takes a value at all.
-				previousBareFlag = true
-				previousFlag = arg
-				continue
-			}
-			arg = value
-			isFlagValue = true
-			afterFlag = ""
+
+	// judge reports why one value escapes, or "". isFlagValue says the value
+	// belongs to a flag; afterFlag names the bare flag it followed, or is ""
+	// for a value carried in the flag's own token.
+	judge := func(arg string, isFlagValue bool, afterFlag string) string {
+		// Output sent to the null device is thrown away, not written
+		// anywhere, whether it is a flag's value or an operand.
+		if arg == "" || arg == devNull {
+			return ""
 		}
 		// A positional argument the run may read is not an escape. For a
 		// command that only reads (readsOnly), neither is a readable path
@@ -641,7 +612,7 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 		// option is the flag's own and is always judged.
 		if readable != nil && readable(arg) &&
 			(!isFlagValue || (reader && afterFlag != "" && !writesTo[afterFlag])) {
-			continue
+			return ""
 		}
 		switch {
 		case strings.HasPrefix(arg, "~"):
@@ -650,15 +621,10 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 			return "the path " + quote(arg) + " is outside the workspace root, which is as far as a shell command reaches"
 		case IsRooted(arg):
 			if root == "" {
-				continue
+				return ""
 			}
 			if !withinRoot(root, arg) {
 				return "the path " + quote(arg) + " is outside the workspace root " + quote(root)
-			}
-			if isFlagValue {
-				if reserved := reservedArgument(root, extraReserved, arg); reserved != "" {
-					return "the path " + quote(arg) + " is inside " + reserved + "/, which a fix never writes to"
-				}
 			}
 		default:
 			// filepath.Separator rather than a literal "/", because
@@ -672,12 +638,57 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 				return "the path " + quote(arg) + " climbs out of the workspace root, which is as far as a shell command reaches"
 			}
 			if root == "" {
-				continue
+				return ""
 			}
-			if isFlagValue {
-				if reserved := reservedArgument(root, extraReserved, arg); reserved != "" {
-					return "the path " + quote(arg) + " is inside " + reserved + "/, which a fix never writes to"
-				}
+		}
+		if isFlagValue {
+			if reserved := reservedArgument(root, extraReserved, arg); reserved != "" {
+				return "the path " + quote(arg) + " is inside " + reserved + "/, which a fix never writes to"
+			}
+		}
+		return ""
+	}
+
+	previousBareFlag := false
+	previousFlag := ""
+	for _, arg := range tokens {
+		isFlagValue := previousBareFlag
+		afterFlag := previousFlag
+		previousBareFlag = false
+		previousFlag = ""
+		if arg == "" {
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") {
+			if why := judge(arg, isFlagValue, afterFlag); why != "" {
+				return why
+			}
+			continue
+		}
+		// A flag can carry its value in its own token, hiding a path from a
+		// check that skipped every token starting with "-": after "=", as
+		// in `git diff --output=/Users/you/.zshrc`, or attached to a short
+		// option, as in `sort -o~/x` or `curl -sSo/etc/x`. Every value the
+		// token could be carrying is judged, since which reading the tool
+		// takes depends on flags the policy does not know.
+		var values []string
+		if _, value, ok := strings.Cut(arg, "="); ok && value != "" {
+			values = append(values, value)
+		}
+		values = append(values, attachedValues(arg)...)
+		if len(values) == 0 {
+			// A bare flag: whatever value it takes, if any, is the next
+			// token. Mark it so the reserved-directory check can tell "-o
+			// .githooks" apart from an ordinary positional argument like
+			// `cd .sirdar/runs`, without also needing to know the flag's
+			// name or whether it takes a value at all.
+			previousBareFlag = true
+			previousFlag = arg
+			continue
+		}
+		for _, v := range values {
+			if why := judge(v, true, ""); why != "" {
+				return why
 			}
 		}
 	}
@@ -731,6 +742,34 @@ var gitDeniedFlagsAnywhere = map[string]bool{
 	"--open-files-in-pager": true,
 	"--upload-pack":         true,
 	"--receive-pack":        true,
+}
+
+// deniedGitSpelling returns the gitDeniedFlagsAnywhere entry a token
+// spells, however git would accept it, or the token itself. A short option
+// can sit anywhere in a cluster with its value attached (`-nO'sh -c id'` is
+// -n and -O), and git takes any unambiguous abbreviation of a long option
+// (`--open=` is --open-files-in-pager), so an exact-name lookup let both
+// through.
+func deniedGitSpelling(flag string) string {
+	if gitDeniedFlagsAnywhere[flag] {
+		return flag
+	}
+	if len(flag) > 2 && flag[0] == '-' && flag[1] != '-' {
+		for i := 1; i < len(flag); i++ {
+			if short := "-" + string(flag[i]); gitDeniedFlagsAnywhere[short] {
+				return short
+			}
+		}
+		return flag
+	}
+	if name, ok := strings.CutPrefix(flag, "--"); ok && name != "" {
+		for denied := range gitDeniedFlagsAnywhere {
+			if strings.HasPrefix(denied, "--"+name) {
+				return denied
+			}
+		}
+	}
+	return flag
 }
 
 // gitDeniedFlagsBeforeSubcommand are top-level git options, valid only
@@ -810,11 +849,7 @@ func gitDenial(segment string) string {
 		if name, _, ok := strings.Cut(arg, "="); ok {
 			flag = name
 		}
-		// A short option carries its value in the same token as readily as
-		// after "=": `git grep -O'sh -c id'` is -O with a program attached.
-		if len(flag) > 2 && flag[0] == '-' && flag[1] != '-' && gitDeniedFlagsAnywhere[flag[:2]] {
-			flag = flag[:2]
-		}
+		flag = deniedGitSpelling(flag)
 		if gitDeniedFlagsAnywhere[flag] {
 			return quote(segment) + " passes git " + quote(flag) +
 				", which moves where git reads its configuration, writes its output, " +
@@ -1082,31 +1117,39 @@ func readsOnly(tokens []string) bool {
 	return false
 }
 
+// devNull is the null device as a shell command names it. The literal, not
+// os.DevNull: the policy judges the command's text, and on Windows the
+// shells Sirdar's agents use spell it this way too.
+const devNull = "/dev/null"
+
 // outputLetters are the short options that name a file or directory to
 // write in the common tools: -o and -O (sort, curl, wget, gcc), -T (sort's
 // temporary directory), -D (curl's header dump) and -P (wget's directory).
 const outputLetters = "oOTDP"
 
-// attachedValue returns the value an output option carries in its own
-// token, as in `-o/etc/x`, or at the end of a cluster, as in `-sSo~/x`,
-// when that value names a path. Other letters keep their attached text as
-// it is, since a delimiter (`cut -d/`) or a pattern (`git log -S/api`) is
-// not a place anything is written.
-func attachedValue(arg string) (string, bool) {
-	if len(arg) <= 2 || arg[0] != '-' || arg[1] == '-' || strings.Contains(arg, "=") {
-		return "", false
+// attachedValues returns every value an output option could be carrying in
+// its own token, as in `-o/etc/x`, or within a cluster, as in `-sSo~/x`
+// or curl's `-Oo/x` (-O, then -o /x): the text after each output letter
+// that names a path. Other letters keep their attached text as it is,
+// since a delimiter (`cut -d/`) or a pattern (`git log -S/api`) is not a
+// place anything is written.
+func attachedValues(arg string) []string {
+	if len(arg) <= 2 || arg[0] != '-' || arg[1] == '-' {
+		return nil
 	}
+	var out []string
 	for i := 1; i < len(arg)-1; i++ {
+		if arg[i] == '=' {
+			break
+		}
 		if !strings.ContainsRune(outputLetters, rune(arg[i])) {
 			continue
 		}
-		v := arg[i+1:]
-		if looksLikePath(v) {
-			return v, true
+		if v := arg[i+1:]; looksLikePath(v) {
+			out = append(out, v)
 		}
-		return "", false
 	}
-	return "", false
+	return out
 }
 
 // looksLikePath reports whether an attached option value names a file: it

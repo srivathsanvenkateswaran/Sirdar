@@ -21,7 +21,7 @@ func companionPolicy(t *testing.T) (p *PermissionPolicy, companion, elsewhere st
 		}
 	}
 	p.ReadAlso = []string{companion}
-	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *", "wc *", "sort *", "go test*", "wget *", "curl *", "awk *", "tar *", "cp *", "openssl *", "git difftool*", "cut *", "git grep*"}
+	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *", "wc *", "sort *", "go test*", "wget *", "curl *", "awk *", "tar *", "cp *", "openssl *", "git difftool*", "cut *", "git grep*", "git ls-remote*"}
 	return p, companion, elsewhere
 }
 
@@ -56,6 +56,9 @@ func TestReadOnlyBashReachesACompanionRepository(t *testing.T) {
 		"cut -d/ -f2 " + filepath.Join(companion, "src", "app.html"),
 		"git -C " + companion + " log -S/api/v1 --oneline",
 		"rg -e/api/v1 " + filepath.Join(companion, "src"),
+		// Output thrown away is not a write anywhere.
+		"curl -sS -o/dev/null https://example.com/x",
+		"curl -sS -o /dev/null https://example.com/x",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); !d.Allow {
 			t.Errorf("refused %q: %s", c, d.Message)
@@ -117,6 +120,13 @@ func TestBashStillStopsAtTheReadScope(t *testing.T) {
 		"rg --hostname-bin " + filepath.Join(companion, "evil.sh") + " x",
 		"git grep -O'sh -c id' foo",
 		"git grep --open-files-in-pager='sh -c id' foo",
+		// The third review: a denied letter later in a cluster, git's
+		// abbreviations of long options, a second output letter, and an
+		// "=" inside the path all still reached a program or a write.
+		"git grep -nO'sh -c id' foo",
+		"git grep --open='sh -c id' foo",
+		"curl -Oo/tmp/x https://example.com/x",
+		"curl -o/Users/me/Library/LaunchAgents/a=b.plist https://example.com/x",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); d.Allow {
 			t.Errorf("allowed %q", c)
