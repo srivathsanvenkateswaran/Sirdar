@@ -187,7 +187,7 @@ func TestGitGlobalFlagDoesNotHideTheSubcommand(t *testing.T) {
 // --exec, the alias of --upload-pack and --receive-pack, ran a program.
 func TestGitClusterAndExecSpellings(t *testing.T) {
 	p, companion, _ := companionPolicy(t)
-	p.BashAllow = []string{"git log*", "git grep*", "git ls-remote*", "git clone*", "git archive*", "git status*"}
+	p.BashAllow = []string{"git log*", "git grep*", "git ls-remote*", "git clone*", "git archive*", "git status*", "git *"}
 	for _, c := range []string{
 		"git log -Sfoo",
 		"git log -S'some string' --oneline",
@@ -196,6 +196,7 @@ func TestGitClusterAndExecSpellings(t *testing.T) {
 		"git grep -efoo",
 		"git -C " + companion + " log -Sfoo",
 		"git status -uno",
+		"git grep -eO'x' foo",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); !d.Allow {
 			t.Errorf("refused %q: %s", c, d.Message)
@@ -207,6 +208,10 @@ func TestGitClusterAndExecSpellings(t *testing.T) {
 		"git ls-remote --exec='sh -c id' .",
 		"git clone -u 'sh -c id' . x",
 		"git archive --remote=. --exec='sh -c id' HEAD",
+		"git --namespace x grep -nO'sh -c id' foo",
+		"git clone -qu 'sh -c id' . x",
+		"git clone -quprog . x",
+		"git grep -n5O'sh -c id' foo",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); d.Allow {
 			t.Errorf("allowed %q", c)

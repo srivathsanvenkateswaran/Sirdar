@@ -771,7 +771,7 @@ func deniedGitSpelling(flag, subcommand string) string {
 			if short := "-" + string(c); gitDeniedFlagsAnywhere[short] {
 				return short
 			}
-			if strings.IndexByte(gitGrepValueLetters, c) >= 0 || c >= '0' && c <= '9' {
+			if strings.IndexByte(gitGrepValueLetters, c) >= 0 {
 				break
 			}
 		}
@@ -785,6 +785,28 @@ func deniedGitSpelling(flag, subcommand string) string {
 		}
 	}
 	return flag
+}
+
+// gitCloneValueLetters are git clone's short options that take a value:
+// -o origin name, -b branch, -c config, -j jobs.
+const gitCloneValueLetters = "obcj"
+
+// clusterHas reports whether a short-option token sets letter, reading the
+// cluster left to right until a letter in valueLetters, whose value is the
+// rest of the token.
+func clusterHas(flag string, letter byte, valueLetters string) bool {
+	if len(flag) < 2 || flag[0] != '-' || flag[1] == '-' {
+		return false
+	}
+	for i := 1; i < len(flag); i++ {
+		if flag[i] == letter {
+			return true
+		}
+		if strings.IndexByte(valueLetters, flag[i]) >= 0 {
+			return false
+		}
+	}
+	return false
 }
 
 // gitGrepValueLetters are git grep's short options that take a value, so
@@ -811,6 +833,11 @@ var gitDeniedFlagsBeforeSubcommand = map[string]bool{
 	"--work-tree":  true,
 	"--exec-path":  true,
 	"--config-env": true,
+	// These take their value as the next word, which gitDenial would then
+	// read as the subcommand: `git --namespace x grep -nO prog` would be
+	// judged as a git "x" and its grep flags never looked at.
+	"--namespace":   true,
+	"--attr-source": true,
 }
 
 // gitDenial reports why a git command segment is refused outright, or ""
@@ -874,8 +901,9 @@ func gitDenial(segment string) string {
 		flag = deniedGitSpelling(flag, subcommand)
 		// git clone's -u is --upload-pack's short name: the program it
 		// names runs on the far side of the clone. Elsewhere -u is
-		// ordinary (status -u, add -u, diff -u), so only clone refuses it.
-		if subcommand == "clone" && (flag == "-u" || strings.HasPrefix(flag, "-u")) {
+		// ordinary (status -u, add -u, diff -u), so only clone refuses it,
+		// wherever it sits in a cluster (`-qu prog`).
+		if subcommand == "clone" && clusterHas(flag, 'u', gitCloneValueLetters) {
 			return quote(segment) + " passes git clone " + quote("-u") +
 				", which names the program git runs as upload-pack; no allow-list pattern approves it"
 		}
