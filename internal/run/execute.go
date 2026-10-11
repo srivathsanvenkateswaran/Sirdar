@@ -1331,6 +1331,9 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		// turn that carries the note is itself one of them, so a note filed
 		// on the eighth turn of eight is kept.
 		if c := r.noteCap(p); c > 0 && p.state.Phase == store.PhaseNote && ex.seen.Turns > c && len(ex.final) == 0 {
+			if r.retryNoteAfterPhaseModelFailed(ctx, p, sess, log, ex, noteCapReason(c)) {
+				return
+			}
 			r.endNoteTurn(sess, ex, noteCapReason(c))
 			break
 		}
@@ -1735,6 +1738,9 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	case !empty && ex.retried:
 		ex.schemaError = firstProblem(err)
+		if r.retryNoteAfterPhaseModelFailed(ctx, p, sess, log, ex, "schema validation failed twice: "+ex.schemaError) {
+			return
+		}
 		ex.failTurn(p, "schema validation failed twice: "+ex.schemaError)
 		sess.Cancel()
 		return
@@ -1743,6 +1749,9 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// A note turn that has used its cap does not get another turn to fix
 	// its answer in: the retry would be the ninth turn of eight.
 	if c := r.noteCap(p); c > 0 && p.state.Phase == store.PhaseNote && ex.seen.Turns >= c {
+		if r.retryNoteAfterPhaseModelFailed(ctx, p, sess, log, ex, noteCapReason(c)) {
+			return
+		}
 		r.endNoteTurn(sess, ex, noteCapReason(c))
 		return
 	}
@@ -2097,11 +2106,38 @@ func (r *Runner) announceNoteModel(p *prepared, log *eventLog, model string) {
 // whole investigation can certainly write it down. It happens once; a
 // limit on the run's model ends the note turn as any limit does.
 func (r *Runner) retryNoteOnRunModel(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, limited string) {
+	r.fileNoteOnRunModel(ctx, p, sess, log, ex,
+		fmt.Sprintf("%s hit a model limit; filing the note on %s", limited, modelName(p.state.RequestedModel())),
+		"note model hit a limit")
+}
+
+// retryNoteAfterPhaseModelFailed files the note on the run's own model when
+// the note turn on phases.note.model failed to write it: it ran out of turns
+// or answered with JSON that would not validate twice. The 2026-10-11
+// OMNI-3420 run had claude-sonnet-5 send an unparseable note, then call its
+// schema's fields as tools until the 8-turn cap, after Opus had answered the
+// operator in full. It happens once, and reports false when it does not
+// apply, so the caller ends the note turn as before.
+func (r *Runner) retryNoteAfterPhaseModelFailed(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, reason string) bool {
+	m := r.notePhaseModel(p)
+	if m == "" || p.noteModelDropped || ex.retrySession != nil || p.state.Phase != store.PhaseNote {
+		return false
+	}
+	r.fileNoteOnRunModel(ctx, p, sess, log, ex,
+		fmt.Sprintf("%s did not file the note (%s); filing it on %s", m, reason, modelName(p.state.RequestedModel())),
+		"note model failed")
+	return true
+}
+
+// fileNoteOnRunModel drops phases.note.model for the rest of the run and
+// opens a fresh note session on the run's own model, with line as the
+// transcript's account of why and why as the model segment's.
+func (r *Runner) fileNoteOnRunModel(ctx context.Context, p *prepared, sess provider.Session, log *eventLog, ex *execution, line, why string) {
 	p.noteModelDropped = true
-	r.recordSystem(p, log, fmt.Sprintf("%s hit a model limit; filing the note on %s", limited, modelName(p.state.RequestedModel())))
+	r.recordSystem(p, log, line)
 	// The segment announceNoteModel wrote names the note model; the note
 	// is now the run model's to write, and the state says so.
-	p.state.ModelSegments = append(p.state.ModelSegments, store.ModelSegment{At: r.now(), Model: p.state.RequestedModel(), Why: "note model hit a limit"})
+	p.state.ModelSegments = append(p.state.ModelSegments, store.ModelSegment{At: r.now(), Model: p.state.RequestedModel(), Why: why})
 	p.state.UpdatedAt = r.now()
 	if err := p.run.WriteState(p.state); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)

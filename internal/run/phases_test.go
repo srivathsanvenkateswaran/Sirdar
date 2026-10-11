@@ -292,6 +292,86 @@ func TestNoteModelLimitRetriesOnTheReplyModel(t *testing.T) {
 	}
 }
 
+// The 2026-10-11 OMNI-3420 run: claude-sonnet-5 sent a note that would not
+// parse, then called its schema's fields as tools until the note turn's cap,
+// and the run ended with Opus's full reply but no note. A note the note model
+// cannot file is filed once on the run's own model.
+func TestNoteModelThatRunsOutOfTurnsRetriesOnTheReplyModel(t *testing.T) {
+	cfg := newWorkspaceWith(t, phasesYAML(noteModelYAML))
+	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
+		switch {
+		case len(spec.OutputSchema) == 0:
+			replay(provider.Event{Kind: provider.EvFinal, Text: "Answer."})(spec, s)
+		case spec.Model == "claude-sonnet-5":
+			events := make([]provider.Event, 0, 10)
+			for turn := 1; turn <= 10; turn++ {
+				events = append(events, provider.Event{Kind: provider.EvUsage, Turns: turn})
+			}
+			untilCancelled(s, events...)
+		default:
+			replay(finalEvent(triageDoc))(spec, s)
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	if n := p.startCount(); n != 3 {
+		t.Fatalf("started %d sessions, want reply, note, note on the run model", n)
+	}
+	if got := p.spec(2).Model; got != "claude-opus-5-5" {
+		t.Errorf("retry model %q, want the run model", got)
+	}
+	if !hasLine(t, runDir(t, cfg, out), "claude-sonnet-5 did not file the note (the note turn used its 8-turn cap); filing it on") {
+		t.Error("no system line for the retry")
+	}
+}
+
+func TestNoteModelThatFailsTheSchemaTwiceRetriesOnTheReplyModel(t *testing.T) {
+	cfg := newWorkspaceWith(t, phasesYAML(noteModelYAML))
+	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
+		if spec.Model == "claude-sonnet-5" && len(spec.OutputSchema) > 0 {
+			failingNote(spec, s)
+			return
+		}
+		if len(spec.OutputSchema) == 0 {
+			replay(provider.Event{Kind: provider.EvFinal, Text: "Answer."})(spec, s)
+			return
+		}
+		replay(finalEvent(triageDoc))(spec, s)
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	if out.State.Status != store.StatusCompleted || out.State.NoteWarning != "" {
+		t.Fatalf("status %q reason %q warning %q", out.State.Status, out.State.Reason, out.State.NoteWarning)
+	}
+	if got := p.spec(p.startCount() - 1).Model; got != "claude-opus-5-5" {
+		t.Errorf("last session on %q, want the run model", got)
+	}
+	if !hasLine(t, runDir(t, cfg, out), "did not file the note (schema validation failed twice") {
+		t.Error("no system line for the retry")
+	}
+}
+
+// Without phases.note.model the note turn is already on the run's model, and
+// a failed note ends as it always has.
+func TestFailedNoteWithoutANoteModelIsNotRetried(t *testing.T) {
+	cfg := newWorkspaceWith(t, phasesYAML(""))
+	p := &stubProvider{script: failingNote}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out := triageOne(t, r, Options{})
+	if !strings.HasPrefix(out.State.NoteWarning, "note not filed: schema validation failed twice") {
+		t.Fatalf("warning %q", out.State.NoteWarning)
+	}
+	if n := p.startCount(); n != 2 {
+		t.Errorf("started %d sessions, want reply and note", n)
+	}
+}
+
 func TestEvalIgnoresPhases(t *testing.T) {
 	cfg := newWorkspaceWith(t, phasesYAML("phases:\n  reply:\n    model: claude-sonnet-5\n    maxTurns: 3\n  note:\n    model: claude-haiku-5\n"))
 	p := &stubProvider{script: replay(finalEvent(triageDoc))}
