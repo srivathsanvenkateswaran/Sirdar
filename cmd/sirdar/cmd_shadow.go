@@ -214,18 +214,37 @@ func cmdShadowRun(args []string, stdout, stderr io.Writer) int {
 	defer unsubscribe()
 	defer svc.Stop()
 
-	started, err := svc.ShadowRun(ctx, wsID, keys, *backfill)
-	if err != nil {
-		fmt.Fprintf(stderr, "sirdar shadow run: %v\n", err)
-	}
+	// One key at a time, each waited for before the next starts. Handing
+	// them all over at once let shadow.concurrency turn every key after the
+	// first away ("skipped: shadow.concurrency reached") on the 2026-10-11
+	// backfill smoke; an operator who names three keys wants three runs.
+	// Each start still goes through the gate and the daily caps, so a cap
+	// reached partway is reported for the keys it stops.
+	var (
+		started     []app.ShadowStarted
+		err         error
+		interrupted bool
+	)
 	// The outcome each job reported, by run id. A run whose job.finished
 	// was missed is read back from its state instead.
 	status := map[string]string{}
-	interrupted := !waitForJobs(ctx, svc, events, func(ev app.Event) {
-		for _, o := range ev.Outcomes {
-			status[o.RunID] = o.Status
+	for _, key := range keys {
+		if interrupted {
+			started = append(started, app.ShadowStarted{Key: key, Skipped: "interrupted before it started"})
+			continue
 		}
-	})
+		got, runErr := svc.ShadowRun(ctx, wsID, []string{key}, *backfill)
+		if runErr != nil {
+			fmt.Fprintf(stderr, "sirdar shadow run: %s: %v\n", key, runErr)
+			err = runErr
+		}
+		started = append(started, got...)
+		interrupted = !waitForJobs(ctx, svc, events, func(ev app.Event) {
+			for _, o := range ev.Outcomes {
+				status[o.RunID] = o.Status
+			}
+		})
+	}
 
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	startedAny := false

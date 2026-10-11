@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -295,4 +296,49 @@ func TestShadowCommandsExitCodes(t *testing.T) {
 	}
 	mustRun(t, 1, "shadow", "status")
 	mustRun(t, 1, "suggestions")
+}
+
+// The 2026-10-11 backfill smoke: `shadow run` with three keys and
+// shadow.concurrency 1 started the first and turned the other two away.
+// Named keys run one after another instead.
+func TestShadowRunTakesNamedKeysInTurn(t *testing.T) {
+	root := shadowWorkspace(t)
+	raw, err := os.ReadFile(filepath.Join(testdataDir, "tickets.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture map[string]map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	second := strings.ReplaceAll(string(fixture["tracker"]["OMNI-1"]), "OMNI-1", "OMNI-2")
+	fixture["tracker"]["OMNI-2"] = json.RawMessage(second)
+	both, err := json.Marshal(fixture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tickets := filepath.Join(t.TempDir(), "tickets.json")
+	if err := os.WriteFile(tickets, both, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(root, ".sirdar", "config.yaml")
+	cfg, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := strings.ReplaceAll(string(cfg), filepath.Join(testdataDir, "tickets.json"), tickets) +
+		"shadow:\n  enabled: false\n  concurrency: 1\n  maxPerDay: 5\n  maxUSDPerDay: 10\n"
+	if err := os.WriteFile(cfgPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr := runCLI(t, "shadow", "run", "OMNI-1", "OMNI-2")
+	if strings.Contains(stdout, "skipped") {
+		t.Fatalf("a named key was skipped:\n%s\nstderr: %s", stdout, stderr)
+	}
+	for _, key := range []string{"OMNI-1", "OMNI-2"} {
+		if !regexp.MustCompile(`(?m)^` + key + `\s+\d{8}T\d{6}Z-`).MatchString(stdout) {
+			t.Errorf("%s has no run:\n%s\nstderr: %s", key, stdout, stderr)
+		}
+	}
 }
