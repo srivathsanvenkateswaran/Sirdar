@@ -181,3 +181,35 @@ func TestGitGlobalFlagDoesNotHideTheSubcommand(t *testing.T) {
 		t.Errorf("allowed %q", c)
 	}
 }
+
+// The fourth review: scanning every git cluster for -O read the pickaxe's
+// own value as flags and refused the commands a triage lives on, while
+// --exec, the alias of --upload-pack and --receive-pack, ran a program.
+func TestGitClusterAndExecSpellings(t *testing.T) {
+	p, companion, _ := companionPolicy(t)
+	p.BashAllow = []string{"git log*", "git grep*", "git ls-remote*", "git clone*", "git archive*", "git status*"}
+	for _, c := range []string{
+		"git log -Sfoo",
+		"git log -S'some string' --oneline",
+		"git log -Gpattern_word",
+		"git log -L10,20:internal/foo.go",
+		"git grep -efoo",
+		"git -C " + companion + " log -Sfoo",
+		"git status -uno",
+	} {
+		if d := p.Decide("Bash", bashInput(c)); !d.Allow {
+			t.Errorf("refused %q: %s", c, d.Message)
+		}
+	}
+	for _, c := range []string{
+		"git grep -nO'sh -c id' foo",
+		"git grep -GO'sh -c id' foo",
+		"git ls-remote --exec='sh -c id' .",
+		"git clone -u 'sh -c id' . x",
+		"git archive --remote=. --exec='sh -c id' HEAD",
+	} {
+		if d := p.Decide("Bash", bashInput(c)); d.Allow {
+			t.Errorf("allowed %q", c)
+		}
+	}
+}

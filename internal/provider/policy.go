@@ -740,24 +740,39 @@ var gitDeniedFlagsAnywhere = map[string]bool{
 	// git grep opens its matches in whatever program these name.
 	"-O":                    true,
 	"--open-files-in-pager": true,
-	"--upload-pack":         true,
-	"--receive-pack":        true,
+	// --exec is --upload-pack's and --receive-pack's other name, on
+	// ls-remote, fetch, push and archive --remote alike.
+	"--exec":         true,
+	"--upload-pack":  true,
+	"--receive-pack": true,
 }
 
 // deniedGitSpelling returns the gitDeniedFlagsAnywhere entry a token
-// spells, however git would accept it, or the token itself. A short option
-// can sit anywhere in a cluster with its value attached (`-nO'sh -c id'` is
-// -n and -O), and git takes any unambiguous abbreviation of a long option
-// (`--open=` is --open-files-in-pager), so an exact-name lookup let both
-// through.
-func deniedGitSpelling(flag string) string {
+// spells, however git would accept it, or the token itself. git takes any
+// unambiguous abbreviation of a long option (`--open=` is
+// --open-files-in-pager). A short option is its first letter, except in git
+// grep, whose -O can follow other letters in one cluster (`-nO'sh -c id'`
+// is -n and -O); the scan stops at a letter that takes a value, since what
+// follows is that value and not more flags. Scanning every subcommand's
+// clusters read `git log -Sfoo` as -S, -f, -o, -o and refused a pickaxe.
+func deniedGitSpelling(flag, subcommand string) string {
 	if gitDeniedFlagsAnywhere[flag] {
 		return flag
 	}
 	if len(flag) > 2 && flag[0] == '-' && flag[1] != '-' {
+		if subcommand != "grep" {
+			if gitDeniedFlagsAnywhere[flag[:2]] {
+				return flag[:2]
+			}
+			return flag
+		}
 		for i := 1; i < len(flag); i++ {
-			if short := "-" + string(flag[i]); gitDeniedFlagsAnywhere[short] {
+			c := flag[i]
+			if short := "-" + string(c); gitDeniedFlagsAnywhere[short] {
 				return short
+			}
+			if strings.IndexByte(gitGrepValueLetters, c) >= 0 || c >= '0' && c <= '9' {
+				break
 			}
 		}
 		return flag
@@ -771,6 +786,11 @@ func deniedGitSpelling(flag string) string {
 	}
 	return flag
 }
+
+// gitGrepValueLetters are git grep's short options that take a value, so
+// the rest of a cluster after one is that value: -e pattern, -f file,
+// -A/-B/-C context, -m count.
+const gitGrepValueLetters = "efABCm"
 
 // gitDeniedFlagsBeforeSubcommand are top-level git options, valid only
 // before the subcommand name, that move where every git command which
@@ -834,10 +854,12 @@ func gitDenial(segment string) string {
 		return ""
 	}
 	sawSubcommand := false
+	subcommand := ""
 	for _, arg := range args[i+1:] {
 		if !strings.HasPrefix(arg, "-") {
 			if !sawSubcommand {
 				sawSubcommand = true
+				subcommand = arg
 				if arg == "config" {
 					return quote(segment) + " runs `git config`, which writes the settings " +
 						"(core.hooksPath among them) that decide what every later git command does"
@@ -849,7 +871,14 @@ func gitDenial(segment string) string {
 		if name, _, ok := strings.Cut(arg, "="); ok {
 			flag = name
 		}
-		flag = deniedGitSpelling(flag)
+		flag = deniedGitSpelling(flag, subcommand)
+		// git clone's -u is --upload-pack's short name: the program it
+		// names runs on the far side of the clone. Elsewhere -u is
+		// ordinary (status -u, add -u, diff -u), so only clone refuses it.
+		if subcommand == "clone" && (flag == "-u" || strings.HasPrefix(flag, "-u")) {
+			return quote(segment) + " passes git clone " + quote("-u") +
+				", which names the program git runs as upload-pack; no allow-list pattern approves it"
+		}
 		if gitDeniedFlagsAnywhere[flag] {
 			return quote(segment) + " passes git " + quote(flag) +
 				", which moves where git reads its configuration, writes its output, " +
