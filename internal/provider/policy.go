@@ -589,9 +589,12 @@ func matchCommand(root string, allow []string, command string, readable func(str
 // output-flag cases this rule exists for.
 func escapesRoot(root string, extraReserved []string, segment string, readable func(string) bool) string {
 	previousBareFlag := false
+	previousFlag := ""
 	for _, arg := range argTokens(segment) {
 		isFlagValue := previousBareFlag
+		afterFlag := previousFlag
 		previousBareFlag = false
+		previousFlag = ""
 		if arg == "" {
 			continue
 		}
@@ -610,15 +613,23 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 				// .sirdar/runs`, without also needing to know the flag's
 				// name or whether it takes a value at all.
 				previousBareFlag = true
+				previousFlag = arg
 				continue
 			}
 			arg = value
 			isFlagValue = true
+			afterFlag = ""
 		}
-		// A positional argument the run may read is not an escape. A flag's
-		// value is judged as before, since an output flag is where a
-		// command writes.
-		if readable != nil && !isFlagValue && readable(arg) {
+		// A positional argument the run may read is not an escape. Neither
+		// is a readable path after a bare flag, unless that flag is one that
+		// names an output or a program: the token after `-l` or `-A6` is
+		// whatever the command reads next, and refusing it refused `wc -l
+		// companion/*` and `rg -A6 x companion/file` on the 2026-10-11
+		// OMNI-3420 rerun. A value joined with "=" is the flag's own and is
+		// judged as before, and so is any flag's value inside a reserved
+		// directory, since no list of output flags is complete.
+		if readable != nil && readable(arg) && (!isFlagValue || (afterFlag != "" && !writesTo[afterFlag] &&
+			reservedArgument(root, extraReserved, arg) == "")) {
 			continue
 		}
 		switch {
@@ -977,6 +988,28 @@ var findDeniedFlags = map[string]bool{
 	"-execdir": true,
 	"-ok":      true,
 	"-okdir":   true,
+	// These write the list find makes to a file, which a "find *" pattern
+	// on a read-only run would otherwise allow anywhere the run may read,
+	// the workspace included.
+	"-fprint":  true,
+	"-fprint0": true,
+	"-fprintf": true,
+	"-fls":     true,
+}
+
+// writesTo are bare flags whose next token is an output or a program, never
+// a path the command reads. escapesRoot judges that token as a flag value
+// even when the run may read it: `sort -o companion/x` writes there, and
+// `rg --pre companion/x.sh` runs it.
+var writesTo = map[string]bool{
+	"-o":                 true,
+	"-O":                 true,
+	"--output":           true,
+	"--output-directory": true,
+	"--output-file":      true,
+	"--out":              true,
+	"--log-file":         true,
+	"--pre":              true,
 }
 
 // findDenial reports why a find command segment is refused outright, or ""

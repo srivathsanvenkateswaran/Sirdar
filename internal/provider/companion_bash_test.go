@@ -21,7 +21,7 @@ func companionPolicy(t *testing.T) (p *PermissionPolicy, companion, elsewhere st
 		}
 	}
 	p.ReadAlso = []string{companion}
-	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *"}
+	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *", "wc *", "sort *", "go test*"}
 	return p, companion, elsewhere
 }
 
@@ -43,6 +43,13 @@ func TestReadOnlyBashReachesACompanionRepository(t *testing.T) {
 		"git -C " + companion + " log --oneline -5 -- src/app/components/select-search",
 		"git -C " + companion + " show HEAD~1 --stat",
 		"rg -n x " + rel + "/src",
+		// The 2026-10-11 OMNI-3420 rerun: a path right after a bare flag
+		// (`-l`, `-A6`) was read as that flag's value and judged as a place
+		// to write, so a read of the companion was refused.
+		"wc -l " + filepath.Join(companion, "src") + "/*",
+		"ls " + filepath.Join(companion, "src") + "/; wc -l " + filepath.Join(companion, "src") + "/*",
+		"rg -n select -A6 " + filepath.Join(companion, "src", "app.html"),
+		"grep -rn root -- " + filepath.Join(companion, "src"),
 	} {
 		if d := p.Decide("Bash", bashInput(c)); !d.Allow {
 			t.Errorf("refused %q: %s", c, d.Message)
@@ -60,6 +67,21 @@ func TestBashStillStopsAtTheReadScope(t *testing.T) {
 		"git -C " + companion + " push",
 		// A flag's value is where a command may write; it stays in the workspace.
 		"rg --files x --pre=" + filepath.Join(companion, "x.sh"),
+		// The same with the value as its own token: a flag that names an
+		// output or a program never takes a read path, however it is spelled.
+		"rg --files x --pre " + filepath.Join(companion, "x.sh"),
+		"sort -o " + filepath.Join(companion, "out.txt") + " x",
+		"git log --output " + filepath.Join(companion, "log.txt"),
+		"rg -n x --log-file " + filepath.Join(companion, "rg.log"),
+		// find's own writing actions write wherever they point, the
+		// workspace included, so no pattern approves them.
+		"find " + filepath.Join(companion, "src") + " -fprint " + filepath.Join(companion, "list.txt"),
+		"find . -fprintf out.txt %p",
+		"find . -fls out.txt",
+		"find . -fprint0 out.txt",
+		// A bare flag this list does not know still cannot name a reserved
+		// directory: the run may read .git, but a value there may be written.
+		"go test -coverprofile .git/hooks/pre-commit ./...",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); d.Allow {
 			t.Errorf("allowed %q", c)
