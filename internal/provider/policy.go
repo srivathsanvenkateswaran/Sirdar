@@ -590,7 +590,10 @@ func matchCommand(root string, allow []string, command string, readable func(str
 func escapesRoot(root string, extraReserved []string, segment string, readable func(string) bool) string {
 	previousBareFlag := false
 	previousFlag := ""
-	for _, arg := range argTokens(segment) {
+	tokens := argTokens(segment)
+	reader := readsOnly(tokens)
+	positionalOnly := false
+	for _, arg := range tokens {
 		isFlagValue := previousBareFlag
 		afterFlag := previousFlag
 		previousBareFlag = false
@@ -598,7 +601,21 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 		if arg == "" {
 			continue
 		}
-		if strings.HasPrefix(arg, "-") {
+		if arg == "--" && !positionalOnly {
+			// Everything after "--" is an operand, never a flag or its value.
+			positionalOnly = true
+			continue
+		}
+		if positionalOnly {
+			isFlagValue = false
+		} else if v, ok := attachedValue(arg); ok {
+			// `sort -o~/x` and `curl -o/etc/x` carry the value in the flag's
+			// own token; it is judged like any flag value, not skipped as a
+			// bare flag.
+			arg = v
+			isFlagValue = true
+			afterFlag = ""
+		} else if strings.HasPrefix(arg, "-") {
 			// A flag carrying its value in the same token hides a path
 			// from a check that skipped every token starting with "-":
 			// `git diff --output=/Users/you/.zshrc` matched a `git diff*`
@@ -620,16 +637,18 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 			isFlagValue = true
 			afterFlag = ""
 		}
-		// A positional argument the run may read is not an escape. Neither
-		// is a readable path after a bare flag, unless that flag is one that
-		// names an output or a program: the token after `-l` or `-A6` is
-		// whatever the command reads next, and refusing it refused `wc -l
-		// companion/*` and `rg -A6 x companion/file` on the 2026-10-11
-		// OMNI-3420 rerun. A value joined with "=" is the flag's own and is
-		// judged as before, and so is any flag's value inside a reserved
-		// directory, since no list of output flags is complete.
-		if readable != nil && readable(arg) && (!isFlagValue || (afterFlag != "" && !writesTo[afterFlag] &&
-			reservedArgument(root, extraReserved, arg) == "")) {
+		// A positional argument the run may read is not an escape. For a
+		// command that only reads (readsOnly), neither is a readable path
+		// after a bare flag: the token after `-l` or `-A6` is whatever wc or
+		// rg reads next, and refusing it refused `wc -l companion/*` and `rg
+		// -A6 x companion/file` on the 2026-10-11 OMNI-3420 rerun. Any other
+		// command's flag value stays judged as a place it may write: no list
+		// of output flags is complete (wget --output-document, curl
+		// --output-dir, go test -coverprofile all reached a companion's .git
+		// when one was tried). A value joined with "=" or attached to a short
+		// option is the flag's own and is always judged.
+		if readable != nil && readable(arg) &&
+			(!isFlagValue || (reader && afterFlag != "" && !writesTo[afterFlag])) {
 			continue
 		}
 		switch {
@@ -997,10 +1016,9 @@ var findDeniedFlags = map[string]bool{
 	"-fls":     true,
 }
 
-// writesTo are bare flags whose next token is an output or a program, never
-// a path the command reads. escapesRoot judges that token as a flag value
-// even when the run may read it: `sort -o companion/x` writes there, and
-// `rg --pre companion/x.sh` runs it.
+// writesTo are bare flags of the reading commands whose next token is an
+// output or a program, never a path read: `rg --pre companion/x.sh` runs it,
+// and `git grep -O prog` opens matches in it.
 var writesTo = map[string]bool{
 	"-o":                 true,
 	"-O":                 true,
@@ -1010,6 +1028,65 @@ var writesTo = map[string]bool{
 	"--out":              true,
 	"--log-file":         true,
 	"--pre":              true,
+}
+
+// readerCommands only read the files they are given, so a path after one
+// of their bare flags is something they read. It is an allow-list on
+// purpose: a command missing here keeps the strict judgment.
+var readerCommands = map[string]bool{
+	"wc": true, "rg": true, "grep": true, "egrep": true, "fgrep": true,
+	"ls": true, "head": true, "tail": true, "cat": true, "jq": true,
+}
+
+// gitReaders are the git subcommands that only read. gitDenial already
+// refuses their output flags wherever they fall.
+var gitReaders = map[string]bool{
+	"log": true, "show": true, "diff": true, "grep": true, "blame": true,
+	"branch": true, "tag": true, "rev-parse": true, "ls-files": true,
+	"cat-file": true, "describe": true, "shortlog": true, "rev-list": true,
+	"status": true,
+}
+
+// readsOnly reports whether a segment's command is one whose bare flags
+// never take an output: a readerCommands word, or git running one of
+// gitReaders (its own -C and -c values skipped to find the subcommand).
+func readsOnly(tokens []string) bool {
+	if len(tokens) == 0 {
+		return false
+	}
+	word := strings.TrimSuffix(filepath.Base(tokens[0]), ".exe")
+	if readerCommands[word] {
+		return true
+	}
+	if !isGit(tokens[0]) {
+		return false
+	}
+	for i := 1; i < len(tokens); i++ {
+		t := tokens[i]
+		if t == "-C" || t == "-c" {
+			i++
+			continue
+		}
+		if strings.HasPrefix(t, "-") {
+			continue
+		}
+		return gitReaders[t]
+	}
+	return false
+}
+
+// attachedValue returns the value a short option carries in its own token,
+// as in `-o/etc/x` or `-o~/x`, when that value names a path; ok is false
+// for a bundle of letters or a count like `-A6`.
+func attachedValue(arg string) (string, bool) {
+	if len(arg) <= 2 || arg[0] != '-' || arg[1] == '-' || strings.Contains(arg, "=") {
+		return "", false
+	}
+	v := arg[2:]
+	if strings.ContainsAny(v, `/\`) || strings.HasPrefix(v, "~") || strings.HasPrefix(v, ".") {
+		return v, true
+	}
+	return "", false
 }
 
 // findDenial reports why a find command segment is refused outright, or ""

