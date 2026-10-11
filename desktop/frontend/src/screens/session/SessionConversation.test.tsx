@@ -1023,6 +1023,10 @@ describe('SessionConversation', () => {
       expect(button).toBeDisabled()
       expect(button).toHaveAttribute('title', REASON)
       expect(screen.getByRole('textbox', { name: 'Steer' })).toBeDisabled()
+      // Said once, in the box: a second copy beside the button squeezed
+      // the model and mode chips to "Op…" and "Triage · re…".
+      expect(screen.getByRole('textbox', { name: 'Steer' })).toHaveAttribute('placeholder', REASON)
+      expect(screen.queryAllByText(REASON)).toHaveLength(0)
       await waitFor(() => expect(screen.getByTestId('published')).toHaveTextContent('Steer inline disabled'))
     })
 

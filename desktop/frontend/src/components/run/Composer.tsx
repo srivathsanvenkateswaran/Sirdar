@@ -154,7 +154,8 @@ export default function Composer({
           ? 'Queue the steer (↵)'
           : `${label} (↵)`
   // Said once: while the run works the box carries the whole of it, and the
-  // button beside it is the Stop.
+  // button beside it is the Stop. A reason the composer is off is said in
+  // the box too, and only there; the button's title repeats it on hover.
   const placeholder = running
     ? runningPlaceholder(provider)
     : mode.kind === 'disabled'
@@ -219,7 +220,6 @@ export default function Composer({
             {kind ? <ChipMenu label="Mode" value={kind} items={runModeItems(kind, access)} readOnly={runModeTitle(kind, access)} /> : null}
           </>
         }
-        aside={mode.kind === 'disabled' ? mode.reason : undefined}
         send={{
           label,
           busyLabel: mode.kind === 'answer' ? 'Answering…' : running ? 'Queuing…' : 'Steering…',
