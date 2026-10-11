@@ -592,7 +592,6 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 	previousFlag := ""
 	tokens := argTokens(segment)
 	reader := readsOnly(tokens)
-	positionalOnly := false
 	for _, arg := range tokens {
 		isFlagValue := previousBareFlag
 		afterFlag := previousFlag
@@ -601,14 +600,7 @@ func escapesRoot(root string, extraReserved []string, segment string, readable f
 		if arg == "" {
 			continue
 		}
-		if arg == "--" && !positionalOnly {
-			// Everything after "--" is an operand, never a flag or its value.
-			positionalOnly = true
-			continue
-		}
-		if positionalOnly {
-			isFlagValue = false
-		} else if v, ok := attachedValue(arg); ok {
+		if v, ok := attachedValue(arg); ok {
 			// `sort -o~/x` and `curl -o/etc/x` carry the value in the flag's
 			// own token; it is judged like any flag value, not skipped as a
 			// bare flag.
@@ -734,8 +726,11 @@ var gitDeniedFlagsAnywhere = map[string]bool{
 	"--output":           true,
 	"--output-directory": true,
 	"-o":                 true,
-	"--upload-pack":      true,
-	"--receive-pack":     true,
+	// git grep opens its matches in whatever program these name.
+	"-O":                    true,
+	"--open-files-in-pager": true,
+	"--upload-pack":         true,
+	"--receive-pack":        true,
 }
 
 // gitDeniedFlagsBeforeSubcommand are top-level git options, valid only
@@ -814,6 +809,11 @@ func gitDenial(segment string) string {
 		flag := arg
 		if name, _, ok := strings.Cut(arg, "="); ok {
 			flag = name
+		}
+		// A short option carries its value in the same token as readily as
+		// after "=": `git grep -O'sh -c id'` is -O with a program attached.
+		if len(flag) > 2 && flag[0] == '-' && flag[1] != '-' && gitDeniedFlagsAnywhere[flag[:2]] {
+			flag = flag[:2]
 		}
 		if gitDeniedFlagsAnywhere[flag] {
 			return quote(segment) + " passes git " + quote(flag) +
@@ -1028,6 +1028,7 @@ var writesTo = map[string]bool{
 	"--out":              true,
 	"--log-file":         true,
 	"--pre":              true,
+	"--hostname-bin":     true,
 }
 
 // readerCommands only read the files they are given, so a path after one
@@ -1036,13 +1037,14 @@ var writesTo = map[string]bool{
 var readerCommands = map[string]bool{
 	"wc": true, "rg": true, "grep": true, "egrep": true, "fgrep": true,
 	"ls": true, "head": true, "tail": true, "cat": true, "jq": true,
+	"cut": true,
 }
 
 // gitReaders are the git subcommands that only read. gitDenial already
 // refuses their output flags wherever they fall.
 var gitReaders = map[string]bool{
 	"log": true, "show": true, "diff": true, "grep": true, "blame": true,
-	"branch": true, "tag": true, "rev-parse": true, "ls-files": true,
+	"rev-parse": true, "ls-files": true,
 	"cat-file": true, "describe": true, "shortlog": true, "rev-list": true,
 	"status": true,
 }
@@ -1068,25 +1070,52 @@ func readsOnly(tokens []string) bool {
 			continue
 		}
 		if strings.HasPrefix(t, "-") {
-			continue
+			// Some global options take a value as the next word, which
+			// would then read as the subcommand: in `git --namespace log
+			// difftool -x prog` git runs difftool. Rather than know every
+			// such option, any global flag but -C and -c keeps the strict
+			// judgment.
+			return false
 		}
 		return gitReaders[t]
 	}
 	return false
 }
 
-// attachedValue returns the value a short option carries in its own token,
-// as in `-o/etc/x` or `-o~/x`, when that value names a path; ok is false
-// for a bundle of letters or a count like `-A6`.
+// outputLetters are the short options that name a file or directory to
+// write in the common tools: -o and -O (sort, curl, wget, gcc), -T (sort's
+// temporary directory), -D (curl's header dump) and -P (wget's directory).
+const outputLetters = "oOTDP"
+
+// attachedValue returns the value an output option carries in its own
+// token, as in `-o/etc/x`, or at the end of a cluster, as in `-sSo~/x`,
+// when that value names a path. Other letters keep their attached text as
+// it is, since a delimiter (`cut -d/`) or a pattern (`git log -S/api`) is
+// not a place anything is written.
 func attachedValue(arg string) (string, bool) {
 	if len(arg) <= 2 || arg[0] != '-' || arg[1] == '-' || strings.Contains(arg, "=") {
 		return "", false
 	}
-	v := arg[2:]
-	if strings.ContainsAny(v, `/\`) || strings.HasPrefix(v, "~") || strings.HasPrefix(v, ".") {
-		return v, true
+	for i := 1; i < len(arg)-1; i++ {
+		if !strings.ContainsRune(outputLetters, rune(arg[i])) {
+			continue
+		}
+		v := arg[i+1:]
+		if looksLikePath(v) {
+			return v, true
+		}
+		return "", false
 	}
 	return "", false
+}
+
+// looksLikePath reports whether an attached option value names a file: it
+// has a separator, starts with "~" or ".", or names a Windows drive.
+func looksLikePath(v string) bool {
+	if strings.ContainsAny(v, "/"+string(rune(92))) || strings.HasPrefix(v, "~") || strings.HasPrefix(v, ".") {
+		return true
+	}
+	return len(v) >= 2 && v[1] == ':' && (v[0] >= 'a' && v[0] <= 'z' || v[0] >= 'A' && v[0] <= 'Z')
 }
 
 // findDenial reports why a find command segment is refused outright, or ""

