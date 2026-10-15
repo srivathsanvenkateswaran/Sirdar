@@ -75,7 +75,7 @@ jobs:
         if: runner.os == 'Linux'
         run: ./scripts/package-linux.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sirdar-desktop-${{ matrix.os }}
           path: desktop/build/bin/*
